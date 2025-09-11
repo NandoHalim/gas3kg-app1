@@ -16,7 +16,7 @@ import {
   maxAllowedDate,
   fmtIDR,
 } from "../../utils/helpers.js";
-import { isValidCustomerName } from "../../utils/validators.jsx";
+import { isValidCustomerName } from "../../utils/validators.js";
 import { DataService } from "../../services/DataService.js";
 
 export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
