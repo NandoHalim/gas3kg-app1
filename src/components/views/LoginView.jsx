@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../../lib/supabase.js";
 
 export default function LoginView({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -12,7 +12,7 @@ export default function LoginView({ onLogin }) {
     setError("");
     setLoading(true);
 
-    // Login via Supabase Auth
+    // 🔑 Login dengan Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -22,7 +22,8 @@ export default function LoginView({ onLogin }) {
       setError(error.message);
     } else {
       alert("Login berhasil!");
-      onLogin?.(data.user); // lempar data user ke App
+      // lempar data user ke App.jsx
+      onLogin?.(data.user);
     }
 
     setLoading(false);
@@ -57,7 +58,13 @@ export default function LoginView({ onLogin }) {
           onChange={(e) => setEmail(e.target.value)}
           disabled={loading}
           required
+          style={{
+            padding: "10px 12px",
+            border: "1px solid #cbd5e1",
+            borderRadius: 6,
+          }}
         />
+
         <input
           type="password"
           placeholder="Password"
@@ -65,7 +72,13 @@ export default function LoginView({ onLogin }) {
           onChange={(e) => setPassword(e.target.value)}
           disabled={loading}
           required
+          style={{
+            padding: "10px 12px",
+            border: "1px solid #cbd5e1",
+            borderRadius: 6,
+          }}
         />
+
         <button
           type="submit"
           disabled={loading}
