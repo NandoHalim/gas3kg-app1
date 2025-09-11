@@ -12,7 +12,6 @@ export default function LoginView({ onLogin }) {
     setError("");
     setLoading(true);
 
-    // 🔑 Login dengan Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -21,8 +20,7 @@ export default function LoginView({ onLogin }) {
     if (error) {
       setError(error.message);
     } else {
-      alert("Login berhasil!");
-      // lempar data user ke App.jsx
+      // biarkan App.jsx yang munculkan notifikasi role-based
       onLogin?.(data.user);
     }
 

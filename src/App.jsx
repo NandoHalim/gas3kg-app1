@@ -63,7 +63,7 @@ export default function App() {
     };
   }, []);
 
-  // ❗ Resolve role (admin / non-admin)
+  // Resolve role (admin / non-admin)
   useEffect(() => {
     let cancelled = false;
 
@@ -73,7 +73,7 @@ export default function App() {
         return;
       }
 
-      // 1) Coba ambil dari user metadata (supabase auth)
+      // 1) Ambil dari user metadata
       const metaRole = user.user_metadata?.role;
       if (metaRole) {
         if (!cancelled)
@@ -81,12 +81,12 @@ export default function App() {
         return;
       }
 
-      // 2) Fallback: ambil dari tabel profiles (ganti nama/kolom jika berbeda)
+      // 2) Fallback (opsional) ke tabel profiles — bisa dihapus jika tidak perlu
       try {
         const { data, error } = await supabase
-          .from("profiles")        // <-- ganti kalau tabelmu beda
+          .from("profiles")
           .select("role")
-          .eq("user_id", user.id)  // <-- ganti kalau kolom FK beda
+          .eq("user_id", user.id)
           .single();
 
         if (error) {
@@ -108,6 +108,20 @@ export default function App() {
       cancelled = true;
     };
   }, [user]);
+
+  // 🔔 Notifikasi saat berhasil login (role-aware)
+  useEffect(() => {
+    if (initializing) return;
+    if (user) {
+      const role = String(user.user_metadata?.role || "user").toLowerCase();
+      push(
+        role === "admin"
+          ? "Login berhasil sebagai Admin"
+          : "Login berhasil sebagai User",
+        "success"
+      );
+    }
+  }, [user, initializing]); // eslint-disable-line
 
   const handleResetAll = async () => {
     if (!confirm("Yakin reset SEMUA data (stok, log, sales)?")) return;
