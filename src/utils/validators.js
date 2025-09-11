@@ -1,1 +1,6 @@
-export function isValidCustomerName(name=''){const n=String(name).trim();if(n.length<2) return false;return /^[A-Za-zÀ-ÖØ-öø-ÿ\s\.\-]+$/.test(n);}
+// src/utils/validators.js
+
+// Cek apakah nama customer hanya huruf & spasi
+export function isValidCustomerName(name = "") {
+  return /^[A-Za-z\s]+$/.test(name.trim());
+}
