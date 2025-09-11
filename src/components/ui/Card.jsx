@@ -1,0 +1,1 @@
+export default function Card({title,children,style}){return <div className='card' style={style}>{title&&<div style={{fontWeight:600,marginBottom:8}}>{title}</div>}{children}</div>}

@@ -1,0 +1,1 @@
+export function isValidCustomerName(name=''){const n=String(name).trim();if(n.length<2) return false;return /^[A-Za-zÀ-ÖØ-öø-ÿ\s\.\-]+$/.test(n);}
