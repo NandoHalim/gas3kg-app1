@@ -1,1 +1,104 @@
-import React,{useEffect,useState} from 'react';import Card from '../ui/Card.jsx';import Input from '../ui/Input.jsx';import Button from '../ui/Button.jsx';import { todayStr,maxAllowedDate } from '../../utils/helpers.js';import { COLORS,MIN_DATE } from '../../utils/constants.js';import { DataService } from '../../services/DataService.js';import { supabase } from '../../lib/supabase.js';export default function StokView({stocks={},onSaved,onCancel}){const [form,setForm]=useState({jenis:'ISI',jumlah:'',tanggal:todayStr(),keterangan:'Isi dari Agen'});const [err,setErr]=useState('');const [loading,setLoading]=useState(false);const [snap,setSnap]=useState(stocks);useEffect(()=>setSnap(stocks),[stocks]);useEffect(()=>{if(form.jenis==='ISI') setForm(p=>({...p,keterangan:'Isi dari Agen'})); else if(form.jenis==='KOSONG') setForm(p=>({...p,keterangan:p.keterangan||'Beli Tabung'}));},[form.jenis]);useEffect(()=>{const ch=supabase.channel('stocks-rt').on('postgres_changes',{event:'*',schema:'public',table:'stocks'},async()=>{try{const fresh=await DataService.loadStocks();setSnap(fresh);onSaved?.(fresh);}catch{}}).subscribe();return()=>{try{supabase.removeChannel(ch);}catch{}};},[onSaved]);const submit=async()=>{setLoading(true);setErr('');try{const payload={qty:Number(form.jumlah),date:form.tanggal,note:form.keterangan};const fresh=form.jenis==='KOSONG'?await DataService.addKosong(payload):await DataService.addIsi(payload);setSnap(fresh);onSaved?.(fresh);setForm({jenis:'ISI',jumlah:'',tanggal:todayStr(),keterangan:'Isi dari Agen'});}catch(e){setErr(e.message)}finally{setLoading(false)}};const total=Number(snap.ISI||0)+Number(snap.KOSONG||0);return(<div className='grid'><div style={{display:'flex',alignItems:'center',gap:12,marginBottom:8}}><Button onClick={onCancel}>← Kembali</Button><h1 style={{margin:0,color:COLORS.text}}>Manajemen Stok</h1></div><div className='grid' style={{gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))'}}><Card title='Stok Isi'><div style={{fontSize:26,fontWeight:800,color:COLORS.primary}}>{snap.ISI||0}</div><div>Gas siap jual</div></Card><Card title='Stok Kosong'><div style={{fontSize:26,fontWeight:800,color:COLORS.danger}}>{snap.KOSONG||0}</div><div>Tabung milik sendiri</div></Card><Card title='Total Tabung'><div style={{fontSize:26,fontWeight:800,color:COLORS.info}}>{total}</div><div>ISI + KOSONG</div></Card></div><Card title='Tambah Stok'>{err&&<div style={{color:COLORS.danger,padding:12,background:`${COLORS.danger}15`,borderRadius:8,marginBottom:16,border:`1px solid ${COLORS.danger}30`}}>⚠️ {err}</div>}<div className='grid'><div><label>Jenis Stok</label><select value={form.jenis} onChange={e=>setForm({...form,jenis:e.target.value})} style={{padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:8,width:'100%'}} disabled={loading}><option value='ISI'>Stok Isi</option><option value='KOSONG'>Tabung Kosong</option></select></div><div><label>Jumlah</label><Input type='number' value={form.jumlah} onChange={e=>setForm({...form,jumlah:e.target.value===''?'':Math.max(0,parseInt(e.target.value,10)||0)})} min={1} disabled={loading}/></div><div><label>Tanggal</label><Input type='date' value={form.tanggal} onChange={e=>setForm({...form,tanggal:e.target.value})} min={MIN_DATE} max={maxAllowedDate()} disabled={loading}/></div><div><label>Keterangan {form.jenis==='KOSONG'?'(bisa diedit)':'(otomatis)'}</label><Input value={form.keterangan} onChange={e=>setForm({...form,keterangan:e.target.value})} readOnly={form.jenis!=='KOSONG'} style={form.jenis!=='KOSONG'?{background:'#f1f5f9',cursor:'not-allowed',opacity:.7}:{}}/></div><div style={{display:'flex',gap:12,justifyContent:'flex-end',marginTop:8}}><Button onClick={onCancel} disabled={loading}>Batal</Button><Button primary onClick={submit} disabled={loading||Number(form.jumlah)<1}>{loading?'Menyimpan...':'Tambah Stok'}</Button></div></div></Card></div>)}
+import React, { useState } from "react";
+import Card from "../ui/Card.jsx";
+import Input from "../ui/Input.jsx";
+import Button from "../ui/Button.jsx";
+import { DataService } from "../../services/DataService.js";
+import { COLORS } from "../../utils/constants.js";
+
+export default function StokView({ stocks = {}, onSaved, onCancel }) {
+  const [form, setForm] = useState({ qty: "", note: "" });
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submitIsi = async () => {
+    setLoading(true);
+    setErr("");
+    try {
+      const snap = await DataService.addIsi({
+        qty: Number(form.qty),
+        note: form.note,
+      });
+      onSaved?.(snap);
+      setForm({ qty: "", note: "" });
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitKosong = async () => {
+    setLoading(true);
+    setErr("");
+    try {
+      const snap = await DataService.addKosong({
+        qty: Number(form.qty),
+        note: form.note,
+      });
+      onSaved?.(snap);
+      setForm({ qty: "", note: "" });
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <Button onClick={onCancel}>← Kembali</Button>
+        <h1 style={{ margin: 0 }}>Update Stok</h1>
+      </div>
+
+      <Card title="Form Stok">
+        {err && (
+          <div
+            style={{
+              color: COLORS.danger,
+              padding: 12,
+              background: `${COLORS.danger}15`,
+              borderRadius: 8,
+              marginBottom: 16,
+              border: `1px solid ${COLORS.danger}30`,
+            }}
+          >
+            ⚠️ {err}
+          </div>
+        )}
+
+        <div className="grid">
+          <div>
+            <label>Jumlah (Qty)</label>
+            <Input
+              type="number"
+              value={form.qty}
+              onChange={(e) => setForm({ ...form, qty: e.target.value })}
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <label>Keterangan</label>
+            <Input
+              placeholder="Catatan (opsional)"
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              disabled={loading}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+          <Button onClick={submitIsi} disabled={loading}>
+            Tambah ISI
+          </Button>
+          <Button onClick={submitKosong} disabled={loading}>
+            Tambah KOSONG
+          </Button>
+          <Button onClick={onCancel}>Batal</Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
