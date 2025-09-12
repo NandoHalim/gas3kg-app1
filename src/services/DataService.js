@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase";
-import { MIN_YEAR, MAX_YEAR } from "../utils/constants";
 
+// Helper: ubah rows → object stok
 function rowsToStockObject(rows) {
   const obj = { ISI: 0, KOSONG: 0 };
   (rows || []).forEach((r) => {
@@ -13,7 +13,10 @@ function rowsToStockObject(rows) {
 export const DataService = {
   async loadStocks() {
     const { data, error } = await supabase.rpc("get_stock_snapshot");
-    if (error) throw new Error(error.message || "Gagal ambil stok");
+    if (error) {
+      console.error("❌ loadStocks error:", error);
+      throw new Error(error.message || "Gagal ambil stok");
+    }
     return rowsToStockObject(data);
   },
 
@@ -23,17 +26,23 @@ export const DataService = {
       .select("id,code,qty_change,note,created_at")
       .order("created_at", { ascending: false })
       .limit(limit);
-    if (error) throw new Error(error.message || "Gagal ambil log stok");
+    if (error) {
+      console.error("❌ loadLogs error:", error);
+      throw new Error(error.message || "Gagal ambil log stok");
+    }
     return data || [];
   },
 
   async loadSales(limit = 500) {
     const { data, error } = await supabase
       .from("sales")
-      .select("id,customer,qty,price,total,method,note,created_at")
+      .select("id,customer,qty,price,total,method,note,created_at,hpp,laba")
       .order("created_at", { ascending: false })
       .limit(limit);
-    if (error) throw new Error(error.message || "Gagal ambil penjualan");
+    if (error) {
+      console.error("❌ loadSales error:", error);
+      throw new Error(error.message || "Gagal ambil penjualan");
+    }
     return data || [];
   },
 
@@ -43,7 +52,10 @@ export const DataService = {
       p_qty: qty,
       p_note: note || "tambah tabung kosong",
     });
-    if (error) throw new Error(error.message || "Gagal tambah stok kosong");
+    if (error) {
+      console.error("❌ addKosong error:", error);
+      throw new Error(error.message || "Gagal tambah stok kosong");
+    }
     return rowsToStockObject(data);
   },
 
@@ -53,7 +65,10 @@ export const DataService = {
       p_qty: qty,
       p_note: note || "isi dari agen",
     });
-    if (error) throw new Error(error.message || "Gagal tambah stok isi");
+    if (error) {
+      console.error("❌ addIsi error:", error);
+      throw new Error(error.message || "Gagal tambah stok isi");
+    }
     return rowsToStockObject(data);
   },
 
@@ -67,13 +82,19 @@ export const DataService = {
       p_method: method,
       p_note: note,
     });
-    if (error) throw new Error(error.message || "Gagal menyimpan penjualan");
+    if (error) {
+      console.error("❌ createSale error:", error);
+      throw new Error(error.message || "Gagal menyimpan penjualan");
+    }
     return rowsToStockObject(data);
   },
 
   async resetAllData() {
     const { error } = await supabase.rpc("reset_all_data");
-    if (error) throw new Error(error.message || "Reset ditolak (khusus admin)");
+    if (error) {
+      console.error("❌ resetAllData error:", error);
+      throw new Error(error.message || "Reset ditolak (khusus admin)");
+    }
     return this.loadStocks();
   },
 };
