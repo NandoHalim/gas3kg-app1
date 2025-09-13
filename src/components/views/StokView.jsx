@@ -2,99 +2,167 @@ import React, { useState } from 'react';
 import Card from '../ui/Card.jsx';
 import Input from '../ui/Input.jsx';
 import Button from '../ui/Button.jsx';
-import { useToast } from '../../context/ToastContext.jsx';
+import { todayStr, maxAllowedDate } from '../../utils/helpers.js';
+import { MIN_DATE, COLORS } from '../../utils/constants.js';
 import { DataService } from '../../services/DataService.js';
-import { COLORS } from '../../utils/constants.js';
+import { useToast } from '../../context/ToastContext.jsx';
 
 export default function StokView({ stocks = {}, onSaved, onCancel }) {
   const toast = useToast();
-  const [loading, setLoading] = useState(false);
-  const [formIsi, setFormIsi] = useState({ qty: '', note: '' });
-  const [formKosong, setFormKosong] = useState({ qty: '', note: '' });
+  const [loadingIsi, setLoadingIsi] = useState(false);
+  const [loadingKosong, setLoadingKosong] = useState(false);
 
-  const handleAddIsi = async () => {
-    const qty = Number(formIsi.qty || 0);
-    if (!(qty > 0)) return toast?.show?.({ type: 'error', message: 'Jumlah harus > 0' });
-    setLoading(true);
+  const [isi, setIsi] = useState({ qty: '', date: todayStr(), note: '' });
+  const [kos, setKos] = useState({ qty: '', date: todayStr(), note: '' });
+
+  const stokKosong = Number(stocks.KOSONG || 0);
+
+  const submitIsi = async (e) => {
+    e?.preventDefault?.();
+    if (loadingIsi || loadingKosong) return;
+    setLoadingIsi(true);
     try {
-      const snap = await DataService.addIsi({ qty, note: formIsi.note || '' });
+      const snap = await DataService.addIsi({
+        qty: Number(isi.qty),
+        date: isi.date,
+        note: isi.note
+      });
       onSaved?.(snap);
-      setFormIsi({ qty: '', note: '' });
-      toast?.show?.({ type: 'success', message: 'Stok ISI bertambah (diambil dari KOSONG)' });
-    } catch (e) {
-      toast?.show?.({ type: 'error', message: e.message || 'Gagal tambah stok ISI' });
+      setIsi({ qty: '', date: todayStr(), note: '' });
+      toast.show({ type: 'success', message: `✅ Berhasil menambah ${isi.qty} tabung ISI` });
+    } catch (e2) {
+      toast.show({ type: 'error', message: e2.message || '❌ Gagal tambah stok isi' });
     } finally {
-      setLoading(false);
+      setLoadingIsi(false);
     }
   };
 
-  const handleAddKosong = async () => {
-    const qty = Number(formKosong.qty || 0);
-    if (!(qty > 0)) return toast?.show?.({ type: 'error', message: 'Jumlah harus > 0' });
-    setLoading(true);
+  const submitKosong = async (e) => {
+    e?.preventDefault?.();
+    if (loadingIsi || loadingKosong) return;
+    setLoadingKosong(true);
     try {
-      const snap = await DataService.addKosong({ qty, note: formKosong.note || '' });
+      const snap = await DataService.addKosong({
+        qty: Number(kos.qty),
+        date: kos.date,
+        note: kos.note
+      });
       onSaved?.(snap);
-      setFormKosong({ qty: '', note: '' });
-      toast?.show?.({ type: 'success', message: 'Stok KOSONG bertambah' });
-    } catch (e) {
-      toast?.show?.({ type: 'error', message: e.message || 'Gagal tambah stok KOSONG' });
+      setKos({ qty: '', date: todayStr(), note: '' });
+      toast.show({ type: 'success', message: `✅ Berhasil menambah ${kos.qty} tabung KOSONG` });
+    } catch (e2) {
+      toast.show({ type: 'error', message: e2.message || '❌ Gagal tambah stok kosong' });
     } finally {
-      setLoading(false);
+      setLoadingKosong(false);
     }
   };
+
+  const disabledIsiBase = !(Number(isi.qty) > 0);
+  const disabledKosBase = !(Number(kos.qty) > 0);
 
   return (
-    <div className='grid' style={{ gap: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Button onClick={onCancel}>← Kembali</Button>
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <Button onClick={loadingIsi || loadingKosong ? undefined : onCancel} disabled={loadingIsi || loadingKosong}>
+          ← Kembali
+        </Button>
         <h1 style={{ margin: 0 }}>Kelola Stok</h1>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <span style={{ padding: '6px 10px', background: '#f1f5f9', borderRadius: 999, fontSize: 12 }}>
+          <div style={{ padding: '6px 10px', background: '#f1f5f9', borderRadius: 999, fontSize: 12 }}>
             ISI: <b>{Number(stocks.ISI || 0)}</b>
-          </span>
-          <span style={{ padding: '6px 10px', background: '#f1f5f9', borderRadius: 999, fontSize: 12 }}>
+          </div>
+          <div style={{ padding: '6px 10px', background: '#f1f5f9', borderRadius: 999, fontSize: 12 }}>
             KOSONG: <b>{Number(stocks.KOSONG || 0)}</b>
-          </span>
+          </div>
         </div>
       </div>
 
-      <Card title="Tambah Stok ISI (butuh KOSONG)">
-        <div className='grid' style={{ gap: 8 }}>
-          <label>Jumlah</label>
-          <Input type='number' min={1} value={formIsi.qty}
-            onChange={e => setFormIsi({ ...formIsi, qty: e.target.value })}
-            disabled={loading} />
-          <label>Catatan</label>
-          <Input placeholder='contoh: isi ulang'
-            value={formIsi.note}
-            onChange={e => setFormIsi({ ...formIsi, note: e.target.value })}
-            disabled={loading} />
-          <div style={{ fontSize: 12, color: COLORS.secondary }}>
-            Menambah ISI akan <b>mengurangi</b> stok KOSONG jumlah yang sama.
-          </div>
-          <div>
-            <Button onClick={handleAddIsi} disabled={loading}>Tambah ISI</Button>
-          </div>
-        </div>
-      </Card>
+      <div className="grid" style={{ gridTemplateColumns: '1fr', gap: 16 }}>
+        {/* Tambah ISI */}
+        <Card title="Tambah Stok ISI">
+          <form
+            onSubmit={submitIsi}
+            className="grid"
+            style={{ opacity: loadingIsi || loadingKosong ? 0.7 : 1, pointerEvents: loadingIsi || loadingKosong ? 'none' : 'auto' }}
+          >
+            <div>
+              <label>Jumlah (Qty)</label>
+              <Input
+                type="number"
+                min={1}
+                value={isi.qty}
+                onChange={(e) => setIsi({ ...isi, qty: e.target.value })}
+              />
+              <div style={{ fontSize: 12, color: COLORS.secondary, marginTop: 4 }}>
+                Stok kosong tersedia: <b>{stokKosong}</b>
+              </div>
+            </div>
+            <div>
+              <label>Tanggal</label>
+              <Input
+                type="date"
+                value={isi.date}
+                min={MIN_DATE}
+                max={maxAllowedDate()}
+                onChange={(e) => setIsi({ ...isi, date: e.target.value })}
+              />
+            </div>
+            <div>
+              <label>Catatan</label>
+              <Input value={isi.note} onChange={(e) => setIsi({ ...isi, note: e.target.value })} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <Button type="button" className="secondary" onClick={onCancel} disabled={loadingIsi || loadingKosong}>
+                Batal
+              </Button>
+              <Button type="submit" disabled={loadingIsi || loadingKosong || disabledIsiBase}>
+                {loadingIsi ? 'Menyimpan…' : 'Simpan ISI'}
+              </Button>
+            </div>
+          </form>
+        </Card>
 
-      <Card title="Tambah Stok KOSONG">
-        <div className='grid' style={{ gap: 8 }}>
-          <label>Jumlah</label>
-          <Input type='number' min={1} value={formKosong.qty}
-            onChange={e => setFormKosong({ ...formKosong, qty: e.target.value })}
-            disabled={loading} />
-          <label>Catatan</label>
-          <Input placeholder='contoh: beli tabung kosong'
-            value={formKosong.note}
-            onChange={e => setFormKosong({ ...formKosong, note: e.target.value })}
-            disabled={loading} />
-          <div>
-            <Button onClick={handleAddKosong} disabled={loading}>Tambah KOSONG</Button>
-          </div>
-        </div>
-      </Card>
+        {/* Tambah KOSONG */}
+        <Card title="Tambah Stok KOSONG">
+          <form
+            onSubmit={submitKosong}
+            className="grid"
+            style={{ opacity: loadingIsi || loadingKosong ? 0.7 : 1, pointerEvents: loadingIsi || loadingKosong ? 'none' : 'auto' }}
+          >
+            <div>
+              <label>Jumlah (Qty)</label>
+              <Input
+                type="number"
+                min={1}
+                value={kos.qty}
+                onChange={(e) => setKos({ ...kos, qty: e.target.value })}
+              />
+            </div>
+            <div>
+              <label>Tanggal</label>
+              <Input
+                type="date"
+                value={kos.date}
+                min={MIN_DATE}
+                max={maxAllowedDate()}
+                onChange={(e) => setKos({ ...kos, date: e.target.value })}
+              />
+            </div>
+            <div>
+              <label>Catatan</label>
+              <Input value={kos.note} onChange={(e) => setKos({ ...kos, note: e.target.value })} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <Button type="button" className="secondary" onClick={onCancel} disabled={loadingIsi || loadingKosong}>
+                Batal
+              </Button>
+              <Button type="submit" disabled={loadingIsi || loadingKosong || disabledKosBase}>
+                {loadingKosong ? 'Menyimpan…' : 'Simpan KOSONG'}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      </div>
     </div>
   );
 }
