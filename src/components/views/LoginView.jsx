@@ -4,7 +4,7 @@ import { useToast } from "../../context/ToastContext.jsx";
 import { useNavigate } from "react-router-dom";
 
 export default function LoginView() {
-  const { signInEmailPass } = useAuth();   // ✅ pakai email+password, bukan anon
+  const { signInEmailPass } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -14,7 +14,6 @@ export default function LoginView() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Muat email tersimpan jika "ingat saya" pernah dicentang
   useEffect(() => {
     try {
       const saved = localStorage.getItem("rememberEmail");
@@ -31,7 +30,7 @@ export default function LoginView() {
     setLoading(true);
 
     try {
-      await signInEmailPass(email, password);   // ✅ ganti ke login email+pass
+      await signInEmailPass(email, password);
 
       if (remember) {
         try { localStorage.setItem("rememberEmail", email); } catch {}
@@ -39,10 +38,18 @@ export default function LoginView() {
         try { localStorage.removeItem("rememberEmail"); } catch {}
       }
 
-      toast.show({ type: "success", message: "Login berhasil 🎉" });
-      navigate("/", { replace: true });   // selalu redirect ke Dashboard
+      toast.show({
+        type: "success",
+        title: "Login Sukses",
+        message: "Selamat datang kembali 👋",
+      });
+      navigate("/", { replace: true });
     } catch (err) {
-      toast.show({ type: "error", message: err?.message || "Login gagal" });
+      toast.show({
+        type: "error",
+        title: "Login Gagal",
+        message: err?.message || "Email atau password salah",
+      });
     } finally {
       setLoading(false);
     }
