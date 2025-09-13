@@ -1,112 +1,121 @@
-import React, { useEffect, useState } from "react";
-import Card from "../ui/Card.jsx";
+import React, { useState, useEffect } from "react";
 import Input from "../ui/Input.jsx";
 import Button from "../ui/Button.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
-import { useNavigate } from "react-router-dom";
 
 export default function LoginView() {
-  const { user, signInWithPassword } = useAuth();
+  const { signInAnon } = useAuth();
   const toast = useToast();
-  const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // kalau user sudah login → redirect dashboard
+  // load email tersimpan
   useEffect(() => {
-    if (user) navigate("/", { replace: true });
-  }, [user, navigate]);
-
-  // load saved credential dari localStorage
-  useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("rememberMe") || "{}");
-    if (saved?.email) setEmail(saved.email);
-    if (saved?.password) setPassword(saved.password);
-    if (saved?.remember) setRemember(true);
+    const saved = localStorage.getItem("rememberEmail");
+    if (saved) {
+      setEmail(saved);
+      setRemember(true);
+    }
   }, []);
 
-  const onSubmit = async (e) => {
-    e?.preventDefault?.();
+  const handleLogin = async (e) => {
+    e.preventDefault();
     setLoading(true);
+
     try {
-      await signInWithPassword(email, password);
+      // 🔑 ganti sesuai kebutuhan (sementara demo pakai signInAnon)
+      await signInAnon();
 
       if (remember) {
-        localStorage.setItem(
-          "rememberMe",
-          JSON.stringify({ email, password, remember: true })
-        );
+        localStorage.setItem("rememberEmail", email);
       } else {
-        localStorage.removeItem("rememberMe");
+        localStorage.removeItem("rememberEmail");
       }
 
-      toast?.show?.({ type: "success", message: "Login berhasil" });
-      navigate("/", { replace: true });
+      toast.show({ type: "success", message: "Login berhasil 🎉" });
     } catch (err) {
-      toast?.show?.({
-        type: "error",
-        message: err?.message || "Login gagal",
-      });
+      toast.show({ type: "error", message: err.message || "Login gagal" });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="p-6" style={{ maxWidth: 420, margin: "40px auto" }}>
-      <h1 style={{ marginBottom: 12 }}>Halaman Login</h1>
-      <Card>
-        <form onSubmit={onSubmit} className="grid" style={{ gap: 12 }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#f1f5f9",
+      }}
+    >
+      <form
+        onSubmit={handleLogin}
+        style={{
+          background: "#fff",
+          padding: 24,
+          borderRadius: 12,
+          boxShadow: "0 6px 12px rgba(0,0,0,0.1)",
+          width: "100%",
+          maxWidth: 360,
+          display: "grid",
+          gap: 16,
+        }}
+      >
+        <h2 style={{ margin: 0, textAlign: "center" }}>🔐 Login</h2>
+
+        <div>
           <label>Email</label>
           <Input
             type="email"
-            placeholder="you@mail.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            disabled={loading}
+            placeholder="admin@mail.com"
+            required
           />
+        </div>
 
+        <div>
           <label>Password</label>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Input
               type={showPass ? "text" : "password"}
-              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
+              placeholder="••••••"
+              required
               style={{ flex: 1 }}
             />
             <Button
               type="button"
-              onClick={() => setShowPass((v) => !v)}
-              style={{ minWidth: 60 }}
+              onClick={() => setShowPass((s) => !s)}
+              style={{ minWidth: 70 }}
             >
-              {showPass ? "Hide" : "Show"}
+              {showPass ? "🙈 Hide" : "👁 Show"}
             </Button>
           </div>
+        </div>
 
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              disabled={loading}
-            />
-            Ingat saya
-          </label>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input
+            type="checkbox"
+            id="remember"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+          />
+          <label htmlFor="remember">Ingat saya</label>
+        </div>
 
-          <div style={{ display: "flex", gap: 12 }}>
-            <Button type="submit" disabled={loading}>
-              Login
-            </Button>
-          </div>
-        </form>
-      </Card>
+        <Button type="submit" disabled={loading}>
+          {loading ? "Loading..." : "Login"}
+        </Button>
+      </form>
     </div>
   );
 }
