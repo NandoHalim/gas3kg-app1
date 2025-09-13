@@ -1,3 +1,4 @@
+// src/services/DataService.js
 import { supabase } from '../lib/supabase';
 import { MIN_YEAR, MAX_YEAR } from '../utils/constants';
 
@@ -69,26 +70,55 @@ export const DataService = {
     return rowsToStockObject(data);
   },
 
+  // ✅ Perbaikan utama di sini: coba versi baru (dengan p_customer), fallback ke versi lama bila error.
   async createSale({ customer = 'PUBLIC', qty, price, method = 'TUNAI', date, note = '' }) {
     if (!(qty > 0)) throw new Error('Qty harus > 0');
     if (!(price > 0)) throw new Error('Harga tidak valid');
 
-    const { data, error } = await supabase.rpc('stock_sell_public_v2', {
-      p_customer: customer,      // ✅ kirim nama customer asli
-      p_qty: qty,
-      p_price: price,
-      p_method: method,
-      p_note: note
-    });
+    // 1) Coba fungsi versi baru (ada p_customer)
+    const tryNew = async () => {
+      return supabase.rpc('stock_sell_public_v2', {
+        p_customer: customer,
+        p_qty: qty,
+        p_price: price,
+        p_method: method,
+        p_note: note
+      });
+    };
 
-    if (error) throw new Error(errMsg(error, 'Gagal menyimpan penjualan'));
-    return rowsToStockObject(data);
+    // 2) Fallback: versi lama (tanpa p_customer); nama customer disisipkan ke note agar tidak hilang
+    const tryLegacy = async () => {
+      const legacyNote = (note ? `${note} | ` : '') + `cust:${customer}`;
+      return supabase.rpc('stock_sell_public_v2', {
+        p_qty: qty,
+        p_price: price,
+        p_method: method,
+        p_note: legacyNote
+      });
+    };
+
+    // eksekusi
+    let resp = await tryNew();
+
+    // Jika DB masih versi lama / ada error "code is ambiguous", fallback otomatis
+    if (resp.error) {
+      const msg = (resp.error.message || '').toLowerCase();
+      const looksAmbiguous = msg.includes('column reference') && msg.includes('code') && msg.includes('ambiguous');
+      const missingArg = msg.includes('function') && msg.includes('does not exist'); // berjaga-jaga jika signaturenya beda
+      if (looksAmbiguous || missingArg) {
+        resp = await tryLegacy();
+      }
+    }
+
+    if (resp.error) {
+      throw new Error(errMsg(resp.error, 'Gagal menyimpan penjualan'));
+    }
+    return rowsToStockObject(resp.data);
   },
 
   async resetAllData() {
     const { data: u } = await supabase.auth.getUser();
     if (!u?.user) throw new Error('Unauthorized: silakan login dulu');
-
     const { error } = await supabase.rpc('reset_all_data');
     if (error) throw new Error(errMsg(error, 'Reset ditolak (khusus admin)'));
     return this.loadStocks();
