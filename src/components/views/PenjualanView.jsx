@@ -4,7 +4,7 @@ import Input from '../ui/Input.jsx';
 import Button from '../ui/Button.jsx';
 import { DEFAULT_PRICE, PRICE_OPTIONS, PAYMENT_METHODS, COLORS, MIN_DATE } from '../../utils/constants.js';
 import { todayStr, maxAllowedDate, fmtIDR } from '../../utils/helpers.js';
-import { isValidCustomerName } from '../../utils/validators.jsx';
+import { isValidCustomerName } from '../../utils/validators.js';
 import { DataService } from '../../services/DataService.js';
 import { useToast } from '../../context/ToastContext.jsx';
 
