@@ -1,11 +1,6 @@
 import { supabase } from "../lib/supabase";
-import { MIN_YEAR, MAX_YEAR } from "../utils/constants";
 
-function errMsg(error, fallback) {
-  // kalau ada pesan dari Supabase, pakai itu
-  return error?.message || fallback;
-}
-
+// helper: convert rows → { ISI, KOSONG }
 function rowsToStockObject(rows) {
   const obj = { ISI: 0, KOSONG: 0 };
   (rows || []).forEach((r) => {
@@ -14,6 +9,8 @@ function rowsToStockObject(rows) {
   });
   return obj;
 }
+
+const errMsg = (error, fallback) => error?.message || fallback;
 
 export const DataService = {
   async loadStocks() {
@@ -35,7 +32,7 @@ export const DataService = {
   async loadSales(limit = 500) {
     const { data, error } = await supabase
       .from("sales")
-      .select("id,customer,qty,price,total,method,note,created_at")
+      .select("id,customer,qty,price,total,method,note,created_at,hpp,laba")
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) throw new Error(errMsg(error, "Gagal ambil penjualan"));
@@ -72,7 +69,6 @@ export const DataService = {
       p_method: method,
       p_note: note,
     });
-
     if (error) throw new Error(errMsg(error, "Gagal menyimpan penjualan"));
     return rowsToStockObject(data);
   },
@@ -80,7 +76,6 @@ export const DataService = {
   async resetAllData() {
     const { data: u } = await supabase.auth.getUser();
     if (!u?.user) throw new Error("Unauthorized: silakan login dulu");
-
     const { error } = await supabase.rpc("reset_all_data");
     if (error) throw new Error(errMsg(error, "Reset ditolak (khusus admin)"));
     return this.loadStocks();

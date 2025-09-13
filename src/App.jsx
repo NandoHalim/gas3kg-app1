@@ -21,10 +21,7 @@ export default function App() {
   const [stocks, setStocks] = useState({ ISI: 0, KOSONG: 0 });
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const push = (m, t = "success") =>
-    toast?.show ? toast.show({ type: t, message: m }) : alert(m);
-
-  // Ambil stok realtime
+  // initial & realtime stocks
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -32,7 +29,7 @@ export default function App() {
         const map = await DataService.loadStocks();
         if (alive) setStocks(map);
       } catch (e) {
-        console.error(e);
+        toast?.show?.({ type: "error", message: e.message || "Gagal ambil stok" });
       }
     })();
 
@@ -58,18 +55,11 @@ export default function App() {
     };
   }, []);
 
-  // Cek role user dari metadata
+  // role check
   useEffect(() => {
-    if (!user) {
-      setIsAdmin(false);
-      return;
-    }
-    try {
-      const role = user.user_metadata?.role || "";
-      setIsAdmin(role.toLowerCase() === "admin");
-    } catch {
-      setIsAdmin(false);
-    }
+    if (!user) return setIsAdmin(false);
+    const role = (user.user_metadata?.role || "").toLowerCase();
+    setIsAdmin(role === "admin");
   }, [user]);
 
   const handleResetAll = async () => {
@@ -77,10 +67,10 @@ export default function App() {
     try {
       const fresh = await DataService.resetAllData();
       setStocks(fresh);
-      push("Data berhasil direset", "success");
+      toast?.show?.({ type: "success", message: "Data berhasil direset" });
       navigate("/");
     } catch (e) {
-      push(e.message || "Gagal mereset data", "error");
+      toast?.show?.({ type: "error", message: e.message || "Gagal mereset data" });
     }
   };
 
@@ -89,8 +79,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
-      <Header onLogout={signOut} onResetAll={handleResetAll} isAdmin={isAdmin} />
-
+      <Header
+        onLogout={signOut}
+        onResetAll={handleResetAll}
+        isAdmin={isAdmin}
+      />
       <div style={{ display: "flex", flex: 1 }}>
         <Navigation />
         <main style={{ flex: 1, padding: 16 }}>
@@ -123,7 +116,6 @@ export default function App() {
           </Routes>
         </main>
       </div>
-
       <footer style={{ padding: 12, textAlign: "center", color: COLORS.secondary }}>
         © {new Date().getFullYear()} Gas 3KG Manager
       </footer>
