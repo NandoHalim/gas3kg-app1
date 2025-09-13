@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 
 export default function Navigation() {
-  const baseLink = {
+  const base = {
     borderRadius: 8,
     padding: "10px 14px",
     textDecoration: "none",
@@ -9,9 +9,8 @@ export default function Navigation() {
     display: "block",
     whiteSpace: "nowrap",
   };
-
   const style = ({ isActive }) => ({
-    ...baseLink,
+    ...base,
     background: isActive ? "#1d4ed8" : "transparent",
     color: isActive ? "#fff" : "#0f172a",
     fontWeight: isActive ? 700 : 500,
@@ -26,7 +25,7 @@ export default function Navigation() {
 
   return (
     <>
-      {/* Sidebar (desktop) — tampil di ≥768px via CSS */}
+      {/* Sidebar (desktop ≥1025px) */}
       <aside
         className="nav-desktop"
         style={{
@@ -41,33 +40,23 @@ export default function Navigation() {
           top: 0,
         }}
       >
-        {menu.map((m) => (
+        {menu.map(m => (
           <NavLink key={m.to} to={m.to} style={style} end={m.end}>
             {m.label}
           </NavLink>
         ))}
       </aside>
 
-      {/* Top tabs (mobile) — tampil di <768px via CSS */}
-      <nav
-        className="nav-mobile"
-        style={{ background: "#fff", borderBottom: "1px solid #e5e7eb" }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            overflowX: "auto",
-            padding: "10px 12px",
-          }}
-        >
-          {menu.map((m) => (
+      {/* Top tabs (HP/Tablet ≤1024px) — STICKY under header */}
+      <nav className="nav-mobile">
+        <div className="tabs">
+          {menu.map(m => (
             <NavLink
               key={m.to}
               to={m.to}
               end={m.end}
               style={({ isActive }) => ({
-                ...baseLink,
+                ...base,
                 background: isActive ? "#1d4ed8" : "#e2e8f0",
                 color: isActive ? "#fff" : "#0f172a",
                 fontWeight: isActive ? 700 : 500,

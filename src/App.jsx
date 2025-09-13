@@ -30,31 +30,19 @@ export default function App() {
       try {
         const map = await DataService.loadStocks();
         if (alive) setStocks(map);
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (e) { console.error(e); }
     })();
 
     const ch = supabase
       .channel("stocks-rt-app")
-      .on(
-        "postgres_changes",
+      .on("postgres_changes",
         { event: "*", schema: "public", table: "stocks" },
         async () => {
-          try {
-            const map = await DataService.loadStocks();
-            setStocks(map);
-          } catch {}
-        }
-      )
+          try { setStocks(await DataService.loadStocks()); } catch {}
+        })
       .subscribe();
 
-    return () => {
-      try {
-        supabase.removeChannel(ch);
-      } catch {}
-      alive = false;
-    };
+    return () => { try { supabase.removeChannel(ch); } catch {} alive = false; };
   }, []);
 
   useEffect(() => setIsAdmin(false), [user]);
@@ -62,13 +50,10 @@ export default function App() {
   const handleResetAll = async () => {
     if (!confirm("Yakin reset SEMUA data (stok, log, sales)?")) return;
     try {
-      const fresh = await DataService.resetAllData();
-      setStocks(fresh);
+      setStocks(await DataService.resetAllData());
       push("Data berhasil direset", "success");
       navigate("/");
-    } catch (e) {
-      push(e.message || "Gagal mereset data", "error");
-    }
+    } catch (e) { push(e.message || "Gagal mereset data", "error"); }
   };
 
   if (initializing) return <div className="p-4">Loading…</div>;
@@ -78,49 +63,20 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
       <Header onLogout={signOut} onResetAll={handleResetAll} isAdmin={isAdmin} />
 
-      {/* BODY: gunakan class agar responsive handled by CSS */}
+      {/* BODY */}
       <div className="app-body">
         <Navigation />
         <main style={{ flex: 1, padding: 16 }}>
           <Routes>
             <Route path="/" element={<DashboardView stocks={stocks} />} />
-            <Route
-              path="/stok"
-              element={
-                <StokView
-                  stocks={stocks}
-                  onSaved={setStocks}
-                  onCancel={() => navigate("/")}
-                />
-              }
-            />
-            <Route
-              path="/penjualan"
-              element={
-                <PenjualanView
-                  stocks={stocks}
-                  onSaved={setStocks}
-                  onCancel={() => navigate("/")}
-                />
-              }
-            />
-            <Route
-              path="/riwayat"
-              element={<RiwayatView onCancel={() => navigate("/")} />}
-            />
+            <Route path="/stok" element={<StokView stocks={stocks} onSaved={setStocks} onCancel={() => navigate("/")} />} />
+            <Route path="/penjualan" element={<PenjualanView stocks={stocks} onSaved={setStocks} onCancel={() => navigate("/")} />} />
+            <Route path="/riwayat" element={<RiwayatView onCancel={() => navigate("/")} />} />
           </Routes>
         </main>
       </div>
 
-      <footer
-        style={{
-          padding: 12,
-          textAlign: "center",
-          color: COLORS.secondary,
-          background: "#fff",
-          borderTop: "1px solid #e5e7eb",
-        }}
-      >
+      <footer style={{ padding:12, textAlign:"center", color:COLORS.secondary, background:"#fff", borderTop:"1px solid #e5e7eb" }}>
         © {new Date().getFullYear()} Gas 3KG Manager
       </footer>
     </div>
