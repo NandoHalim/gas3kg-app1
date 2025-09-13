@@ -6,13 +6,16 @@ import { DEFAULT_PRICE, PRICE_OPTIONS, PAYMENT_METHODS, COLORS, MIN_DATE } from 
 import { todayStr, maxAllowedDate, fmtIDR } from '../../utils/helpers.js';
 import { isValidCustomerName } from '../../utils/validators.js';
 import { DataService } from '../../services/DataService.js';
+import { useToast } from '../../context/ToastContext.jsx';
 
 export default function PenjualanView({stocks={}, onSaved, onCancel}) {
+  const toast = useToast();
+
   const [form,setForm]=useState({
     customer:'', date:todayStr(), qty:'', price:DEFAULT_PRICE, method:'TUNAI'
   });
   const [err,setErr]=useState('');
-  const [loading,setLoading]=useState(false); // <- kunci UI
+  const [loading,setLoading]=useState(false); // kunci UI (anti double submit)
 
   const stokISI = Number(stocks.ISI||0);
   const qtyNum  = Number(form.qty)||0;
@@ -26,7 +29,7 @@ export default function PenjualanView({stocks={}, onSaved, onCancel}) {
   const disabled = loading || disabledBase;
 
   const inc = (d)=> setForm(p=>{
-    if (loading) return p; // cegah saat proses
+    if (loading) return p;
     const cur = Number(p.qty)||0;
     const next = Math.max(0, cur + d);
     return {...p, qty: next===0 ? '' : next};
@@ -34,26 +37,31 @@ export default function PenjualanView({stocks={}, onSaved, onCancel}) {
 
   const submit = async (e)=>{
     e?.preventDefault?.();
-    if (loading) return;           // double guard
-    if (disabledBase) return;
+    if (loading || disabledBase) return;
     setLoading(true);
     setErr('');
     try {
-      // idempotency sederhana: key sekali pakai per klik
-      const idemKey = crypto?.randomUUID?.() || String(Date.now());
       const snap = await DataService.createSale({
         customer: form.customer.trim() || 'PUBLIC',
         qty: Number(form.qty),
         price: Number(form.price),
         method: form.method,
         date: form.date,
-        note: '',
-        idemKey
+        note: ''
       });
       onSaved?.(snap);
       setForm({customer:'', date:todayStr(), qty:'', price:DEFAULT_PRICE, method:'TUNAI'});
-    } catch (e) {
-      setErr(e.message || 'Gagal menyimpan penjualan');
+
+      // ✅ Toast sukses
+      toast?.show
+        ? toast.show({ type:'success', message:`✅ Penjualan tersimpan: ${qtyNum} tabung • Total ${fmtIDR(total)}` })
+        : alert(`Penjualan tersimpan: ${qtyNum} tabung`);
+    } catch (e2) {
+      setErr(e2.message || 'Gagal menyimpan penjualan');
+      // ❌ Toast gagal
+      toast?.show
+        ? toast.show({ type:'error', message:`❌ ${e2.message || 'Gagal menyimpan penjualan'}` })
+        : alert(e2.message || 'Gagal menyimpan penjualan');
     } finally {
       setLoading(false);
     }
