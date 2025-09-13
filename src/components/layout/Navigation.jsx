@@ -9,6 +9,7 @@ export default function Navigation() {
     display: "block",
     whiteSpace: "nowrap",
   };
+
   const style = ({ isActive }) => ({
     ...baseLink,
     background: isActive ? "#1d4ed8" : "transparent",
@@ -25,38 +26,42 @@ export default function Navigation() {
 
   return (
     <>
-      {/* Sidebar untuk desktop/tablet */}
-      <aside className="nav-desktop" style={{
-        width: 220,
-        padding: 16,
-        borderRight: "1px solid #e5e7eb",
-        display: "grid",
-        gap: 8,
-        background: "#fff",
-        height: "100%",
-        position: "sticky",
-        top: 0
-      }}>
-        {menu.map(m => (
+      {/* Sidebar (desktop) — tampil di ≥768px via CSS */}
+      <aside
+        className="nav-desktop"
+        style={{
+          width: 220,
+          padding: 16,
+          borderRight: "1px solid #e5e7eb",
+          display: "grid",
+          gap: 8,
+          background: "#fff",
+          height: "100%",
+          position: "sticky",
+          top: 0,
+        }}
+      >
+        {menu.map((m) => (
           <NavLink key={m.to} to={m.to} style={style} end={m.end}>
             {m.label}
           </NavLink>
         ))}
       </aside>
 
-      {/* Top tabs untuk mobile */}
-      <nav className="nav-mobile" style={{
-        width: "100%",
-        background: "#fff",
-        borderBottom: "1px solid #e5e7eb",
-      }}>
-        <div style={{
-          display: "flex",
-          gap: 8,
-          overflowX: "auto",
-          padding: "10px 12px",
-        }}>
-          {menu.map(m => (
+      {/* Top tabs (mobile) — tampil di <768px via CSS */}
+      <nav
+        className="nav-mobile"
+        style={{ background: "#fff", borderBottom: "1px solid #e5e7eb" }}
+      >
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            overflowX: "auto",
+            padding: "10px 12px",
+          }}
+        >
+          {menu.map((m) => (
             <NavLink
               key={m.to}
               to={m.to}
@@ -74,25 +79,6 @@ export default function Navigation() {
           ))}
         </div>
       </nav>
-
-      {/* CSS responsif: tampilkan salah satu saja */}
-      <style>{`
-        /* default: sembunyikan keduanya (di-overwrite di media query) agar tidak "lompat" saat SSR/CSR */
-        .nav-desktop { display: none; }
-        .nav-mobile  { display: none; }
-
-        /* >= 768px: pakai sidebar kiri */
-        @media (min-width: 768px) {
-          .nav-desktop { display: grid; }
-          .nav-mobile  { display: none; }
-        }
-
-        /* < 768px: pakai top tabs */
-        @media (max-width: 767px) {
-          .nav-desktop { display: none; }
-          .nav-mobile  { display: block; }
-        }
-      `}</style>
     </>
   );
 }

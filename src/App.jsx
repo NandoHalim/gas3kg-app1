@@ -1,7 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
-
+import React, { useEffect, useState } from "react";
+import { Routes, Route, useNavigate } from "react-router-dom";
 import Header from "./components/layout/Header.jsx";
 import Navigation from "./components/layout/Navigation.jsx";
 import DashboardView from "./components/views/DashboardView.jsx";
@@ -9,31 +7,22 @@ import LoginView from "./components/views/LoginView.jsx";
 import PenjualanView from "./components/views/PenjualanView.jsx";
 import StokView from "./components/views/StokView.jsx";
 import RiwayatView from "./components/views/RiwayatView.jsx";
-
 import { useToast } from "./context/ToastContext.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 import { DataService } from "./services/DataService.js";
 import { supabase } from "./lib/supabase.js";
 import { COLORS } from "./utils/constants.js";
 
-function RequireAuth({ children }) {
-  const { user, initializing } = useAuth();
-  if (initializing) return <div className="p-4">Loading…</div>;
-  if (!user) return <Navigate to="/login" replace />;
-  return children;
-}
-
 export default function App() {
-  const { user, signOut } = useAuth();
+  const { user, initializing, signOut } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
-  const location = useLocation();
+
+  const push = (m, t = "success") =>
+    toast?.show ? toast.show({ type: t, message: m }) : alert(m);
 
   const [stocks, setStocks] = useState({ ISI: 0, KOSONG: 0 });
   const [isAdmin, setIsAdmin] = useState(false);
-
-  const lastLocalUpdateRef = useRef(0);
-  const COOLDOWN_MS = 800;
 
   useEffect(() => {
     let alive = true;
@@ -43,132 +32,91 @@ export default function App() {
         if (alive) setStocks(map);
       } catch (e) {
         console.error(e);
-        toast?.show?.({ type: "error", message: e.message || "Gagal ambil stok" });
       }
     })();
 
     const ch = supabase
       .channel("stocks-rt-app")
-      .on("postgres_changes", { event: "*", schema: "public", table: "stocks" }, async () => {
-        if (Date.now() - lastLocalUpdateRef.current < COOLDOWN_MS) return;
-        try {
-          const map = await DataService.loadStocks();
-          setStocks(map);
-        } catch {}
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "stocks" },
+        async () => {
+          try {
+            const map = await DataService.loadStocks();
+            setStocks(map);
+          } catch {}
+        }
+      )
       .subscribe();
 
     return () => {
-      try { supabase.removeChannel(ch); } catch {}
+      try {
+        supabase.removeChannel(ch);
+      } catch {}
       alive = false;
     };
-  }, []); // eslint-disable-line
+  }, []);
 
-  useEffect(() => {
-    if (!user) return setIsAdmin(false);
-    const role = (user.user_metadata?.role || "").toLowerCase();
-    setIsAdmin(role === "admin");
-  }, [user]);
+  useEffect(() => setIsAdmin(false), [user]);
 
   const handleResetAll = async () => {
     if (!confirm("Yakin reset SEMUA data (stok, log, sales)?")) return;
     try {
       const fresh = await DataService.resetAllData();
       setStocks(fresh);
-      lastLocalUpdateRef.current = Date.now();
-      toast?.show?.({
-        type: "success",
-        title: "Reset Berhasil",
-        message: "Semua data telah direset.",
-      });
-      navigate("/", { replace: true });
+      push("Data berhasil direset", "success");
+      navigate("/");
     } catch (e) {
-      toast?.show?.({
-        type: "error",
-        title: "Reset Gagal",
-        message: e.message || "Reset ditolak. Pastikan Anda admin.",
-      });
+      push(e.message || "Gagal mereset data", "error");
     }
   };
 
-  const handleSavedStocks = (snapshot) => {
-    setStocks(snapshot);
-    lastLocalUpdateRef.current = Date.now();
-  };
+  if (initializing) return <div className="p-4">Loading…</div>;
+  if (!user) return <LoginView />;
 
   return (
-    <div
-      className="min-h-screen flex flex-col bg-gray-50 text-gray-900"
-      style={{ width: "100%", height: "100vh" }}
-    >
-      {user && (
-        <Header onLogout={signOut} onResetAll={handleResetAll} isAdmin={isAdmin} />
-      )}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {user && <Navigation />}
-        <main style={{ flex: 1, padding: 16, overflowY: "auto" }}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Routes location={location}>
-                {!user ? (
-                  <>
-                    <Route path="/login" element={<LoginView />} />
-                    <Route path="*" element={<Navigate to="/login" replace />} />
-                  </>
-                ) : (
-                  <>
-                    <Route path="/" element={<DashboardView stocks={stocks} />} />
-                    <Route
-                      path="/stok"
-                      element={
-                        <RequireAuth>
-                          <StokView
-                            stocks={stocks}
-                            onSaved={handleSavedStocks}
-                            onCancel={() => navigate("/")}
-                          />
-                        </RequireAuth>
-                      }
-                    />
-                    <Route
-                      path="/penjualan"
-                      element={
-                        <RequireAuth>
-                          <PenjualanView
-                            stocks={stocks}
-                            onSaved={handleSavedStocks}
-                            onCancel={() => navigate("/")}
-                          />
-                        </RequireAuth>
-                      }
-                    />
-                    <Route
-                      path="/riwayat"
-                      element={
-                        <RequireAuth>
-                          <RiwayatView onCancel={() => navigate("/")} />
-                        </RequireAuth>
-                      }
-                    />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </>
-                )}
-              </Routes>
-            </motion.div>
-          </AnimatePresence>
+    <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
+      <Header onLogout={signOut} onResetAll={handleResetAll} isAdmin={isAdmin} />
+
+      {/* BODY: gunakan class agar responsive handled by CSS */}
+      <div className="app-body">
+        <Navigation />
+        <main style={{ flex: 1, padding: 16 }}>
+          <Routes>
+            <Route path="/" element={<DashboardView stocks={stocks} />} />
+            <Route
+              path="/stok"
+              element={
+                <StokView
+                  stocks={stocks}
+                  onSaved={setStocks}
+                  onCancel={() => navigate("/")}
+                />
+              }
+            />
+            <Route
+              path="/penjualan"
+              element={
+                <PenjualanView
+                  stocks={stocks}
+                  onSaved={setStocks}
+                  onCancel={() => navigate("/")}
+                />
+              }
+            />
+            <Route
+              path="/riwayat"
+              element={<RiwayatView onCancel={() => navigate("/")} />}
+            />
+          </Routes>
         </main>
       </div>
+
       <footer
         style={{
           padding: 12,
           textAlign: "center",
-          color: COLORS?.secondary || "#64748b",
+          color: COLORS.secondary,
           background: "#fff",
           borderTop: "1px solid #e5e7eb",
         }}
