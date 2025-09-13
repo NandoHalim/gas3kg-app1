@@ -52,8 +52,8 @@ export default function App() {
         "postgres_changes",
         { event: "*", schema: "public", table: "stocks" },
         async () => {
-          const since = Date.now() - lastLocalUpdateRef.current;
-          if (since < COOLDOWN_MS) return;
+          // jika baru saja update lokal, jangan langsung fetch lagi
+          if (Date.now() - lastLocalUpdateRef.current < COOLDOWN_MS) return;
           try {
             const map = await DataService.loadStocks();
             setStocks(map);
@@ -105,60 +105,59 @@ export default function App() {
     lastLocalUpdateRef.current = Date.now();
   };
 
-  const shell =
-    user ? (
-      <>
-        <Header onLogout={signOut} onResetAll={handleResetAll} isAdmin={isAdmin} />
-        <div style={{ display: "flex", flex: 1 }}>
-          <Navigation />
-          <main style={{ flex: 1, padding: 16 }}>
-            <Routes>
-              <Route path="/" element={<DashboardView stocks={stocks} />} />
-              <Route
-                path="/stok"
-                element={
-                  <RequireAuth>
-                    <StokView
-                      stocks={stocks}
-                      onSaved={handleSavedStocks}
-                      onCancel={() => navigate("/")}
-                    />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/penjualan"
-                element={
-                  <RequireAuth>
-                    <PenjualanView
-                      stocks={stocks}
-                      onSaved={handleSavedStocks}
-                      onCancel={() => navigate("/")}
-                    />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/riwayat"
-                element={
-                  <RequireAuth>
-                    <RiwayatView onCancel={() => navigate("/")} />
-                  </RequireAuth>
-                }
-              />
-              {/* jika route tak dikenal → dashboard */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </main>
-        </div>
-      </>
-    ) : (
-      <Routes>
-        <Route path="/login" element={<LoginView />} />
-        {/* blokir semua rute saat belum login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    );
+  const shell = user ? (
+    <>
+      <Header onLogout={signOut} onResetAll={handleResetAll} isAdmin={isAdmin} />
+      <div style={{ display: "flex", flex: 1 }}>
+        <Navigation />
+        <main style={{ flex: 1, padding: 16 }}>
+          <Routes>
+            <Route path="/" element={<DashboardView stocks={stocks} />} />
+            <Route
+              path="/stok"
+              element={
+                <RequireAuth>
+                  <StokView
+                    stocks={stocks}
+                    onSaved={handleSavedStocks}
+                    onCancel={() => navigate("/")}
+                  />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/penjualan"
+              element={
+                <RequireAuth>
+                  <PenjualanView
+                    stocks={stocks}
+                    onSaved={handleSavedStocks}
+                    onCancel={() => navigate("/")}
+                  />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/riwayat"
+              element={
+                <RequireAuth>
+                  <RiwayatView onCancel={() => navigate("/")} />
+                </RequireAuth>
+              }
+            />
+            {/* jika route tak dikenal → dashboard */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </>
+  ) : (
+    <Routes>
+      <Route path="/login" element={<LoginView />} />
+      {/* blokir semua rute saat belum login */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">

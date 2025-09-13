@@ -89,6 +89,7 @@ export const DataService = {
     );
     if (error) throw new Error(errMsg(error, "Gagal menyimpan penjualan"));
 
+    // simpan nama pelanggan terakhir pada baris sale terbaru (opsional)
     const { error: err2 } = await withBusyTimeout(
       supabase.rpc("set_latest_sale_customer_by_match", {
         p_customer: customer || "PUBLIC",
