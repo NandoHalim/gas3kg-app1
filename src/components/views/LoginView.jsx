@@ -4,7 +4,7 @@ import { useToast } from "../../context/ToastContext.jsx";
 import { useNavigate } from "react-router-dom";
 
 export default function LoginView() {
-  const { signInEmailPassword } = useAuth();
+  const { signInEmailPassword } = useAuth(); // ✅ pakai nama pasti
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -14,6 +14,7 @@ export default function LoginView() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // load remember me
   useEffect(() => {
     try {
       const saved = localStorage.getItem("rememberEmail");
@@ -24,24 +25,38 @@ export default function LoginView() {
     } catch {}
   }, []);
 
+  // toast aman (fallback ke alert)
+  const safeToast = (type, message, title) => {
+    if (toast?.show && typeof toast.show === "function") {
+      toast.show({ type, title, message });
+    } else {
+      alert(`${title ? title + ": " : ""}${message}`);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
 
     try {
+      if (typeof signInEmailPassword !== "function") {
+        throw new Error("Fungsi login belum tersedia (AuthContext).");
+      }
+
       await signInEmailPassword(email, password);
 
       if (remember) {
-        localStorage.setItem("rememberEmail", email);
+        try { localStorage.setItem("rememberEmail", email); } catch {}
       } else {
-        localStorage.removeItem("rememberEmail");
+        try { localStorage.removeItem("rememberEmail"); } catch {}
       }
 
-      toast.show({ type: "success", message: "Login berhasil 🎉" });
+      safeToast("success", "Selamat datang kembali 👋", "Login Sukses");
       navigate("/", { replace: true });
     } catch (err) {
-      toast.show({ type: "error", message: err?.message || "Login gagal" });
+      console.error(err);
+      safeToast("error", err?.message || "Email atau password salah", "Login Gagal");
     } finally {
       setLoading(false);
     }
@@ -54,9 +69,10 @@ export default function LoginView() {
         display: "grid",
         placeItems: "center",
         padding: 16,
-        backgroundImage: "url('/login-bg.jpg')",
+        backgroundImage: "url('/login-bg.jpg')", // pastikan file ada di /public/login-bg.jpg
         backgroundSize: "cover",
         backgroundPosition: "center",
+        backgroundColor: "#eff6ff", // fallback bila gambar gagal load
       }}
     >
       <form
@@ -64,7 +80,7 @@ export default function LoginView() {
         style={{
           width: "100%",
           maxWidth: 380,
-          background: "rgba(255,255,255,0.9)",
+          background: "rgba(255,255,255,0.92)",
           border: "1px solid #e5e7eb",
           borderRadius: 12,
           padding: 24,
@@ -72,6 +88,7 @@ export default function LoginView() {
           gap: 14,
           boxShadow: "0 8px 20px rgba(0,0,0,.15)",
           backdropFilter: "blur(6px)",
+          animation: "fadein .25s ease-out",
         }}
       >
         <h2 style={{ margin: 0, textAlign: "center" }}>🔐 Login</h2>
@@ -161,6 +178,13 @@ export default function LoginView() {
           {loading ? "Loading..." : "Login"}
         </button>
       </form>
+
+      <style>{`
+        @keyframes fadein {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }

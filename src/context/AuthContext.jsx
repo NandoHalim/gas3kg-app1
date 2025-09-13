@@ -26,29 +26,22 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  // Implementasi tunggal
+  const _signInEmailPassword = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    setUser(data?.user ?? null);
+  };
+
   return (
     <Ctx.Provider
       value={{
         user,
         initializing,
-
-        // ✅ dikembalikan agar kompatibel dengan LoginView sekarang
-        async signInAnon() {
-          const { data, error } = await supabase.auth.signInAnonymously();
-          if (error) throw error;
-          setUser(data?.user ?? null);
-        },
-
-        // tetap tersedia untuk login email+password jika nanti dibutuhkan
-        async signInEmailPass(email, password) {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
-          if (error) throw error;
-          setUser(data?.user ?? null);
-        },
-
+        // Nama utama yang dipakai LoginView versi terbaru
+        signInEmailPassword: _signInEmailPassword,
+        // Alias untuk kompatibilitas bila ada komponen lama
+        signInEmailPass: _signInEmailPassword,
         async signOut() {
           await supabase.auth.signOut();
           setUser(null);
