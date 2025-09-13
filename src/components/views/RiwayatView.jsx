@@ -1,1 +1,93 @@
-import React,{useEffect,useMemo,useState} from 'react';import Card from '../ui/Card.jsx';import Input from '../ui/Input.jsx';import Button from '../ui/Button.jsx';import { COLORS } from '../../utils/constants.js';import { fmtIDR } from '../../utils/helpers.js';import { DataService } from '../../services/DataService.js';import jsPDF from 'jspdf';import autoTable from 'jspdf-autotable';export default function RiwayatView({onCancel}){const [sales,setSales]=useState([]);const [logs,setLogs]=useState([]);const [filter,setFilter]=useState({search:'',startDate:'',endDate:'',metode:'SEMUA'});const [page,setPage]=useState(1);const perPage=10;useEffect(()=>{let on=true;(async()=>{try{const [s,l]=await Promise.all([DataService.loadSales(500),DataService.loadLogs(500)]);if(on){setSales(s||[]);setLogs(l||[])}}catch(e){console.error(e)}})();return()=>{on=false};},[]);const data=useMemo(()=>sales.filter(s=>{const byName=!filter.search||s.customer?.toLowerCase().includes(filter.search.toLowerCase());const d=String(s.created_at).slice(0,10);const byFrom=!filter.startDate||d>=filter.startDate;const byTo=!filter.endDate||d<=filter.endDate;const byMethod=filter.metode==='SEMUA'||s.method===filter.metode;return byName&&byFrom&&byTo&&byMethod;}),[sales,filter]);const totalPages=Math.max(1,Math.ceil(data.length/perPage));const rows=data.slice((page-1)*perPage,page*perPage);const totalAmount=data.reduce((a,s)=>a+Number(s.total||0),0);const totalQty=data.reduce((a,s)=>a+Number(s.qty||0),0);const exportPDF=()=>{const doc=new jsPDF();doc.text('Laporan Transaksi',14,14);autoTable(doc,{startY:20,head:[['Tanggal','Pelanggan','Qty','Harga','Total','Metode']],body:data.map(s=>[new Date(s.created_at).toLocaleString('id-ID'),s.customer,s.qty,fmtIDR(s.price),fmtIDR(s.total),s.method])});autoTable(doc,{startY:doc.lastAutoTable.finalY+6,head:[['Log Stok (terbaru)']],body:logs.map(l=>[`${new Date(l.created_at).toLocaleString('id-ID')} • ${l.code} ${l.qty_change>0?'+':''}${l.qty_change} — ${l.note||''}`])});doc.save(`riwayat-${new Date().toISOString().slice(0,10)}.pdf`)};return(<div><div style={{display:'flex',alignItems:'center',gap:12,marginBottom:24}}><Button onClick={onCancel}>← Kembali</Button><h1 style={{margin:0,color:COLORS.text}}>Riwayat</h1></div><div className='grid' style={{gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16,marginBottom:16}}><Card><div style={{textAlign:'center'}}><div style={{fontSize:14,color:COLORS.secondary,marginBottom:8}}>Total Transaksi</div><div style={{fontSize:24,fontWeight:'bold',color:COLORS.primary}}>{data.length}</div></div></Card><Card><div style={{textAlign:'center'}}><div style={{fontSize:14,color:COLORS.secondary,marginBottom:8}}>Total Penjualan</div><div style={{fontSize:20,fontWeight:'bold',color:COLORS.success}}>{fmtIDR(totalAmount)}</div></div></Card><Card><div style={{textAlign:'center'}}><div style={{fontSize:14,color:COLORS.secondary,marginBottom:8}}>Total Qty</div><div style={{fontSize:24,fontWeight:'bold',color:COLORS.danger}}>{totalQty}</div></div></Card></div><Card title='Filter'><div className='grid' style={{gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16}}><div><label>Cari</label><Input placeholder='Nama pelanggan...' value={filter.search} onChange={e=>setFilter({...filter,search:e.target.value})}/></div><div><label>Dari</label><Input type='date' value={filter.startDate} onChange={e=>setFilter({...filter,startDate:e.target.value})}/></div><div><label>Sampai</label><Input type='date' value={filter.endDate} onChange={e=>setFilter({...filter,endDate:e.target.value})}/></div><div><label>Metode</label><select value={filter.metode} onChange={e=>setFilter({...filter,metode:e.target.value})} style={{padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:8,width:'100%'}}><option value='SEMUA'>Semua</option><option value='TUNAI'>Tunai</option><option value='HUTANG'>Hutang</option></select></div></div><div style={{display:'flex',justifyContent:'flex-end',gap:12,marginTop:16}}><Button onClick={exportPDF}>📄 Export PDF</Button><Button primary onClick={()=>{setFilter({search:'',startDate:'',endDate:'',metode:'SEMUA'});setPage(1);}}>🔄 Reset</Button></div></Card><Card title={`Data Transaksi (${data.length} items)`} style={{marginTop:16}}>{rows.length===0?(<div style={{textAlign:'center',padding:40,color:COLORS.secondary}}><div style={{fontSize:48,marginBottom:16}}>📋</div><div>Tidak ada data transaksi</div></div>):(<><div style={{overflowX:'auto'}}><table className='table'><thead><tr><th>Tanggal</th><th>Pelanggan</th><th style={{textAlign:'right'}}>Qty</th><th style={{textAlign:'right'}}>Harga</th><th style={{textAlign:'right'}}>Total</th><th style={{textAlign:'center'}}>Metode</th></tr></thead><tbody>{rows.map(s=>(<tr key={s.id}><td>{new Date(s.created_at).toLocaleString('id-ID')}</td><td><b>{s.customer}</b></td><td style={{textAlign:'right'}}>{s.qty}</td><td style={{textAlign:'right'}}>{fmtIDR(s.price)}</td><td style={{textAlign:'right',fontWeight:600,color:COLORS.success}}>{fmtIDR(s.total)}</td><td style={{textAlign:'center'}}><span className='badge' style={{background:s.method==='HUTANG'?'#fee2e2':'#dcfce7',color:s.method==='HUTANG'?'#b91c1c':'#166534'}}>{s.method}</span></td></tr>))}</tbody></table></div>{totalPages>1&&(<div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:8,marginTop:24}}><Button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1}>← Prev</Button><span style={{color:COLORS.secondary}}>Halaman {page} dari {totalPages}</span><Button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages}>Next →</Button></div>)}</>)}</Card></div>) }
+// src/components/views/RiwayatView.jsx
+import React, { useEffect, useState } from 'react';
+import Card from '../ui/Card.jsx';
+import Button from '../ui/Button.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { DataService } from '../../services/DataService.js';
+import { supabase } from '../../lib/supabase.js';
+import { fmtIDR } from '../../utils/helpers.js';
+import { COLORS } from '../../utils/constants.js';
+
+export default function RiwayatView({ onCancel }) {
+  const toast = useToast();
+  const [loading, setLoading] = useState(false);
+  const [sales, setSales] = useState([]);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const rows = await DataService.loadSales(500);
+      setSales(rows);
+    } catch (e) {
+      toast?.show?.({ type: 'error', message: e.message || 'Gagal memuat riwayat penjualan' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let alive = true;
+    (async () => { if (alive) await load(); })();
+
+    // Realtime: dengarkan perubahan di tabel sales
+    const ch = supabase
+      .channel('sales-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, async () => {
+        try { await load(); } catch {}
+      })
+      .subscribe();
+
+    return () => {
+      try { supabase.removeChannel(ch); } catch {}
+      alive = false;
+    };
+  }, []);
+
+  return (
+    <div className="grid" style={{ gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <Button onClick={loading ? undefined : onCancel} disabled={loading}>← Kembali</Button>
+        <h1 style={{ margin: 0 }}>Riwayat Penjualan</h1>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <Button className="secondary" onClick={load} disabled={loading}>
+            {loading ? 'Memuat…' : 'Muat Ulang'}
+          </Button>
+        </div>
+      </div>
+
+      <Card title="Daftar Penjualan Terbaru">
+        <div style={{ overflowX: 'auto' }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Pelanggan</th>
+                <th>Qty</th>
+                <th>Harga</th>
+                <th>Total</th>
+                <th>Metode</th>
+                <th>Catatan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sales.length === 0 && !loading && (
+                <tr><td colSpan={7} style={{ color: COLORS.secondary, fontStyle: 'italic' }}>Belum ada data</td></tr>
+              )}
+              {sales.map(row => (
+                <tr key={row.id}>
+                  <td>{new Date(row.created_at).toLocaleString('id-ID')}</td>
+                  <td style={{ fontWeight: 600 }}>{row.customer || 'PUBLIC'}</td>
+                  <td>{row.qty}</td>
+                  <td>{fmtIDR(row.price)}</td>
+                  <td style={{ fontWeight: 700, color: COLORS.success }}>{fmtIDR(row.total)}</td>
+                  <td>{row.method}</td>
+                  <td>{row.note || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
