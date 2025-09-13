@@ -4,7 +4,7 @@ import { useToast } from "../../context/ToastContext.jsx";
 import { useNavigate } from "react-router-dom";
 
 export default function LoginView() {
-  const { signInAnon } = useAuth();         // tetap pakai anon agar tak mengubah fungsi yg sudah baik
+  const { signInEmailPass } = useAuth();   // ✅ pakai email+password, bukan anon
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -31,9 +31,7 @@ export default function LoginView() {
     setLoading(true);
 
     try {
-      // NOTE:
-      // Jika nanti ingin email+password beneran, ganti ke fungsi signInEmailPassword(email, password)
-      await signInAnon();
+      await signInEmailPass(email, password);   // ✅ ganti ke login email+pass
 
       if (remember) {
         try { localStorage.setItem("rememberEmail", email); } catch {}
@@ -42,7 +40,7 @@ export default function LoginView() {
       }
 
       toast.show({ type: "success", message: "Login berhasil 🎉" });
-      navigate("/", { replace: true });
+      navigate("/", { replace: true });   // selalu redirect ke Dashboard
     } catch (err) {
       toast.show({ type: "error", message: err?.message || "Login gagal" });
     } finally {
