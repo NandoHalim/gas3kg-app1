@@ -1,19 +1,26 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import './index.css'
 import { ToastProvider } from './context/ToastContext.jsx'
-import { NetworkProvider } from './context/NetworkContext.jsx'
-import ErrorBoundary from './components/common/ErrorBoundary.jsx'
+
+// Logger global (membantu debugging di prod)
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (e) => {
+    console.error('[window.onerror]', e?.error || e?.message || e)
+  })
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('[unhandledrejection]', e?.reason || e)
+  })
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ToastProvider>
-      <NetworkProvider>
-        <ErrorBoundary>
-          <App />
-        </ErrorBoundary>
-      </NetworkProvider>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
     </ToastProvider>
   </React.StrictMode>
 )

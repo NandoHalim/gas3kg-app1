@@ -5,6 +5,6 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
-    sourcemap: true,   // <- ini yang bikin error trace jelas ke file .jsx
+    sourcemap: true, // aktifkan source map agar stacktrace menunjuk ke file .jsx asli
   },
 })

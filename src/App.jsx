@@ -30,11 +30,9 @@ export default function App() {
   const [stocks, setStocks] = useState({ ISI: 0, KOSONG: 0 });
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // cooldown untuk realtime agar tidak spam refresh
   const lastLocalUpdateRef = useRef(0);
   const COOLDOWN_MS = 800;
 
-  // ambil data stok awal + subscribe realtime
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -42,6 +40,7 @@ export default function App() {
         const map = await DataService.loadStocks();
         if (alive) setStocks(map);
       } catch (e) {
+        console.error(e);
         toast?.show?.({ type: "error", message: e.message || "Gagal ambil stok" });
       }
     })();
@@ -52,7 +51,6 @@ export default function App() {
         "postgres_changes",
         { event: "*", schema: "public", table: "stocks" },
         async () => {
-          // jika baru saja update lokal, jangan langsung fetch lagi
           if (Date.now() - lastLocalUpdateRef.current < COOLDOWN_MS) return;
           try {
             const map = await DataService.loadStocks();
@@ -63,21 +61,17 @@ export default function App() {
       .subscribe();
 
     return () => {
-      try {
-        supabase.removeChannel(ch);
-      } catch {}
+      try { supabase.removeChannel(ch); } catch {}
       alive = false;
     };
   }, []); // eslint-disable-line
 
-  // deteksi role user
   useEffect(() => {
     if (!user) return setIsAdmin(false);
     const role = (user.user_metadata?.role || "").toLowerCase();
     setIsAdmin(role === "admin");
   }, [user]);
 
-  // reset semua data
   const handleResetAll = async () => {
     if (!confirm("Yakin reset SEMUA data (stok, log, sales)?")) return;
     try {
@@ -87,15 +81,14 @@ export default function App() {
       toast?.show?.({
         type: "success",
         title: "Reset Berhasil",
-        message: "Semua data (stok, log, penjualan) telah direset.",
-        duration: 3800,
+        message: "Semua data telah direset.",
       });
-      navigate("/");
+      navigate("/", { replace: true });
     } catch (e) {
       toast?.show?.({
         type: "error",
         title: "Reset Gagal",
-        message: e.message || "Reset ditolak. Pastikan Anda login sebagai admin.",
+        message: e.message || "Reset ditolak. Pastikan Anda admin.",
       });
     }
   };
@@ -145,7 +138,6 @@ export default function App() {
                 </RequireAuth>
               }
             />
-            {/* jika route tak dikenal → dashboard */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
@@ -154,7 +146,6 @@ export default function App() {
   ) : (
     <Routes>
       <Route path="/login" element={<LoginView />} />
-      {/* blokir semua rute saat belum login */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
@@ -162,7 +153,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
       {shell}
-      <footer style={{ padding: 12, textAlign: "center", color: COLORS.secondary }}>
+      <footer style={{ padding: 12, textAlign: "center", color: COLORS?.secondary || "#64748b" }}>
         © {new Date().getFullYear()} Gas 3KG Manager
       </footer>
     </div>
