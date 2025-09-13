@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import './index.css'
 import { ToastProvider } from './context/ToastContext.jsx'
+import { AuthProvider } from './context/AuthContext.jsx'
 
 // Logger global (membantu debugging di prod)
 if (typeof window !== 'undefined') {
@@ -18,9 +19,11 @@ if (typeof window !== 'undefined') {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ToastProvider>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <AuthProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </AuthProvider>
     </ToastProvider>
   </React.StrictMode>
 )
