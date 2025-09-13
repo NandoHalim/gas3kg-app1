@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Routes, Route, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 
 import Header from "./components/layout/Header.jsx";
 import Navigation from "./components/layout/Navigation.jsx";
@@ -15,22 +15,28 @@ import { DataService } from "./services/DataService.js";
 import { supabase } from "./lib/supabase.js";
 import { COLORS } from "./utils/constants.js";
 
+function RequireAuth({ children }) {
+  const { user, initializing } = useAuth();
+  if (initializing) return <div className="p-4">Loading…</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
 export default function App() {
-  const { user, initializing, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
   const [stocks, setStocks] = useState({ ISI: 0, KOSONG: 0 });
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Cooldown agar event realtime tidak menimpa update lokal yang baru saja terjadi
+  // realtime cooldown
   const lastLocalUpdateRef = useRef(0);
   const COOLDOWN_MS = 800;
 
-  // Muat awal & subscribe realtime stok
+  // initial + realtime stocks
   useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
         const map = await DataService.loadStocks();
@@ -47,36 +53,28 @@ export default function App() {
         { event: "*", schema: "public", table: "stocks" },
         async () => {
           const since = Date.now() - lastLocalUpdateRef.current;
-          if (since < COOLDOWN_MS) return; // abaikan 1 event realtime segera setelah update lokal
-
+          if (since < COOLDOWN_MS) return;
           try {
             const map = await DataService.loadStocks();
             setStocks(map);
-          } catch {
-            /* noop */
-          }
+          } catch {}
         }
       )
       .subscribe();
 
     return () => {
-      try {
-        supabase.removeChannel(ch);
-      } catch {
-        /* noop */
-      }
+      try { supabase.removeChannel(ch); } catch {}
       alive = false;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line
 
-  // Deteksi role admin dari user metadata
+  // cek role admin
   useEffect(() => {
     if (!user) return setIsAdmin(false);
     const role = (user.user_metadata?.role || "").toLowerCase();
     setIsAdmin(role === "admin");
   }, [user]);
 
-  // Handler reset (dengan toast)
   const handleResetAll = async () => {
     if (!confirm("Yakin reset SEMUA data (stok, log, sales)?")) return;
     try {
@@ -90,55 +88,69 @@ export default function App() {
     }
   };
 
-  // Dipanggil child (PenjualanView/StokView) saat simpan sukses
   const handleSavedStocks = (snapshot) => {
-    setStocks(snapshot);                  // update instan dari hasil RPC
-    lastLocalUpdateRef.current = Date.now(); // aktifkan cooldown agar realtime tidak menimpa
+    setStocks(snapshot);
+    lastLocalUpdateRef.current = Date.now();
   };
 
-  if (initializing) return <div className="p-4">Loading…</div>;
-  if (!user) return <LoginView />;
+  const shell =
+    user ? (
+      <>
+        <Header onLogout={signOut} onResetAll={handleResetAll} isAdmin={isAdmin} />
+        <div style={{ display: "flex", flex: 1 }}>
+          <Navigation />
+          <main style={{ flex: 1, padding: 16 }}>
+            <Routes>
+              <Route path="/" element={<DashboardView stocks={stocks} />} />
+              <Route
+                path="/stok"
+                element={
+                  <RequireAuth>
+                    <StokView
+                      stocks={stocks}
+                      onSaved={handleSavedStocks}
+                      onCancel={() => navigate("/")}
+                    />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/penjualan"
+                element={
+                  <RequireAuth>
+                    <PenjualanView
+                      stocks={stocks}
+                      onSaved={handleSavedStocks}
+                      onCancel={() => navigate("/")}
+                    />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/riwayat"
+                element={
+                  <RequireAuth>
+                    <RiwayatView onCancel={() => navigate("/")} />
+                  </RequireAuth>
+                }
+              />
+              {/* jika route tak dikenal, arahkan ke dashboard */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </main>
+        </div>
+      </>
+    ) : (
+      <Routes>
+        <Route path="/login" element={<LoginView />} />
+        {/* blok akses lain saat belum login */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
-      <Header onLogout={signOut} onResetAll={handleResetAll} isAdmin={isAdmin} />
-
-      <div style={{ display: "flex", flex: 1 }}>
-        <Navigation />
-        <main style={{ flex: 1, padding: 16 }}>
-          <Routes>
-            <Route path="/" element={<DashboardView stocks={stocks} />} />
-
-            <Route
-              path="/stok"
-              element={
-                <StokView
-                  stocks={stocks}
-                  onSaved={handleSavedStocks}
-                  onCancel={() => navigate("/")}
-                />
-              }
-            />
-
-            <Route
-              path="/penjualan"
-              element={
-                <PenjualanView
-                  stocks={stocks}
-                  onSaved={handleSavedStocks}
-                  onCancel={() => navigate("/")}
-                />
-              }
-            />
-
-            <Route
-              path="/riwayat"
-              element={<RiwayatView onCancel={() => navigate("/")} />}
-            />
-          </Routes>
-        </main>
-      </div>
-
+      {shell}
       <footer style={{ padding: 12, textAlign: "center", color: COLORS.secondary }}>
         © {new Date().getFullYear()} Gas 3KG Manager
       </footer>
