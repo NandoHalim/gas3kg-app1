@@ -30,11 +30,11 @@ export default function App() {
   const [stocks, setStocks] = useState({ ISI: 0, KOSONG: 0 });
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // realtime cooldown
+  // cooldown untuk realtime agar tidak spam refresh
   const lastLocalUpdateRef = useRef(0);
   const COOLDOWN_MS = 800;
 
-  // initial + realtime stocks
+  // ambil data stok awal + subscribe realtime
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -63,28 +63,40 @@ export default function App() {
       .subscribe();
 
     return () => {
-      try { supabase.removeChannel(ch); } catch {}
+      try {
+        supabase.removeChannel(ch);
+      } catch {}
       alive = false;
     };
   }, []); // eslint-disable-line
 
-  // cek role admin
+  // deteksi role user
   useEffect(() => {
     if (!user) return setIsAdmin(false);
     const role = (user.user_metadata?.role || "").toLowerCase();
     setIsAdmin(role === "admin");
   }, [user]);
 
+  // reset semua data
   const handleResetAll = async () => {
     if (!confirm("Yakin reset SEMUA data (stok, log, sales)?")) return;
     try {
       const fresh = await DataService.resetAllData();
       setStocks(fresh);
       lastLocalUpdateRef.current = Date.now();
-      toast?.show?.({ type: "success", message: "Data berhasil direset" });
+      toast?.show?.({
+        type: "success",
+        title: "Reset Berhasil",
+        message: "Semua data (stok, log, penjualan) telah direset.",
+        duration: 3800,
+      });
       navigate("/");
     } catch (e) {
-      toast?.show?.({ type: "error", message: e.message || "Gagal mereset data" });
+      toast?.show?.({
+        type: "error",
+        title: "Reset Gagal",
+        message: e.message || "Reset ditolak. Pastikan Anda login sebagai admin.",
+      });
     }
   };
 
@@ -134,7 +146,7 @@ export default function App() {
                   </RequireAuth>
                 }
               />
-              {/* jika route tak dikenal, arahkan ke dashboard */}
+              {/* jika route tak dikenal → dashboard */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
@@ -143,7 +155,7 @@ export default function App() {
     ) : (
       <Routes>
         <Route path="/login" element={<LoginView />} />
-        {/* blok akses lain saat belum login */}
+        {/* blokir semua rute saat belum login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
