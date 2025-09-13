@@ -4,7 +4,7 @@ import { useToast } from "../../context/ToastContext.jsx";
 import { useNavigate } from "react-router-dom";
 
 export default function LoginView() {
-  const { signInEmailPass } = useAuth();
+  const { signInEmailPassword } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -30,26 +30,18 @@ export default function LoginView() {
     setLoading(true);
 
     try {
-      await signInEmailPass(email, password);
+      await signInEmailPassword(email, password);
 
       if (remember) {
-        try { localStorage.setItem("rememberEmail", email); } catch {}
+        localStorage.setItem("rememberEmail", email);
       } else {
-        try { localStorage.removeItem("rememberEmail"); } catch {}
+        localStorage.removeItem("rememberEmail");
       }
 
-      toast.show({
-        type: "success",
-        title: "Login Sukses",
-        message: "Selamat datang kembali 👋",
-      });
+      toast.show({ type: "success", message: "Login berhasil 🎉" });
       navigate("/", { replace: true });
     } catch (err) {
-      toast.show({
-        type: "error",
-        title: "Login Gagal",
-        message: err?.message || "Email atau password salah",
-      });
+      toast.show({ type: "error", message: err?.message || "Login gagal" });
     } finally {
       setLoading(false);
     }
@@ -61,8 +53,10 @@ export default function LoginView() {
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
-        background: "#f1f5f9",
         padding: 16,
+        backgroundImage: "url('/login-bg.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
       }}
     >
       <form
@@ -70,21 +64,20 @@ export default function LoginView() {
         style={{
           width: "100%",
           maxWidth: 380,
-          background: "#fff",
+          background: "rgba(255,255,255,0.9)",
           border: "1px solid #e5e7eb",
           borderRadius: 12,
           padding: 24,
           display: "grid",
           gap: 14,
-          boxShadow: "0 8px 20px rgba(0,0,0,.06)",
+          boxShadow: "0 8px 20px rgba(0,0,0,.15)",
+          backdropFilter: "blur(6px)",
         }}
       >
         <h2 style={{ margin: 0, textAlign: "center" }}>🔐 Login</h2>
 
         <div style={{ display: "grid", gap: 6 }}>
-          <label htmlFor="email" style={{ fontWeight: 600 }}>
-            Email
-          </label>
+          <label htmlFor="email" style={{ fontWeight: 600 }}>Email</label>
           <input
             id="email"
             type="email"
@@ -103,9 +96,7 @@ export default function LoginView() {
         </div>
 
         <div style={{ display: "grid", gap: 6 }}>
-          <label htmlFor="password" style={{ fontWeight: 600 }}>
-            Password
-          </label>
+          <label htmlFor="password" style={{ fontWeight: 600 }}>Password</label>
           <div style={{ display: "flex", gap: 8 }}>
             <input
               id="password"
