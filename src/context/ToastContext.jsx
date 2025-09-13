@@ -44,7 +44,7 @@ export function ToastProvider({ children }) {
                 borderRadius: 8,
                 minWidth: 260,
                 boxShadow: "0 4px 12px rgba(0,0,0,.1)",
-                animation: "fadeIn .3s ease-out",
+                animation: "slideIn .3s ease-out, fadeOut .3s ease-in 2.7s forwards",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -61,9 +61,12 @@ export function ToastProvider({ children }) {
         })}
       </div>
       <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeOut {
+          to { opacity: 0; transform: translateY(20px); }
         }
       `}</style>
     </Ctx.Provider>

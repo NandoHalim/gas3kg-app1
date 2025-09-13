@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 
 import Header from "./components/layout/Header.jsx";
 import Navigation from "./components/layout/Navigation.jsx";
@@ -26,6 +27,7 @@ export default function App() {
   const { user, signOut } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [stocks, setStocks] = useState({ ISI: 0, KOSONG: 0 });
   const [isAdmin, setIsAdmin] = useState(false);
@@ -47,17 +49,13 @@ export default function App() {
 
     const ch = supabase
       .channel("stocks-rt-app")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "stocks" },
-        async () => {
-          if (Date.now() - lastLocalUpdateRef.current < COOLDOWN_MS) return;
-          try {
-            const map = await DataService.loadStocks();
-            setStocks(map);
-          } catch {}
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "stocks" }, async () => {
+        if (Date.now() - lastLocalUpdateRef.current < COOLDOWN_MS) return;
+        try {
+          const map = await DataService.loadStocks();
+          setStocks(map);
+        } catch {}
+      })
       .subscribe();
 
     return () => {
@@ -98,62 +96,83 @@ export default function App() {
     lastLocalUpdateRef.current = Date.now();
   };
 
-  const shell = user ? (
-    <>
-      <Header onLogout={signOut} onResetAll={handleResetAll} isAdmin={isAdmin} />
-      <div style={{ display: "flex", flex: 1 }}>
-        <Navigation />
-        <main style={{ flex: 1, padding: 16 }}>
-          <Routes>
-            <Route path="/" element={<DashboardView stocks={stocks} />} />
-            <Route
-              path="/stok"
-              element={
-                <RequireAuth>
-                  <StokView
-                    stocks={stocks}
-                    onSaved={handleSavedStocks}
-                    onCancel={() => navigate("/")}
-                  />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/penjualan"
-              element={
-                <RequireAuth>
-                  <PenjualanView
-                    stocks={stocks}
-                    onSaved={handleSavedStocks}
-                    onCancel={() => navigate("/")}
-                  />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/riwayat"
-              element={
-                <RequireAuth>
-                  <RiwayatView onCancel={() => navigate("/")} />
-                </RequireAuth>
-              }
-            />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+  return (
+    <div
+      className="min-h-screen flex flex-col bg-gray-50 text-gray-900"
+      style={{ width: "100%", height: "100vh" }}
+    >
+      {user && (
+        <Header onLogout={signOut} onResetAll={handleResetAll} isAdmin={isAdmin} />
+      )}
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+        {user && <Navigation />}
+        <main style={{ flex: 1, padding: 16, overflowY: "auto" }}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Routes location={location}>
+                {!user ? (
+                  <>
+                    <Route path="/login" element={<LoginView />} />
+                    <Route path="*" element={<Navigate to="/login" replace />} />
+                  </>
+                ) : (
+                  <>
+                    <Route path="/" element={<DashboardView stocks={stocks} />} />
+                    <Route
+                      path="/stok"
+                      element={
+                        <RequireAuth>
+                          <StokView
+                            stocks={stocks}
+                            onSaved={handleSavedStocks}
+                            onCancel={() => navigate("/")}
+                          />
+                        </RequireAuth>
+                      }
+                    />
+                    <Route
+                      path="/penjualan"
+                      element={
+                        <RequireAuth>
+                          <PenjualanView
+                            stocks={stocks}
+                            onSaved={handleSavedStocks}
+                            onCancel={() => navigate("/")}
+                          />
+                        </RequireAuth>
+                      }
+                    />
+                    <Route
+                      path="/riwayat"
+                      element={
+                        <RequireAuth>
+                          <RiwayatView onCancel={() => navigate("/")} />
+                        </RequireAuth>
+                      }
+                    />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </>
+                )}
+              </Routes>
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
-    </>
-  ) : (
-    <Routes>
-      <Route path="/login" element={<LoginView />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
-  );
-
-  return (
-    <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
-      {shell}
-      <footer style={{ padding: 12, textAlign: "center", color: COLORS?.secondary || "#64748b" }}>
+      <footer
+        style={{
+          padding: 12,
+          textAlign: "center",
+          color: COLORS?.secondary || "#64748b",
+          background: "#fff",
+          borderTop: "1px solid #e5e7eb",
+        }}
+      >
         © {new Date().getFullYear()} Gas 3KG Manager
       </footer>
     </div>
