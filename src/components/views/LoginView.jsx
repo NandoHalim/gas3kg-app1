@@ -1,73 +1,167 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 import { useNavigate } from "react-router-dom";
 
 export default function LoginView() {
-  const { signInAnon } = useAuth();
+  const { signInAnon } = useAuth();         // tetap pakai anon agar tak mengubah fungsi yg sudah baik
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [email,setEmail] = useState("");
-  const [password,setPassword] = useState("");
-  const [remember,setRemember] = useState(false);
-  const [showPass,setShowPass] = useState(false);
-  const [loading,setLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(()=>{
-    const saved = localStorage.getItem("rememberEmail");
-    if(saved){ setEmail(saved); setRemember(true); }
-  },[]);
+  // Muat email tersimpan jika "ingat saya" pernah dicentang
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("rememberEmail");
+      if (saved) {
+        setEmail(saved);
+        setRemember(true);
+      }
+    } catch {}
+  }, []);
 
-  const onSubmit = async (e)=>{
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
-    try{
-      // sementara pakai anon; kalau mau email+password ganti fungsi di AuthContext
+
+    try {
+      // NOTE:
+      // Jika nanti ingin email+password beneran, ganti ke fungsi signInEmailPassword(email, password)
       await signInAnon();
-      if(remember) localStorage.setItem("rememberEmail", email);
-      else localStorage.removeItem("rememberEmail");
-      toast.show({ type:"success", message:"Login berhasil" });
-      navigate("/", { replace:true });
-    }catch(err){
-      toast.show({ type:"error", message: err?.message || "Login gagal" });
-    }finally{
+
+      if (remember) {
+        try { localStorage.setItem("rememberEmail", email); } catch {}
+      } else {
+        try { localStorage.removeItem("rememberEmail"); } catch {}
+      }
+
+      toast.show({ type: "success", message: "Login berhasil 🎉" });
+      navigate("/", { replace: true });
+    } catch (err) {
+      toast.show({ type: "error", message: err?.message || "Login gagal" });
+    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{minHeight:"100vh",display:"grid",placeItems:"center",background:"#f8fafc"}}>
-      <form onSubmit={onSubmit}
-            style={{background:"#fff",padding:24,borderRadius:12,width:"100%",maxWidth:380,
-                    boxShadow:"0 6px 16px rgba(0,0,0,.08)",display:"grid",gap:12}}>
-        <h2 style={{margin:0,textAlign:"center"}}>🔐 Login</h2>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        background: "#f1f5f9",
+        padding: 16,
+      }}
+    >
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          width: "100%",
+          maxWidth: 380,
+          background: "#fff",
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          padding: 24,
+          display: "grid",
+          gap: 14,
+          boxShadow: "0 8px 20px rgba(0,0,0,.06)",
+        }}
+      >
+        <h2 style={{ margin: 0, textAlign: "center" }}>🔐 Login</h2>
 
-        <label>Email</label>
-        <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
-               placeholder="admin@mail.com" required
-               style={{padding:"10px 12px",border:"1px solid #cbd5e1",borderRadius:8}}/>
-
-        <label>Password</label>
-        <div style={{display:"flex",gap:8}}>
-          <input type={showPass?"text":"password"} value={password}
-                 onChange={e=>setPassword(e.target.value)}
-                 placeholder="••••••" required
-                 style={{flex:1,padding:"10px 12px",border:"1px solid #cbd5e1",borderRadius:8}}/>
-          <button type="button" onClick={()=>setShowPass(v=>!v)}
-                  style={{padding:"10px 12px",border:"1px solid #cbd5e1",borderRadius:8,background:"#f1f5f9"}}>
-            {showPass ? "Hide" : "Show"}
-          </button>
+        <div style={{ display: "grid", gap: 6 }}>
+          <label htmlFor="email" style={{ fontWeight: 600 }}>
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            placeholder="admin@mail.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="username"
+            style={{
+              padding: "10px 12px",
+              borderRadius: 8,
+              border: "1px solid #cbd5e1",
+              outline: "none",
+            }}
+          />
         </div>
 
-        <label style={{display:"flex",alignItems:"center",gap:8}}>
-          <input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/>
+        <div style={{ display: "grid", gap: 6 }}>
+          <label htmlFor="password" style={{ fontWeight: 600 }}>
+            Password
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              id="password"
+              type={showPass ? "text" : "password"}
+              placeholder="••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              style={{
+                flex: 1,
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: "1px solid #cbd5e1",
+                outline: "none",
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass((s) => !s)}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: "1px solid #cbd5e1",
+                background: "#f8fafc",
+                cursor: "pointer",
+                minWidth: 72,
+              }}
+            >
+              {showPass ? "🙈 Hide" : "👁 Show"}
+            </button>
+          </div>
+        </div>
+
+        <label
+          htmlFor="remember"
+          style={{ display: "flex", alignItems: "center", gap: 8, userSelect: "none" }}
+        >
+          <input
+            id="remember"
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+          />
           Ingat saya
         </label>
 
-        <button type="submit" disabled={loading}
-                style={{padding:"10px 12px",border:"1px solid #3b82f6",background:"#3b82f6",
-                        color:"#fff",borderRadius:8,fontWeight:600}}>
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            marginTop: 6,
+            padding: "10px 12px",
+            borderRadius: 8,
+            border: "1px solid #2563eb",
+            background: loading ? "#93c5fd" : "#3b82f6",
+            color: "#fff",
+            fontWeight: 700,
+            cursor: loading ? "not-allowed" : "pointer",
+          }}
+        >
           {loading ? "Loading..." : "Login"}
         </button>
       </form>
