@@ -1,75 +1,83 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback } from 'react';
 
 const Ctx = createContext(null);
 export const useToast = () => useContext(Ctx);
 
 export function ToastProvider({ children }) {
-  const [toasts, setToasts] = useState([]);
+  const [toasts, set] = useState([]);
 
-  const show = useCallback(({ type = "info", message, title, duration = 3200 }) => {
+  const show = useCallback(({ type = 'info', message }) => {
     const id = Math.random().toString(36).slice(2);
-    setToasts((prev) => [...prev, { id, type, message, title, duration }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, duration);
+    set((t) => [...t, { id, type, message }]);
+    setTimeout(() => set((t) => t.filter((x) => x.id !== id)), 3500);
   }, []);
-
-  const remove = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
-
-  const STYLES = {
-    success: { bg: "#ecfdf5", border: "#10b981", text: "#065f46", icon: "✅", label: "Sukses" },
-    error:   { bg: "#fef2f2", border: "#ef4444", text: "#991b1b", icon: "❌", label: "Error" },
-    info:    { bg: "#eff6ff", border: "#3b82f6", text: "#1e3a8a", icon: "ℹ️", label: "Info" },
-    warning: { bg: "#fffbeb", border: "#f59e0b", text: "#92400e", icon: "⚠️", label: "Peringatan" },
-  };
 
   return (
     <Ctx.Provider value={{ show }}>
       {children}
       <div style={{
-        position: "fixed", right: 16, bottom: 16,
-        display: "grid", gap: 12, zIndex: 9999
+        position: 'fixed',
+        right: 16,
+        bottom: 16,
+        display: 'grid',
+        gap: 10,
+        zIndex: 99999,
       }}>
-        {toasts.map((t) => {
-          const s = STYLES[t.type] || STYLES.info;
-          return (
-            <div key={t.id}
-              style={{
-                display: "flex", gap: 12, alignItems: "flex-start",
-                background: s.bg, border: `1px solid ${s.border}`, color: s.text,
-                padding: "12px 14px", borderRadius: 10,
-                boxShadow: "0 6px 18px rgba(0,0,0,.12)", minWidth: 260,
-                animation: "toast-in .18s ease-out"
-              }}>
-              <div style={{ fontSize: 20, lineHeight: "20px" }}>{s.icon}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                  {t.title || s.label}
-                </div>
-                <div style={{ fontSize: 14 }}>{t.message}</div>
-              </div>
-              <button
-                onClick={() => remove(t.id)}
-                aria-label="Close"
-                style={{
-                  background: "transparent", border: 0, color: s.text,
-                  fontSize: 18, lineHeight: "18px", cursor: "pointer"
-                }}
-              >
-                ×
-              </button>
-            </div>
-          );
-        })}
+        {toasts.map((t) => (
+          <ToastItem key={t.id} type={t.type} message={t.message} />
+        ))}
       </div>
+    </Ctx.Provider>
+  );
+}
 
-      {/* Keyframes kecil untuk animasi masuk */}
+function ToastItem({ type, message }) {
+  const colors = {
+    success: { bg: '#dcfce7', border: '#22c55e', text: '#166534', icon: '✅' },
+    error: { bg: '#fee2e2', border: '#ef4444', text: '#991b1b', icon: '❌' },
+    info: { bg: '#e0f2fe', border: '#3b82f6', text: '#1e3a8a', icon: 'ℹ️' },
+    warning: { bg: '#fef9c3', border: '#eab308', text: '#78350f', icon: '⚠️' },
+    loading: { bg: '#f1f5f9', border: '#64748b', text: '#334155', icon: '🔄' },
+  };
+
+  const c = colors[type] || colors.info;
+
+  return (
+    <div
+      style={{
+        minWidth: 220,
+        maxWidth: 320,
+        padding: '10px 14px',
+        borderRadius: 10,
+        background: c.bg,
+        border: `1px solid ${c.border}`,
+        color: c.text,
+        fontSize: 14,
+        fontWeight: 500,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        boxShadow: '0 6px 14px rgba(0,0,0,.1)',
+        animation: 'slideIn .3s ease',
+      }}
+    >
+      <span style={{
+        fontSize: 18,
+        animation: type === 'loading' ? 'spin 1s linear infinite' : 'none',
+        display: 'inline-block',
+      }}>{c.icon}</span>
+      <span style={{ flex: 1 }}>{message}</span>
+
       <style>{`
-        @keyframes toast-in {
-          from { transform: translateY(8px); opacity: .0; }
-          to   { transform: translateY(0);  opacity: 1;  }
+        @keyframes spin { 
+          from { transform: rotate(0deg) } 
+          to { transform: rotate(360deg) } 
+        }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateX(20px); }
+          to { opacity: 1; transform: translateX(0); }
         }
       `}</style>
-    </Ctx.Provider>
+    </div>
   );
 }
