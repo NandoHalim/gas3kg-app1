@@ -31,6 +31,15 @@ export function AuthProvider({ children }) {
       value={{
         user,
         initializing,
+
+        // ✅ dikembalikan agar kompatibel dengan LoginView sekarang
+        async signInAnon() {
+          const { data, error } = await supabase.auth.signInAnonymously();
+          if (error) throw error;
+          setUser(data?.user ?? null);
+        },
+
+        // tetap tersedia untuk login email+password jika nanti dibutuhkan
         async signInEmailPass(email, password) {
           const { data, error } = await supabase.auth.signInWithPassword({
             email,
@@ -39,6 +48,7 @@ export function AuthProvider({ children }) {
           if (error) throw error;
           setUser(data?.user ?? null);
         },
+
         async signOut() {
           await supabase.auth.signOut();
           setUser(null);
