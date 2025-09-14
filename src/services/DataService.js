@@ -21,7 +21,7 @@ function daysAgo(n) {
 }
 
 export const DataService = {
-  // Snapshot stok (ISI & KOSONG) via RPC agar konsisten
+  // Snapshot stok
   async loadStocks() {
     const { data, error } = await supabase.rpc("get_stock_snapshot");
     if (error) throw new Error(errMsg(error, "Gagal ambil stok"));
@@ -39,11 +39,11 @@ export const DataService = {
     return data || [];
   },
 
-  // Riwayat penjualan terbaru
+  // Riwayat penjualan
   async loadSales(limit = 500) {
     const { data, error } = await supabase
       .from("sales")
-      .select("id,customer,qty,price,total,method,note,created_at,date")
+      .select("id,customer,qty,price,total,method,note,created_at")
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) throw new Error(errMsg(error, "Gagal ambil penjualan"));
@@ -156,9 +156,9 @@ export const DataService = {
   async getSalesSummary({ from, to }) {
     const { data, error } = await supabase
       .from("sales")
-      .select("qty, price, date")
-      .gte("date", from)
-      .lte("date", to);
+      .select("qty, price, created_at")
+      .gte("created_at", from + "T00:00:00")
+      .lte("created_at", to + "T23:59:59");
     if (error) throw error;
     const qty = (data || []).reduce((a, b) => a + (Number(b.qty) || 0), 0);
     const money = (data || []).reduce(
@@ -185,13 +185,13 @@ export const DataService = {
     const end = todayStr();
     const { data, error } = await supabase
       .from("sales")
-      .select("qty, date")
-      .gte("date", start)
-      .lte("date", end);
+      .select("qty, created_at")
+      .gte("created_at", start + "T00:00:00")
+      .lte("created_at", end + "T23:59:59");
     if (error) throw error;
     const map = {};
     (data || []).forEach((r) => {
-      const d = (r.date || "").slice(0, 10);
+      const d = (r.created_at || "").slice(0, 10);
       map[d] = (map[d] || 0) + (Number(r.qty) || 0);
     });
     const out = [];
@@ -205,7 +205,7 @@ export const DataService = {
   async getRecentSales(limit = 10) {
     const { data, error } = await supabase
       .from("sales")
-      .select("id, customer, qty, price, method, date, created_at")
+      .select("id, customer, qty, price, method, created_at")
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) throw error;
