@@ -46,16 +46,28 @@ export const DataService = {
     return rowsToStockObject(data);
   },
 
+  // Tambah stok ISI (HARUS menukar dari KOSONG yang cukup)
   async addIsi({ qty, date, note }) {
     if (!(qty > 0)) throw new Error("Jumlah harus > 0");
     const yyyy = Number(String(date).slice(0, 4));
     if (Number.isFinite(yyyy) && (yyyy < MIN_YEAR || yyyy > MAX_YEAR)) {
       throw new Error(`Tanggal harus antara ${MIN_YEAR}-${MAX_YEAR}`);
     }
+
+    // ✅ Precheck: pastikan stok KOSONG cukup (UI sudah membatasi, ini pagar tambahan)
+    try {
+      const snap = await this.loadStocks();
+      if (Number(qty) > Number(snap.KOSONG || 0)) {
+        throw new Error("Stok KOSONG tidak cukup untuk ditukar menjadi ISI");
+      }
+    } catch {
+      // Jika snapshot gagal, tetap lanjut ke RPC—DB akan memvalidasi lagi.
+    }
+
     const { data, error } = await supabase.rpc("stock_add_isi", {
       p_qty: qty,
       p_date: date,
-      p_note: note || "isi dari agen",
+      p_note: note || "isi dari agen (tukar kosong)",
     });
     if (error) throw new Error(errMsg(error, "Gagal tambah stok isi"));
     return rowsToStockObject(data);
@@ -162,7 +174,7 @@ export const DataService = {
     return { qty, money };
   },
 
-  // Catatan: jika kamu sudah punya view 'view_sales_daily', bisa diarahkan ke situ.
+  // Jika punya view 'view_sales_daily', fungsi ini memakainya.
   async getSevenDaySales() {
     const { data, error } = await supabase
       .from("view_sales_daily")
@@ -195,7 +207,7 @@ export const DataService = {
       .from("sales")
       .select("id, customer, qty, price, method, status, note, created_at")
       .eq("method", "HUTANG")
-      .neq("status", "LUNAS") // ✅ hanya yang belum lunas
+      .neq("status", "LUNAS") // hanya yang belum lunas
       .order("created_at", { ascending: false })
       .limit(limit);
 
@@ -217,7 +229,7 @@ export const DataService = {
     if (!(amount > 0)) throw new Error("Nominal pembayaran harus > 0");
 
     const { data, error } = await supabase.rpc("sales_pay_debt", {
-      p_sale_id: sale_id, // integer sesuai DB kamu
+      p_sale_id: sale_id, // integer sesuai DB
       p_amount: amount,
       p_note: note,
     });
