@@ -11,68 +11,62 @@ import { useToast } from "../../context/ToastContext.jsx";
 export default function StokView({ stocks = {}, onSaved, onCancel }) {
   const toast = useToast();
 
-  const [formKosong, setFormKosong] = useState({
-    qty: "",
-    date: todayStr(),
-    note: "",
-  });
-  const [formIsi, setFormIsi] = useState({
-    qty: "",
-    date: todayStr(),
-    note: "",
-  });
-
+  const [jenis, setJenis] = useState("KOSONG"); // "KOSONG" | "ISI"
+  const [qty, setQty] = useState("");
+  const [date, setDate] = useState(todayStr());
+  const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
-  const stokKosong = Number(stocks.KOSONG || 0);
-  const stokIsi = Number(stocks.ISI || 0);
 
-  const saveKosong = async (e) => {
-    e?.preventDefault?.();
-    if (loading) return;
-    try {
-      setLoading(true);
-      const snap = await DataService.addKosong({
-        qty: Number(formKosong.qty),
-        date: formKosong.date,
-        note: formKosong.note,
-      });
-      onSaved?.(snap);
-      setFormKosong({ qty: "", date: todayStr(), note: "" });
-      toast?.show({
-        type: "success",
-        message: `✅ Tambah ${formKosong.qty} tabung KOSONG`,
-      });
-    } catch (e2) {
-      toast?.show({
-        type: "error",
-        message: `❌ ${e2.message || "Gagal tambah kosong"}`,
-      });
-    } finally {
-      setLoading(false);
-    }
+  const stokIsi = Number(stocks.ISI || 0);
+  const stokKosong = Number(stocks.KOSONG || 0);
+
+  const reset = () => {
+    setQty("");
+    setDate(todayStr());
+    setNote("");
   };
 
-  const saveIsi = async (e) => {
+  const submit = async (e) => {
     e?.preventDefault?.();
     if (loading) return;
+
     try {
       setLoading(true);
-      const snap = await DataService.addIsi({
-        qty: Number(formIsi.qty),
-        date: formIsi.date,
-        note: formIsi.note,
-      });
+
+      let snap;
+      const q = Number(qty);
+
+      if (!(q > 0)) throw new Error("Jumlah harus > 0");
+
+      if (jenis === "KOSONG") {
+        // Tambah stok kosong (titip/beli tabung)
+        snap = await DataService.addKosong({
+          qty: q,
+          date,
+          note: note || "beli / titip tabung kosong",
+        });
+      } else {
+        // ISI: restok dengan menukar KOSONG (wajib cukup)
+        if (q > stokKosong)
+          throw new Error("Stok KOSONG tidak cukup untuk ditukar");
+        snap = await DataService.addIsi({
+          qty: q,
+          date,
+          note: note || "restok isi (tukar tabung kosong)",
+        });
+      }
+
       onSaved?.(snap);
-      setFormIsi({ qty: "", date: todayStr(), note: "" });
-      toast?.show({
+      toast?.show?.({
         type: "success",
-        message: `✅ Restok ${formIsi.qty} tabung ISI (tukar kosong)`,
+        message:
+          jenis === "KOSONG"
+            ? `✅ Tambah ${q} tabung KOSONG`
+            : `✅ Restok ${q} tabung ISI (tukar kosong)`,
       });
-    } catch (e2) {
-      toast?.show({
-        type: "error",
-        message: `❌ ${e2.message || "Gagal restok isi"}`,
-      });
+      reset();
+    } catch (err) {
+      toast?.show?.({ type: "error", message: `❌ ${err.message}` });
     } finally {
       setLoading(false);
     }
@@ -80,14 +74,8 @@ export default function StokView({ stocks = {}, onSaved, onCancel }) {
 
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          marginBottom: 16,
-        }}
-      >
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <Button onClick={loading ? undefined : onCancel} disabled={loading}>
           ← Kembali
         </Button>
@@ -105,87 +93,79 @@ export default function StokView({ stocks = {}, onSaved, onCancel }) {
         </div>
       </div>
 
-      <section className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {/* Tambah Kosong */}
-        <Card title="Tambah Stok Kosong">
-          <form onSubmit={saveKosong} className="grid" style={{ gap: 12 }}>
-            <Input
-              type="number"
-              placeholder="Jumlah"
-              value={formKosong.qty}
-              onChange={(e) =>
-                setFormKosong({ ...formKosong, qty: e.target.value })
-              }
-              min={1}
-              required
-              disabled={loading}
-            />
-            <Input
-              type="date"
-              value={formKosong.date}
-              onChange={(e) =>
-                setFormKosong({ ...formKosong, date: e.target.value })
-              }
-              min={MIN_DATE}
-              max={maxAllowedDate()}
-              disabled={loading}
-            />
-            <Input
-              placeholder="Catatan (opsional)"
-              value={formKosong.note}
-              onChange={(e) =>
-                setFormKosong({ ...formKosong, note: e.target.value })
-              }
-              disabled={loading}
-            />
-            <Button type="submit" disabled={loading || !formKosong.qty}>
-              {loading ? "Menyimpan…" : "Simpan"}
-            </Button>
-          </form>
-        </Card>
+      <Card title="Update Stok">
+        <form onSubmit={submit} className="grid" style={{ gap: 12 }}>
+          <label>Jenis Stok</label>
+          <select
+            value={jenis}
+            onChange={(e) => setJenis(e.target.value)}
+            disabled={loading}
+            style={{ padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: 8 }}
+          >
+            <option value="KOSONG">Tambah KOSONG</option>
+            <option value="ISI">Restok ISI (Tukar dari KOSONG)</option>
+          </select>
 
-        {/* Restok Isi */}
-        <Card title="Restok Isi (Tukar Kosong)">
-          <form onSubmit={saveIsi} className="grid" style={{ gap: 12 }}>
-            <Input
-              type="number"
-              placeholder="Jumlah"
-              value={formIsi.qty}
-              onChange={(e) => setFormIsi({ ...formIsi, qty: e.target.value })}
-              min={1}
-              required
+          <label>Jumlah</label>
+          <Input
+            type="number"
+            value={qty}
+            onChange={(e) => setQty(e.target.value)}
+            min={1}
+            required
+            disabled={loading}
+          />
+          {jenis === "ISI" && (
+            <div style={{ fontSize: 12, color: "#64748b" }}>
+              Stok KOSONG tersedia: <b>{stokKosong}</b>
+              {qty > stokKosong && (
+                <div style={{ color: COLORS.danger }}>
+                  ⚠️ Jumlah melebihi stok KOSONG
+                </div>
+              )}
+            </div>
+          )}
+
+          <label>Tanggal</label>
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            min={MIN_DATE}
+            max={maxAllowedDate()}
+            disabled={loading}
+          />
+
+          <label>Catatan (opsional)</label>
+          <Input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Contoh: titip pelanggan / restok agen"
+            disabled={loading}
+          />
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Button
+              type="button"
+              className="secondary"
+              onClick={reset}
               disabled={loading}
-            />
-            <Input
-              type="date"
-              value={formIsi.date}
-              onChange={(e) =>
-                setFormIsi({ ...formIsi, date: e.target.value })
-              }
-              min={MIN_DATE}
-              max={maxAllowedDate()}
-              disabled={loading}
-            />
-            <Input
-              placeholder="Catatan (opsional)"
-              value={formIsi.note}
-              onChange={(e) => setFormIsi({ ...formIsi, note: e.target.value })}
-              disabled={loading}
-            />
+            >
+              Reset
+            </Button>
             <Button
               type="submit"
-              disabled={loading || !formIsi.qty || formIsi.qty > stokKosong}
+              disabled={
+                loading ||
+                !qty ||
+                (jenis === "ISI" && Number(qty) > stokKosong)
+              }
             >
               {loading ? "Menyimpan…" : "Simpan"}
             </Button>
-            {formIsi.qty > stokKosong && (
-              <div style={{ color: COLORS.danger, fontSize: 12 }}>
-                ⚠️ Stok kosong tidak cukup untuk ditukar
-              </div>
-            )}
-          </form>
-        </Card>
-      </section>
+          </div>
+        </form>
+      </Card>
     </div>
   );
 }
