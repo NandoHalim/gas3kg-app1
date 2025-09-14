@@ -1,3 +1,4 @@
+// src/components/views/PenjualanView.jsx
 import React, { useState } from 'react';
 import Card from '../ui/Card.jsx';
 import Input from '../ui/Input.jsx';
@@ -73,9 +74,7 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
       // ✅ Toast sukses
       toast?.show?.({
         type: 'success',
-        message: `✅ Penjualan tersimpan: ${qtyNum} tabung • Total ${fmtIDR(
-          total
-        )}`,
+        message: `✅ Penjualan tersimpan: ${qtyNum} tabung • Total ${fmtIDR(total)}`,
       });
     } catch (e2) {
       setErr(e2.message || 'Gagal menyimpan penjualan');
@@ -91,9 +90,7 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
 
   return (
     <div>
-      <div
-        style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}
-      >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <Button onClick={loading ? undefined : onCancel} disabled={loading}>
           ← Kembali
         </Button>
@@ -140,9 +137,7 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
             <Input
               placeholder="Contoh: Ayu"
               value={form.customer}
-              onChange={(e) =>
-                setForm({ ...form, customer: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, customer: e.target.value })}
               disabled={loading}
             />
             {!isValidCustomerName(form.customer || '') &&
@@ -215,9 +210,7 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
             <label>Harga Satuan</label>
             <select
               value={form.price}
-              onChange={(e) =>
-                setForm({ ...form, price: parseInt(e.target.value, 10) })
-              }
+              onChange={(e) => setForm({ ...form, price: parseInt(e.target.value, 10) })}
               style={{
                 padding: '10px 12px',
                 border: '1px solid #cbd5e1',
@@ -242,9 +235,7 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
             <label>Metode Pembayaran</label>
             <select
               value={form.method}
-              onChange={(e) =>
-                setForm({ ...form, method: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, method: e.target.value })}
               style={{
                 padding: '10px 12px',
                 border: '1px solid #cbd5e1',
