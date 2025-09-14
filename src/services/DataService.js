@@ -65,7 +65,7 @@ export const DataService = {
   async loadSales(limit = 500) {
     const { data, error } = await supabase
       .from("sales")
-      .select("id,customer,qty,price,total,method,note,created_at")
+      .select("id,customer,qty,price,total,method,note,created_at,status")
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) throw new Error(errMsg(error, "Gagal ambil penjualan"));
@@ -75,7 +75,7 @@ export const DataService = {
   async getRecentSales(limit = 10) {
     const { data, error } = await supabase
       .from("sales")
-      .select("id,customer,qty,price,method,created_at")
+      .select("id,customer,qty,price,method,created_at,status")
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) throw new Error(errMsg(error, "Gagal ambil transaksi terbaru"));
@@ -154,14 +154,15 @@ export const DataService = {
       .gte("created_at", from)
       .lte("created_at", to);
     if (error) throw new Error(errMsg(error, "Gagal ambil ringkasan penjualan"));
-    const qty = data.reduce((a, b) => a + Number(b.qty || 0), 0);
-    const money = data.reduce(
+    const qty = (data || []).reduce((a, b) => a + Number(b.qty || 0), 0);
+    const money = (data || []).reduce(
       (a, b) => a + (Number(b.qty) || 0) * (Number(b.price) || 0),
       0
     );
     return { qty, money };
   },
 
+  // Catatan: jika kamu sudah punya view 'view_sales_daily', bisa diarahkan ke situ.
   async getSevenDaySales() {
     const { data, error } = await supabase
       .from("view_sales_daily")
@@ -178,10 +179,11 @@ export const DataService = {
   async getTotalReceivables() {
     const { data, error } = await supabase
       .from("sales")
-      .select("qty,price,method")
-      .eq("method", "HUTANG");
+      .select("qty,price,method,status")
+      .eq("method", "HUTANG")
+      .neq("status", "LUNAS");
     if (error) throw new Error(errMsg(error, "Gagal ambil piutang"));
-    return data.reduce(
+    return (data || []).reduce(
       (a, b) => a + (Number(b.qty) || 0) * (Number(b.price) || 0),
       0
     );
@@ -191,8 +193,9 @@ export const DataService = {
   async getDebts({ query = "", limit = 200 } = {}) {
     let q = supabase
       .from("sales")
-      .select("id, customer, qty, price, method, note, created_at")
+      .select("id, customer, qty, price, method, status, note, created_at")
       .eq("method", "HUTANG")
+      .neq("status", "LUNAS") // ✅ hanya yang belum lunas
       .order("created_at", { ascending: false })
       .limit(limit);
 
@@ -214,23 +217,12 @@ export const DataService = {
     if (!(amount > 0)) throw new Error("Nominal pembayaran harus > 0");
 
     const { data, error } = await supabase.rpc("sales_pay_debt", {
-      p_sale_id: sale_id,
+      p_sale_id: sale_id, // integer sesuai DB kamu
       p_amount: amount,
       p_note: note,
     });
 
-    if (error) {
-      const msg = (error.message || "").toLowerCase();
-      const fnMissing =
-        msg.includes("could not find function") || msg.includes("does not exist");
-      if (fnMissing) {
-        throw new Error(
-          "Fitur pembayaran hutang belum aktif di database (fungsi sales_pay_debt tidak ditemukan)."
-        );
-      }
-      throw error;
-    }
-
+    if (error) throw new Error(errMsg(error, "Gagal mencatat pembayaran hutang"));
     return data;
   },
 
