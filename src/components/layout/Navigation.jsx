@@ -1,6 +1,10 @@
 import { NavLink } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function Navigation() {
+  const { user } = useAuth() || {};
+  const role = String(user?.role || "user").toLowerCase();
+
   const base = {
     borderRadius: 8,
     padding: "10px 14px",
@@ -16,12 +20,22 @@ export default function Navigation() {
     fontWeight: isActive ? 700 : 500,
   });
 
+  // Menu default untuk semua user
   const menu = [
-    { to: "/", label: "Dashboard", end: true },
-    { to: "/stok", label: "Stok" },
-    { to: "/penjualan", label: "Penjualan" },
-    { to: "/riwayat", label: "Riwayat" },
+    { to: "/", label: "🏠 Dashboard", end: true },
+    { to: "/transaksi", label: "💰 Transaksi" },
+    { to: "/stok", label: "📦 Stok" },
+    { to: "/riwayat", label: "📊 Riwayat" },
+    { to: "/pelanggan", label: "👥 Pelanggan" },
   ];
+
+  // Menu tambahan khusus admin
+  if (["admin", "owner"].includes(role)) {
+    menu.push(
+      { to: "/laporan", label: "📋 Laporan" },
+      { to: "/pengaturan", label: "⚙️ Pengaturan" }
+    );
+  }
 
   return (
     <>
@@ -40,7 +54,7 @@ export default function Navigation() {
           top: 0,
         }}
       >
-        {menu.map(m => (
+        {menu.map((m) => (
           <NavLink key={m.to} to={m.to} style={style} end={m.end}>
             {m.label}
           </NavLink>
@@ -48,9 +62,26 @@ export default function Navigation() {
       </aside>
 
       {/* Top tabs (HP/Tablet ≤1024px) — STICKY under header */}
-      <nav className="nav-mobile">
-        <div className="tabs">
-          {menu.map(m => (
+      <nav
+        className="nav-mobile"
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 50,
+          background: "#fff",
+          borderBottom: "1px solid #e5e7eb",
+          overflowX: "auto",
+        }}
+      >
+        <div
+          className="tabs"
+          style={{
+            display: "flex",
+            gap: 6,
+            padding: "6px 8px",
+          }}
+        >
+          {menu.map((m) => (
             <NavLink
               key={m.to}
               to={m.to}
