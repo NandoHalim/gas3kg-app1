@@ -1,3 +1,4 @@
+// src/components/views/TransaksiView.jsx
 import React, { useEffect, useState } from "react";
 import Card from "../ui/Card.jsx";
 import Input from "../ui/Input.jsx";
@@ -14,9 +15,9 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
   const [q, setQ] = useState("");
   const [debts, setDebts] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [paying, setPaying] = useState(null); // {id, customer, total}
+  const [paying, setPaying] = useState(null); // { id, customer, total }
 
-  // Load daftar hutang saat tab "hutang" aktif atau pencarian berubah
+  // Load daftar hutang saat tab aktif / keyword berubah
   useEffect(() => {
     let on = true;
     (async () => {
@@ -36,28 +37,33 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
     };
   }, [tab, q]);
 
+  // Submit pelunasan (nominal wajib tepat — dikunci pada input)
   const onPaid = async (ev) => {
     ev?.preventDefault?.();
     if (!paying) return;
-    const amountStr = new FormData(ev.target).get("amount");
-    const amount = Number(amountStr);
+
+    const form = new FormData(ev.target);
+    const amount = Number(form.get("amount") || 0);
     if (!(amount > 0)) {
       toast?.show?.({ type: "error", message: "Nominal harus > 0" });
       return;
     }
+
     try {
       setLoading(true);
       await DataService.payDebt({
-        sale_id: paying.id,
+        sale_id: paying.id, // integer ID sesuai DB kamu
         amount,
         note: `pelunasan: ${paying.customer || ""}`,
       });
-      toast?.show?.({ type: "success", message: "✅ Pembayaran hutang dicatat" });
+      toast?.show?.({ type: "success", message: "✅ Pembayaran hutang dicatat (LUNAS)" });
       setPaying(null);
-      // refresh list hutang
+
+      // refresh daftar hutang
       const rows = await DataService.getDebts({ query: q, limit: 200 });
       setDebts(rows);
-      // jika RPC juga update stok/penjualan, parent bisa ikut refresh bila diperlukan:
+
+      // beri tahu parent bila perlu refresh stok/dll
       onSaved?.();
     } catch (e) {
       toast?.show?.({ type: "error", message: `❌ ${e.message}` });
@@ -78,7 +84,10 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
           >
             Penjualan Baru
           </Button>
-          <Button className={tab === "hutang" ? "primary" : ""} onClick={() => setTab("hutang")}>
+          <Button
+            className={tab === "hutang" ? "primary" : ""}
+            onClick={() => setTab("hutang")}
+          >
             Bayar Hutang
           </Button>
         </div>
@@ -105,7 +114,7 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
               </Button>
             </div>
             <div style={{ marginTop: 8, fontSize: 12, color: COLORS.secondary }}>
-              Menampilkan transaksi dengan metode <b>HUTANG</b>.
+              Menampilkan transaksi dengan metode <b>HUTANG</b>. Pembayaran wajib <b>lunas</b>.
             </div>
           </Card>
 
@@ -140,7 +149,13 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
                       <td>
                         <Button
                           size="sm"
-                          onClick={() => setPaying({ id: d.id, customer: d.customer, total: d.total })}
+                          onClick={() =>
+                            setPaying({
+                              id: d.id,
+                              customer: d.customer,
+                              total: d.total, // kebijakan: harus lunas
+                            })
+                          }
                           disabled={loading}
                         >
                           Bayar
@@ -161,8 +176,20 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
                   <span>Total Tagihan</span>
                   <b>{fmtIDR(paying.total)}</b>
                 </div>
+
                 <label>Nominal Pembayaran</label>
-                <Input name="amount" type="number" min={1} placeholder="0" disabled={loading} />
+                <Input
+                  name="amount"
+                  type="number"
+                  min={1}
+                  value={paying.total}   // dikunci ke total/sisa
+                  readOnly                // tidak boleh diubah
+                  disabled={loading}
+                />
+                <div style={{ fontSize: 12, color: COLORS.secondary }}>
+                  *Pembayaran wajib <b>tepat sama</b> dengan sisa hutang.
+                </div>
+
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                   <Button
                     className="secondary"
@@ -175,10 +202,6 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
                   <Button type="submit" disabled={loading}>
                     {loading ? "Menyimpan…" : "Simpan"}
                   </Button>
-                </div>
-                <div style={{ fontSize: 12, color: COLORS.secondary }}>
-                  *Jika muncul pesan bahwa RPC tidak ditemukan, minta admin DB membuat fungsi
-                  <code> sales_pay_debt(p_sale_id uuid, p_amount numeric, p_note text) </code>.
                 </div>
               </form>
             </Card>
