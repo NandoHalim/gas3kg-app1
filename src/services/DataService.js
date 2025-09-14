@@ -151,21 +151,17 @@ export const DataService = {
     return this.loadStocks();
   },
 
-  // ===== Tambahan untuk Dashboard =====
+  // ===== Tambahan untuk Dashboard (pakai view) =====
 
-  async getSalesSummary({ from, to }) {
+  async getDailySummary(from, to) {
     const { data, error } = await supabase
-      .from("sales")
-      .select("qty, price, created_at")
-      .gte("created_at", from + "T00:00:00")
-      .lte("created_at", to + "T23:59:59");
+      .from("view_sales_daily")
+      .select("tanggal, transaksi, total_qty, omzet")
+      .gte("tanggal", from)
+      .lte("tanggal", to)
+      .order("tanggal", { ascending: true });
     if (error) throw error;
-    const qty = (data || []).reduce((a, b) => a + (Number(b.qty) || 0), 0);
-    const money = (data || []).reduce(
-      (a, b) => a + (Number(b.qty) || 0) * (Number(b.price) || 0),
-      0
-    );
-    return { qty, money };
+    return data || [];
   },
 
   async getTotalReceivables() {
@@ -182,22 +178,18 @@ export const DataService = {
 
   async getSevenDaySales() {
     const start = daysAgo(6);
-    const end = todayStr();
     const { data, error } = await supabase
-      .from("sales")
-      .select("qty, created_at")
-      .gte("created_at", start + "T00:00:00")
-      .lte("created_at", end + "T23:59:59");
+      .from("view_sales_daily")
+      .select("tanggal, total_qty")
+      .gte("tanggal", start)
+      .order("tanggal", { ascending: true });
     if (error) throw error;
-    const map = {};
-    (data || []).forEach((r) => {
-      const d = (r.created_at || "").slice(0, 10);
-      map[d] = (map[d] || 0) + (Number(r.qty) || 0);
-    });
+
     const out = [];
     for (let i = 6; i >= 0; i--) {
       const d = daysAgo(i);
-      out.push({ date: d, qty: map[d] || 0 });
+      const row = (data || []).find((r) => r.tanggal === d);
+      out.push({ date: d, qty: row ? row.total_qty : 0 });
     }
     return out;
   },

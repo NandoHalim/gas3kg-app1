@@ -1,78 +1,38 @@
-import React, { useMemo, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Card from "../ui/Card.jsx";
 import StatCard from "../ui/StatCard.jsx";
 import { COLORS, HPP } from "../../utils/constants.js";
 import { fmtIDR, todayStr } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
 
-const LOW_STOCK_THRESHOLD = 5;
-
-function MiniBarChart({ data }) {
-  const max = useMemo(() => Math.max(1, ...data.map((d) => d.qty)), [data]);
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 120 }}>
-      {data.map((d) => {
-        const h = Math.max(6, Math.round((d.qty / max) * 110));
-        return (
-          <div
-            key={d.date}
-            title={`${d.date} • ${d.qty} tabung`}
-            style={{ width: 20, height: h, background: "#1d4ed8", borderRadius: 6 }}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
 export default function DashboardView({ stocks = {} }) {
   const isi = Number(stocks.ISI || 0),
     kosong = Number(stocks.KOSONG || 0),
     total = isi + kosong;
 
-  const [sum, setSum] = useState({ qty: 0, omzet: 0, laba: 0 });
   const [today, setToday] = useState({ qty: 0, money: 0 });
-  const [piutang, setPiutang] = useState(0);
+  const [receivables, setReceivables] = useState(0);
   const [recent, setRecent] = useState([]);
-  const [series7, setSeries7] = useState([]);
-  const [err, setErr] = useState("");
+  const [chart, setChart] = useState([]);
 
   useEffect(() => {
     let on = true;
     (async () => {
       try {
-        // Total riwayat
-        const rows = await DataService.loadSales(200);
-        const qty = rows.reduce((a, b) => a + Number(b.qty || 0), 0);
-        const omzet = rows.reduce((a, b) => a + Number(b.total || 0), 0);
-        const hpp = rows.reduce((a, b) => a + Number(b.qty || 0) * HPP, 0);
-        const laba = omzet - hpp;
+        const sum = await DataService.getDailySummary(todayStr(), todayStr());
+        const row = sum[0] || { total_qty: 0, omzet: 0 };
+        if (on) setToday({ qty: row.total_qty, money: row.omzet });
 
-        // Hari ini
-        const todaySum =
-          (await DataService.getSalesSummary?.({
-            from: todayStr(),
-            to: todayStr(),
-          })) || { qty: 0, money: 0 };
+        const hutang = await DataService.getTotalReceivables();
+        if (on) setReceivables(hutang);
 
-        // Piutang
-        const totalPiutang = await DataService.getTotalReceivables?.();
+        const sales = await DataService.getRecentSales(5);
+        if (on) setRecent(sales);
 
-        // 7 hari terakhir
-        const s7 = await DataService.getSevenDaySales?.();
-
-        // Transaksi terbaru
-        const r = await DataService.getRecentSales?.(5);
-
-        if (on) {
-          setSum({ qty, omzet, laba });
-          setToday(todaySum);
-          setPiutang(totalPiutang ?? 0);
-          setSeries7(Array.isArray(s7) ? s7 : []);
-          setRecent(Array.isArray(r) ? r : []);
-        }
+        const seven = await DataService.getSevenDaySales();
+        if (on) setChart(seven);
       } catch (e) {
-        if (on) setErr(e.message || "Gagal memuat dashboard");
+        console.error(e);
       }
     })();
     return () => {
@@ -82,6 +42,7 @@ export default function DashboardView({ stocks = {} }) {
 
   return (
     <div className="grid">
+      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -108,22 +69,7 @@ export default function DashboardView({ stocks = {} }) {
         </div>
       </div>
 
-      {err && (
-        <div
-          style={{
-            padding: 12,
-            borderRadius: 8,
-            border: "1px solid #fecaca",
-            background: "#fee2e2",
-            color: "#b91c1c",
-            marginTop: 8,
-          }}
-        >
-          ⚠️ {err}
-        </div>
-      )}
-
-      {/* STAT CARDS */}
+      {/* Stat Cards */}
       <section
         className="grid"
         style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}
@@ -131,16 +77,14 @@ export default function DashboardView({ stocks = {} }) {
         <StatCard
           title="Stok Isi"
           value={isi}
-          subtitle={isi <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Siap jual"}
+          subtitle="Siap jual"
           color={COLORS.primary}
           icon="🟢"
         />
         <StatCard
           title="Stok Kosong"
           value={kosong}
-          subtitle={
-            kosong <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Tabung kembali"
-          }
+          subtitle="Tabung kembali"
           color={COLORS.danger}
           icon="⚪"
         />
@@ -153,101 +97,43 @@ export default function DashboardView({ stocks = {} }) {
         />
         <StatCard
           title="Piutang"
-          value={fmtIDR(piutang)}
+          value={fmtIDR(receivables)}
           subtitle="Belum lunas"
           color={COLORS.warning}
-          icon="📄"
-        />
-        <StatCard
-          title="Total Terjual (riwayat)"
-          value={sum.qty}
-          subtitle="Akumulasi data"
-          color={COLORS.info}
-          icon="🧮"
-        />
-        <StatCard
-          title="Laba (akumulasi)"
-          value={fmtIDR(sum.laba)}
-          subtitle={`HPP @ ${fmtIDR(HPP)}`}
-          color={COLORS.success}
-          icon="💰"
+          icon="📌"
         />
       </section>
 
-      {/* RINGKASAN KEUANGAN */}
-      <section
-        className="grid"
-        style={{ gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))" }}
-      >
-        <Card title="Ringkasan Keuangan">
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>Omzet</span>
-              <b>{fmtIDR(sum.omzet)}</b>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>HPP</span>
-              <b>− {fmtIDR(sum.omzet - sum.laba)}</b>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>Laba</span>
-              <b style={{ color: COLORS.success }}>{fmtIDR(sum.laba)}</b>
-            </div>
-          </div>
-        </Card>
-      </section>
-
-      {/* GRAFIK & TRANSAKSI */}
-      <section
-        className="grid"
-        style={{
-          gridTemplateColumns: "2fr 3fr",
-          gap: 12,
-          marginTop: 12,
-        }}
-      >
-        <Card title="Penjualan 7 Hari Terakhir">
-          {series7.length ? (
-            <MiniBarChart data={series7} />
-          ) : (
-            <div style={{ padding: 8, color: "#64748b" }}>
-              Belum ada data penjualan
-            </div>
-          )}
-        </Card>
-
+      {/* Recent Transactions */}
+      <section>
         <Card title="Transaksi Terbaru">
-          <div style={{ overflow: "auto" }}>
-            <table className="table">
-              <thead>
+          <table style={{ width: "100%", fontSize: 14 }}>
+            <thead>
+              <tr style={{ textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>
+                <th>Tanggal</th>
+                <th>Pelanggan</th>
+                <th>Qty</th>
+                <th>Metode</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent.length === 0 && (
                 <tr>
-                  <th>Tanggal</th>
-                  <th>Pelanggan</th>
-                  <th>Qty</th>
-                  <th>Metode</th>
-                  <th>Total</th>
+                  <td colSpan={4} style={{ padding: 8, textAlign: "center" }}>
+                    Belum ada transaksi
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {recent.map((x) => (
-                  <tr key={x.id}>
-                    <td>{x.date || String(x.created_at).slice(0, 10)}</td>
-                    <td>{x.customer || "PUBLIC"}</td>
-                    <td>{x.qty}</td>
-                    <td>{x.method}</td>
-                    <td>{fmtIDR((Number(x.qty) || 0) * (Number(x.price) || 0))}</td>
-                  </tr>
-                ))}
-                {!recent.length && (
-                  <tr>
-                    <td colSpan={5} style={{ color: "#64748b" }}>
-                      Belum ada transaksi
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              )}
+              {recent.map((r) => (
+                <tr key={r.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  <td>{(r.created_at || "").slice(0, 10)}</td>
+                  <td>{r.customer}</td>
+                  <td>{r.qty}</td>
+                  <td>{r.method}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Card>
       </section>
     </div>
