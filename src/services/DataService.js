@@ -46,7 +46,6 @@ export const DataService = {
     return rowsToStockObject(data);
   },
 
-  // Tambah stok ISI (HARUS menukar dari KOSONG yang cukup)
   async addIsi({ qty, date, note }) {
     if (!(qty > 0)) throw new Error("Jumlah harus > 0");
     const yyyy = Number(String(date).slice(0, 4));
@@ -54,14 +53,14 @@ export const DataService = {
       throw new Error(`Tanggal harus antara ${MIN_YEAR}-${MAX_YEAR}`);
     }
 
-    // ✅ Precheck: pastikan stok KOSONG cukup (UI sudah membatasi, ini pagar tambahan)
+    // ✅ Precheck stok kosong
     try {
       const snap = await this.loadStocks();
       if (Number(qty) > Number(snap.KOSONG || 0)) {
         throw new Error("Stok KOSONG tidak cukup untuk ditukar menjadi ISI");
       }
     } catch {
-      // Jika snapshot gagal, tetap lanjut ke RPC—DB akan memvalidasi lagi.
+      // fallback ke DB validation
     }
 
     const { data, error } = await supabase.rpc("stock_add_isi", {
@@ -117,6 +116,7 @@ export const DataService = {
         p_qty: qty,
         p_price: price,
         p_method: method,
+        p_date: date,
         p_note: note,
       });
 
@@ -126,6 +126,7 @@ export const DataService = {
         p_qty: qty,
         p_price: price,
         p_method: method,
+        p_date: date,
         p_note: note,
       });
 
@@ -135,6 +136,7 @@ export const DataService = {
         p_qty: qty,
         p_price: price,
         p_method: method,
+        p_date: date,
         p_note: legacyNote,
       });
     };
@@ -174,7 +176,6 @@ export const DataService = {
     return { qty, money };
   },
 
-  // Jika punya view 'view_sales_daily', fungsi ini memakainya.
   async getSevenDaySales() {
     const { data, error } = await supabase
       .from("view_sales_daily")
@@ -207,7 +208,7 @@ export const DataService = {
       .from("sales")
       .select("id, customer, qty, price, method, status, note, created_at")
       .eq("method", "HUTANG")
-      .neq("status", "LUNAS") // hanya yang belum lunas
+      .neq("status", "LUNAS")
       .order("created_at", { ascending: false })
       .limit(limit);
 
@@ -229,7 +230,7 @@ export const DataService = {
     if (!(amount > 0)) throw new Error("Nominal pembayaran harus > 0");
 
     const { data, error } = await supabase.rpc("sales_pay_debt", {
-      p_sale_id: sale_id, // integer sesuai DB
+      p_sale_id: sale_id,
       p_amount: amount,
       p_note: note,
     });
@@ -243,8 +244,7 @@ export const DataService = {
     const { data: u } = await supabase.auth.getUser();
     if (!u?.user) throw new Error("Unauthorized: silakan login dulu");
     const { error } = await supabase.rpc("reset_all_data");
-    if (error)
-      throw new Error(errMsg(error, "Reset ditolak (khusus admin)"));
+    if (error) throw new Error(errMsg(error, "Reset ditolak (khusus admin)"));
     return this.loadStocks();
   },
 };
