@@ -1,3 +1,4 @@
+// src/components/views/PenjualanView.jsx
 import React, { useState } from 'react';
 import Card from '../ui/Card.jsx';
 import Input from '../ui/Input.jsx';
@@ -24,7 +25,7 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
     price: DEFAULT_PRICE,
     method: 'TUNAI',
   });
-  const [err] = useState(''); // tetap ada, tapi kita pakai toast sebagai satu-satunya notifikasi
+  const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false); // 🔒 anti double submit
 
   const stokISI = Number(stocks.ISI || 0);
@@ -51,6 +52,7 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
     e?.preventDefault?.();
     if (loading || disabledBase) return;
     setLoading(true);
+    setErr('');
     try {
       const snap = await DataService.createSale({
         customer: form.customer.trim() || 'PUBLIC',
@@ -69,13 +71,12 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
         method: 'TUNAI',
       });
 
-      // ✅ sukses (toast konsisten)
       toast?.show?.({
         type: 'success',
-        message: `✅ Penjualan: ${qtyNum} tabung • ${fmtIDR(total)}`,
+        message: `✅ Penjualan tersimpan: ${qtyNum} tabung • Total ${fmtIDR(total)}`,
       });
     } catch (e2) {
-      // ❌ gagal (toast konsisten)
+      setErr(e2.message || 'Gagal menyimpan penjualan');
       toast?.show?.({
         type: 'error',
         message: `❌ ${e2.message || 'Gagal menyimpan penjualan'}`,
@@ -106,7 +107,21 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
       </div>
 
       <Card title="Form Penjualan">
-        {/* Semua notifikasi via toast (tidak ada box error di form) */}
+        {err && (
+          <div
+            style={{
+              color: COLORS.danger,
+              padding: 12,
+              background: `${COLORS.danger}15`,
+              borderRadius: 8,
+              marginBottom: 16,
+              border: `1px solid ${COLORS.danger}30`,
+            }}
+          >
+            ⚠️ {err}
+          </div>
+        )}
+
         <form
           onSubmit={submit}
           className="grid"
@@ -153,6 +168,7 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
             <label>Jumlah (Qty)</label>
             <div style={{ display: 'flex', gap: 8 }}>
               <Button
+                type="button"   // ✅ supaya tidak auto-submit
                 onClick={() => inc(-1)}
                 disabled={loading || qtyNum <= 1}
                 title="Kurangi"
@@ -177,6 +193,7 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
                 style={{ flex: 1 }}
               />
               <Button
+                type="button"   // ✅ supaya tidak auto-submit
                 onClick={() => inc(+1)}
                 disabled={loading || qtyNum >= stokISI}
                 title="Tambah"
@@ -239,7 +256,7 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
             style={{
               padding: 16,
               background: '#f8fafc',
-              border: '1px solid '#e2e8f0',
+              border: '1px solid #e2e8f0',
               borderRadius: 8,
             }}
           >
