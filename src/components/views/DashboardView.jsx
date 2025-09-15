@@ -1,3 +1,4 @@
+// src/components/views/DashboardView.jsx
 import React, { useMemo, useEffect, useState } from "react";
 import Card from "../ui/Card.jsx";
 import StatCard from "../ui/StatCard.jsx";
@@ -231,6 +232,7 @@ export default function DashboardView({ stocks = {} }) {
               <tbody>
                 {recent.map((x) => (
                   <tr key={x.id}>
+                    {/* gunakan created_at (bukan kolom date) */}
                     <td>{(x.created_at || "").slice(0, 10)}</td>
                     <td>{x.customer || "PUBLIC"}</td>
                     <td>{x.qty}</td>
