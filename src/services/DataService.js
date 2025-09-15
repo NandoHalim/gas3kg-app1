@@ -284,4 +284,46 @@ export const DataService = {
     if (error) throw new Error(errMsg(error, "Reset ditolak (khusus admin)"));
     return this.loadStocks();
   },
+
+  // ====== RIWAYAT (baru, TANPA mengubah yang sudah baik) ======
+  async getAllSales({ from, to, method, status, limit = 500 } = {}) {
+    let q = supabase
+      .from("sales")
+      .select(
+        "id,customer,qty,price,total,method,note,created_at,status,hpp,laba"
+      )
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (from) q = q.gte("created_at", from);
+    if (to) q = q.lte("created_at", to);
+    if (method) q = q.eq("method", method);
+    if (status) q = q.eq("status", status);
+
+    const { data, error } = await q;
+    if (error) throw new Error(errMsg(error, "Gagal ambil riwayat transaksi"));
+    return data || [];
+  },
+
+  async getStockHistory(limit = 500) {
+    const { data, error } = await supabase
+      .from("stock_logs")
+      .select("id,code,qty_change,note,created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(errMsg(error, "Gagal ambil riwayat stok"));
+    return data || [];
+  },
+
+  async getDebtHistory(limit = 500) {
+    const { data, error } = await supabase
+      .from("sales")
+      .select("id,customer,qty,price,total,method,note,created_at,status")
+      .eq("method", "HUTANG")
+      .neq("status", "LUNAS")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(errMsg(error, "Gagal ambil riwayat hutang"));
+    return data || [];
+  },
 };
