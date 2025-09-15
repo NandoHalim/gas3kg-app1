@@ -1,4 +1,3 @@
-// src/components/views/TransaksiView.jsx
 import React, { useEffect, useState } from "react";
 import Card from "../ui/Card.jsx";
 import Input from "../ui/Input.jsx";
@@ -35,36 +34,30 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
     return () => { on = false; };
   }, [tab, q]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Submit pelunasan (nominal wajib tepat — DIKUNCI)
+  // Pelunasan hutang (nominal DIKUNCI == total)
   const onPaid = async (ev) => {
     ev?.preventDefault?.();
     if (!paying) return;
-
-    // amount dikunci == paying.total (readOnly), ambil langsung dari state
     const amount = Number(paying.total || 0);
     if (!(amount > 0)) {
-      toast?.show?.({ type: "error", message: "Nominal harus > 0" });
+      toast?.show?.({ type: "error", message: "❌ Nominal tidak valid" });
       return;
     }
 
     try {
       setLoading(true);
       await DataService.payDebt({
-        sale_id: paying.id,     // integer ID
-        amount,                 // wajib pas
+        sale_id: paying.id,
+        amount,
         note: `pelunasan: ${paying.customer || ""}`,
       });
-      toast?.show?.({ type: "success", message: "✅ Pembayaran hutang dicatat (LUNAS)" });
+      toast?.show?.({ type: "success", message: `✅ Hutang lunas: ${paying.customer || "Pelanggan"}` });
       setPaying(null);
-
-      // refresh daftar hutang
       const rows = await DataService.getDebts({ query: q, limit: 200 });
       setDebts(rows);
-
-      // beri tahu parent bila perlu refresh stok/dll
       onSaved?.();
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      toast?.show?.({ type: "error", message: `❌ ${e.message || "Gagal membayar hutang"}` });
     } finally {
       setLoading(false);
     }
@@ -85,7 +78,7 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
         </div>
       </div>
 
-      {/* PENJUALAN BARU (validasi nama & qty sudah di PenjualanView dan TIDAK diubah) */}
+      {/* PENJUALAN BARU (validasi nama & qty tetap di PenjualanView) */}
       {tab === "penjualan" && (
         <PenjualanView stocks={stocks} onSaved={onSaved} onCancel={() => {}} />
       )}
