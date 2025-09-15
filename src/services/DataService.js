@@ -46,6 +46,7 @@ export const DataService = {
     return rowsToStockObject(data);
   },
 
+  // Tambah stok ISI (HARUS menukar dari KOSONG yang cukup)
   async addIsi({ qty, date, note }) {
     if (!(qty > 0)) throw new Error("Jumlah harus > 0");
     const yyyy = Number(String(date).slice(0, 4));
@@ -53,14 +54,13 @@ export const DataService = {
       throw new Error(`Tanggal harus antara ${MIN_YEAR}-${MAX_YEAR}`);
     }
 
-    // ✅ Precheck stok kosong
     try {
       const snap = await this.loadStocks();
       if (Number(qty) > Number(snap.KOSONG || 0)) {
         throw new Error("Stok KOSONG tidak cukup untuk ditukar menjadi ISI");
       }
     } catch {
-      // fallback ke DB validation
+      // snapshot gagal → lanjut ke DB (validasi ulang di sana)
     }
 
     const { data, error } = await supabase.rpc("stock_add_isi", {
@@ -76,7 +76,8 @@ export const DataService = {
   async loadSales(limit = 500) {
     const { data, error } = await supabase
       .from("sales")
-      .select("id,customer,qty,price,total,method,note,created_at,status")
+      .select("id,customer,qty,price,total,method,note,created_at,status,hpp,laba")
+      .eq("status", "LUNAS")   // ✅ hanya transaksi lunas
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) throw new Error(errMsg(error, "Gagal ambil penjualan"));
@@ -93,12 +94,6 @@ export const DataService = {
     return data || [];
   },
 
-  /**
-   * Simpan penjualan:
-   * - Prefer: stock_sell_with_customer
-   * - Fallback: stock_sell_public_v2
-   * - Fallback: stock_sell_public (nama customer di-embed di note)
-   */
   async createSale({
     customer = "PUBLIC",
     qty,
@@ -116,7 +111,6 @@ export const DataService = {
         p_qty: qty,
         p_price: price,
         p_method: method,
-        p_date: date,
         p_note: note,
       });
 
@@ -126,7 +120,6 @@ export const DataService = {
         p_qty: qty,
         p_price: price,
         p_method: method,
-        p_date: date,
         p_note: note,
       });
 
@@ -136,7 +129,6 @@ export const DataService = {
         p_qty: qty,
         p_price: price,
         p_method: method,
-        p_date: date,
         p_note: legacyNote,
       });
     };
@@ -164,9 +156,10 @@ export const DataService = {
   async getSalesSummary({ from, to }) {
     const { data, error } = await supabase
       .from("sales")
-      .select("qty,price,method,created_at")
+      .select("qty,price,method,created_at,status")
       .gte("created_at", from)
-      .lte("created_at", to);
+      .lte("created_at", to)
+      .eq("status", "LUNAS");  // ✅ ringkasan hanya transaksi lunas
     if (error) throw new Error(errMsg(error, "Gagal ambil ringkasan penjualan"));
     const qty = (data || []).reduce((a, b) => a + Number(b.qty || 0), 0);
     const money = (data || []).reduce(
@@ -244,7 +237,8 @@ export const DataService = {
     const { data: u } = await supabase.auth.getUser();
     if (!u?.user) throw new Error("Unauthorized: silakan login dulu");
     const { error } = await supabase.rpc("reset_all_data");
-    if (error) throw new Error(errMsg(error, "Reset ditolak (khusus admin)"));
+    if (error)
+      throw new Error(errMsg(error, "Reset ditolak (khusus admin)"));
     return this.loadStocks();
   },
 };
