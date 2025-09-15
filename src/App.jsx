@@ -7,7 +7,7 @@ import LoginView from "./components/views/LoginView.jsx";
 import PenjualanView from "./components/views/PenjualanView.jsx";
 import StokView from "./components/views/StokView.jsx";
 import RiwayatView from "./components/views/RiwayatView.jsx";
-// ✅ Tambahan view baru
+// ✅ View tambahan (jika sudah ada di project)
 import TransaksiView from "./components/views/TransaksiView.jsx";
 import PelangganView from "./components/views/PelangganView.jsx";
 import LaporanView from "./components/views/LaporanView.jsx";
@@ -23,7 +23,7 @@ export default function App() {
   const { user, initializing, signOut } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
-  const location = useLocation(); // 👈 dipakai untuk refresh ringan saat pindah menu
+  const location = useLocation(); // 👈 untuk refetch saat pindah menu
 
   const push = (m, t = "success") =>
     toast?.show ? toast.show({ type: t, message: m }) : alert(m);
@@ -31,17 +31,17 @@ export default function App() {
   const [stocks, setStocks] = useState({ ISI: 0, KOSONG: 0 });
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // 🔄 Helper: refresh stok ringan (dipakai di beberapa tempat)
+  // Helper: refresh snapshot stok
   const refreshStocks = async () => {
     try {
       const map = await DataService.loadStocks();
       setStocks(map);
     } catch (e) {
-      console.error(e);
+      console.error("Refresh stok gagal:", e?.message || e);
     }
   };
 
-  // 1) Initial load + Realtime (SATU channel untuk stocks & sales)
+  // Initial load + realtime (satu channel untuk stocks & sales)
   useEffect(() => {
     let alive = true;
 
@@ -55,7 +55,6 @@ export default function App() {
       }
     })();
 
-    // satu channel untuk dua tabel: stocks & sales
     const ch = supabase
       .channel("rt-app")
       .on(
@@ -63,7 +62,6 @@ export default function App() {
         { event: "*", schema: "public", table: "stocks" },
         async () => {
           try {
-            // perubahan stok → refresh snapshot
             await refreshStocks();
           } catch {}
         }
@@ -73,9 +71,8 @@ export default function App() {
         { event: "*", schema: "public", table: "sales" },
         async () => {
           try {
-            // perubahan transaksi → stok ikut berubah via fungsi SQL
+            // penjualan memengaruhi stok via fungsi SQL → refresh snapshot
             await refreshStocks();
-            // (opsional) di sini bisa tambahkan event bus lokal kalau mau refresh komponen lain
           } catch {}
         }
       )
@@ -89,13 +86,13 @@ export default function App() {
     };
   }, []);
 
-  // 2) Refresh ringan setiap pindah menu (cepat, hanya snapshot stok)
+  // Refetch ringan setiap pindah menu → tampilkan data DB terbaru tanpa delay
   useEffect(() => {
-    // saat route berubah (Dashboard ↔ Transaksi ↔ Stok ↔ Riwayat), ambil snapshot terbaru
     refreshStocks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
+  // (placeholder role; tetap false kecuali Anda sudah set di AuthContext)
   useEffect(() => setIsAdmin(false), [user]);
 
   const handleResetAll = async () => {
@@ -148,7 +145,7 @@ export default function App() {
               element={<RiwayatView onCancel={() => navigate("/")} />}
             />
 
-            {/* ✅ Route baru sesuai struktur menu */}
+            {/* ✅ Route tambahan (aktifkan kalau file-nya ada) */}
             <Route
               path="/transaksi"
               element={<TransaksiView stocks={stocks} onSaved={setStocks} />}
