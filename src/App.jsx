@@ -1,3 +1,4 @@
+// src/App.js
 import React, { useEffect, useState } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import Header from "./components/layout/Header.jsx";
@@ -7,7 +8,7 @@ import LoginView from "./components/views/LoginView.jsx";
 import PenjualanView from "./components/views/PenjualanView.jsx";
 import StokView from "./components/views/StokView.jsx";
 import RiwayatView from "./components/views/RiwayatView.jsx";
-// ✅ View tambahan (jika sudah ada di project)
+// ✅ View tambahan (aktifkan jika ada)
 import TransaksiView from "./components/views/TransaksiView.jsx";
 import PelangganView from "./components/views/PelangganView.jsx";
 import LaporanView from "./components/views/LaporanView.jsx";
@@ -23,7 +24,7 @@ export default function App() {
   const { user, initializing, signOut } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
-  const location = useLocation(); // 👈 untuk refetch saat pindah menu
+  const location = useLocation(); // 👈 supaya tahu tiap ganti route
 
   const push = (m, t = "success") =>
     toast?.show ? toast.show({ type: t, message: m }) : alert(m);
@@ -31,21 +32,21 @@ export default function App() {
   const [stocks, setStocks] = useState({ ISI: 0, KOSONG: 0 });
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Helper: refresh snapshot stok
+  // Helper untuk refresh snapshot stok
   const refreshStocks = async () => {
     try {
       const map = await DataService.loadStocks();
       setStocks(map);
     } catch (e) {
-      console.error("Refresh stok gagal:", e?.message || e);
+      console.error("❌ Refresh stok gagal:", e?.message || e);
     }
   };
 
-  // Initial load + realtime (satu channel untuk stocks & sales)
+  // initial load + realtime listener
   useEffect(() => {
     let alive = true;
 
-    // initial snapshot
+    // snapshot awal
     (async () => {
       try {
         const map = await DataService.loadStocks();
@@ -55,44 +56,41 @@ export default function App() {
       }
     })();
 
+    // channel realtime: stocks & sales
     const ch = supabase
       .channel("rt-app")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "stocks" },
         async () => {
-          try {
-            await refreshStocks();
-          } catch {}
+          await refreshStocks();
         }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "sales" },
         async () => {
-          try {
-            // penjualan memengaruhi stok via fungsi SQL → refresh snapshot
-            await refreshStocks();
-          } catch {}
+          // penjualan otomatis update stok via DB → ambil ulang snapshot
+          await refreshStocks();
         }
       )
       .subscribe();
 
     return () => {
+      alive = false;
       try {
         supabase.removeChannel(ch);
       } catch {}
-      alive = false;
     };
   }, []);
 
-  // Refetch ringan setiap pindah menu → tampilkan data DB terbaru tanpa delay
+  // setiap pindah menu → langsung refresh stok
   useEffect(() => {
     refreshStocks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  // (placeholder role; tetap false kecuali Anda sudah set di AuthContext)
+  // role admin (placeholder)
   useEffect(() => setIsAdmin(false), [user]);
 
   const handleResetAll = async () => {
@@ -118,7 +116,6 @@ export default function App() {
         <Navigation />
         <main style={{ flex: 1, padding: 16 }}>
           <Routes>
-            {/* Halaman utama & lama */}
             <Route path="/" element={<DashboardView stocks={stocks} />} />
             <Route
               path="/stok"
@@ -145,7 +142,7 @@ export default function App() {
               element={<RiwayatView onCancel={() => navigate("/")} />}
             />
 
-            {/* ✅ Route tambahan (aktifkan kalau file-nya ada) */}
+            {/* ✅ menu tambahan */}
             <Route
               path="/transaksi"
               element={<TransaksiView stocks={stocks} onSaved={setStocks} />}
