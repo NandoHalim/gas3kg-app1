@@ -10,55 +10,68 @@ import { useToast } from "../../context/ToastContext.jsx";
 
 export default function RiwayatView() {
   const toast = useToast();
-  const [tab, setTab] = useState("transaksi"); // transaksi | hutang
+
+  // tab: transaksi | hutang
+  const [tab, setTab] = useState("transaksi");
+
+  // data dan loading
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // ===== Transaksi filters =====
+  // ===== Filter: Riwayat Transaksi =====
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [method, setMethod] = useState("");   // "", "TUNAI", "HUTANG"
-  const [status, setStatus] = useState("");   // "", "LUNAS", "BELUM"
-  const [cashier, setCashier] = useState("");
-  const [q, setQ] = useState("");             // invoice/name
-  const [rowsTrx, setRowsTrx] = useState([]);
+  const [method, setMethod] = useState(""); // "", "TUNAI", "HUTANG"
+  const [status, setStatus] = useState(""); // "", "LUNAS", "BELUM"
+  const [cashier, setCashier] = useState(""); // kasir (opsional)
+  const [q, setQ] = useState(""); // cari Invoice/Nama
 
-  // ===== Hutang filters =====
-  const [qDebt, setQDebt] = useState("");
-  const [rowsDebt, setRowsDebt] = useState([]);
+  // ===== Filter: Riwayat Hutang =====
+  const [qDebt, setQDebt] = useState(""); // cari Invoice/Nama
+  const [nameDebt, setNameDebt] = useState(""); // nama pelanggan
 
-  const totalDebt = useMemo(
-    () => rowsDebt.reduce((a, b) => a + Number(b.total || 0), 0),
-    [rowsDebt]
+  // Modal pelunasan (hutang)
+  const [paying, setPaying] = useState(null); // { id, customer, total }
+
+  const totalHutang = useMemo(
+    () =>
+      (rows || []).reduce((a, r) => a + (Number(r.total) || 0), 0),
+    [rows]
   );
 
-  // Loaders
   const loadTransaksi = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const data = await DataService.getAllSales({
         from,
         to,
-        method,
-        status,
+        method,  // wajib di menu (boleh "Semua" = "")
+        status,  // wajib di menu (boleh "Semua" = "")
         cashier,
-        q,
-        limit: 1000,
+        query: q, // invoice / nama
+        limit: 800,
       });
-      setRowsTrx(data);
+      setRows(data || []);
     } catch (e) {
       toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      setRows([]);
     } finally {
       setLoading(false);
     }
   };
 
   const loadHutang = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const data = await DataService.getDebtHistory({ q: qDebt, limit: 1000 });
-      setRowsDebt(data);
+      const data = await DataService.getDebtHistory({
+        query: qDebt,
+        customer: nameDebt,
+        limit: 800,
+      });
+      setRows(data || []);
     } catch (e) {
       toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -66,20 +79,23 @@ export default function RiwayatView() {
 
   useEffect(() => {
     if (tab === "transaksi") loadTransaksi();
-    if (tab === "hutang") loadHutang();
+    else if (tab === "hutang") loadHutang();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
-  // Actions
-  const handlePayDebt = async (row) => {
+  // Aksi pelunasan HUTANG (wajib lunas penuh)
+  const onPaid = async (ev) => {
+    ev?.preventDefault?.();
+    if (!paying) return;
     try {
       setLoading(true);
       await DataService.payDebt({
-        sale_id: row.id,
-        amount: Number(row.total || 0),
-        note: `pelunasan (${row.invoice_no || row.id})`,
+        sale_id: paying.id,
+        amount: paying.total, // lunas penuh
+        note: `Pelunasan via Riwayat Hutang: ${paying.customer || ""}`,
       });
-      toast?.show?.({ type: "success", message: "✅ Ditandai LUNAS" });
+      toast?.show?.({ type: "success", message: "✅ Hutang ditandai LUNAS" });
+      setPaying(null);
       await loadHutang();
     } catch (e) {
       toast?.show?.({ type: "error", message: `❌ ${e.message}` });
@@ -88,37 +104,18 @@ export default function RiwayatView() {
     }
   };
 
-  const handleAddNote = async (row) => {
-    const current = row?.note || "";
-    const extra = prompt("Tambah/ubah catatan:", current);
-    if (extra === null) return;
-    try {
-      setLoading(true);
-      await DataService.appendSaleNote({ sale_id: row.id, extra_note: extra });
-      toast?.show?.({ type: "success", message: "📝 Catatan disimpan" });
-      if (tab === "transaksi") await loadTransaksi();
-      else await loadHutang();
-    } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const buildWhatsappUrl = (row) => {
-    const phone = (row.phone || "").replace(/[^\d]/g, "");
+  // helper WA link (jika tidak ada nomor, tetap bisa kirim nama)
+  const buildWaLink = (row) => {
     const msg = encodeURIComponent(
-      `Halo ${row.customer}, tagihan tabung 3kg:\n` +
-      `Invoice: ${row.invoice_no || row.id}\n` +
-      `Total: ${fmtIDR(row.total || 0)}\n\n` +
-      `Mohon konfirmasi pelunasan. Terima kasih 🙏`
+      `Halo ${row.customer || ""}, mohon konfirmasi pembayaran untuk transaksi LPG.\nTotal: ${fmtIDR(row.total)}\nInvoice: ${row.invoice_no || row.id}`
     );
+    const phone = (row.phone || "").replace(/\D+/g, "");
     return phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;
   };
 
   return (
     <div>
-      {/* Header & Tabs */}
+      {/* Header Tabs */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>Riwayat</h1>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
@@ -146,7 +143,7 @@ export default function RiwayatView() {
               </div>
               <div>
                 <label>Metode</label>
-                <select value={method} onChange={(e) => setMethod(e.target.value)} style={{ width: "100%", padding: 10 }}>
+                <select value={method} onChange={(e) => setMethod(e.target.value)} style={{ width: "100%", padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}>
                   <option value="">Semua</option>
                   <option value="TUNAI">Tunai</option>
                   <option value="HUTANG">Hutang</option>
@@ -154,10 +151,10 @@ export default function RiwayatView() {
               </div>
               <div>
                 <label>Status</label>
-                <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: "100%", padding: 10 }}>
+                <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: "100%", padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}>
                   <option value="">Semua</option>
                   <option value="LUNAS">Lunas</option>
-                  <option value="BELUM">Belum Lunas</option>
+                  <option value="BELUM">Belum</option>
                 </select>
               </div>
               <div>
@@ -165,11 +162,13 @@ export default function RiwayatView() {
                 <Input placeholder="Nama kasir" value={cashier} onChange={(e) => setCashier(e.target.value)} />
               </div>
               <div>
-                <label>Pencarian</label>
-                <Input placeholder="No. Invoice / Nama" value={q} onChange={(e) => setQ(e.target.value)} />
+                <label>Pencarian (Invoice/Nama)</label>
+                <Input placeholder="INV-001 / Ayu" value={q} onChange={(e) => setQ(e.target.value)} />
               </div>
               <div style={{ alignSelf: "end" }}>
-                <Button onClick={loadTransaksi} disabled={loading}>Terapkan</Button>
+                <Button onClick={loadTransaksi} disabled={loading}>
+                  Terapkan
+                </Button>
               </div>
             </div>
           </Card>
@@ -191,28 +190,26 @@ export default function RiwayatView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {!rowsTrx.length && !loading && (
+                  {!rows.length && !loading && (
                     <tr>
-                      <td colSpan={9} style={{ color: "#64748b" }}>Tidak ada data</td>
+                      <td colSpan={9} style={{ color: "#64748b" }}>
+                        Tidak ada data transaksi
+                      </td>
                     </tr>
                   )}
-                  {rowsTrx.map((r) => (
+                  {rows.map((r) => (
                     <tr key={r.id}>
                       <td>{(r.created_at || "").slice(0, 10)}</td>
                       <td>{r.invoice_no || r.id}</td>
-                      <td>{r.customer}</td>
+                      <td>{r.customer || "-"}</td>
                       <td>{r.qty}</td>
-                      <td>{fmtIDR(r.total ?? (Number(r.qty)*Number(r.price)))}</td>
+                      <td>{fmtIDR(r.total)}</td>
                       <td>{r.method}</td>
                       <td>{r.status}</td>
-                      <td>{r.cashier || r.created_by || "-"}</td>
-                      <td style={{ display: "flex", gap: 6 }}>
-                        <Button size="sm" className="secondary" onClick={() => alert(JSON.stringify(r, null, 2))}>
-                          📋 Detail
-                        </Button>
-                        <Button size="sm" onClick={() => handleAddNote(r)}>
-                          📝 Catatan
-                        </Button>
+                      <td>{r.cashier || "-"}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <Button size="sm" className="secondary" onClick={() => alert(JSON.stringify(r, null, 2))}>📋 Detail</Button>{" "}
+                        <Button size="sm" className="secondary" onClick={() => toast?.show?.({ type: "info", message: "📝 Catatan: (coming soon)" })}>📝 Catatan</Button>
                       </td>
                     </tr>
                   ))}
@@ -226,21 +223,40 @@ export default function RiwayatView() {
       {/* ===================== RIWAYAT HUTANG ===================== */}
       {tab === "hutang" && (
         <>
-          <Card title="Filter Hutang">
-            <div className="grid" style={{ gridTemplateColumns: "1fr auto", gap: 8 }}>
-              <Input
-                placeholder="Nama pelanggan / No. Invoice"
-                value={qDebt}
-                onChange={(e) => setQDebt(e.target.value)}
-              />
-              <Button onClick={loadHutang} disabled={loading}>Cari</Button>
-            </div>
-            <div style={{ marginTop: 8, padding: "10px 12px", background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 8 }}>
-              <b>Total Hutang Belum Lunas: {fmtIDR(totalDebt)}</b>
+          {/* Summary total hutang */}
+          <Card>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: 8,
+              background: "#fff7ed",
+              border: "1px solid #fed7aa",
+              borderRadius: 8
+            }}>
+              <b>Total Hutang Belum Lunas</b>
+              <span style={{ fontSize: 18, fontWeight: 800, color: "#c2410c" }}>{fmtIDR(totalHutang)}</span>
             </div>
           </Card>
 
-          <Card title={loading ? "Memuat…" : "Daftar Hutang (Belum Lunas)"}>
+          {/* Filter sederhana (nama + pencarian invoice/nama) */}
+          <Card title="Filter Hutang">
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 8 }}>
+              <div>
+                <label>Nama Pelanggan</label>
+                <Input placeholder="cth: Ayu" value={nameDebt} onChange={(e) => setNameDebt(e.target.value)} />
+              </div>
+              <div>
+                <label>Pencarian (Invoice/Nama)</label>
+                <Input placeholder="INV-001 / Ayu" value={qDebt} onChange={(e) => setQDebt(e.target.value)} />
+              </div>
+              <div style={{ alignSelf: "end" }}>
+                <Button onClick={loadHutang} disabled={loading}>Terapkan</Button>
+              </div>
+            </div>
+          </Card>
+
+          <Card title={loading ? "Memuat…" : "Riwayat Hutang (Belum Lunas)"}>
             <div style={{ overflow: "auto" }}>
               <table className="table">
                 <thead>
@@ -254,30 +270,77 @@ export default function RiwayatView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {!rowsDebt.length && !loading && (
+                  {!rows.length && !loading && (
                     <tr>
-                      <td colSpan={6} style={{ color: "#64748b" }}>Tidak ada data hutang</td>
+                      <td colSpan={6} style={{ color: "#64748b" }}>
+                        Tidak ada data hutang
+                      </td>
                     </tr>
                   )}
-                  {rowsDebt.map((r) => (
+                  {rows.map((r) => (
                     <tr key={r.id}>
                       <td>{(r.created_at || "").slice(0, 10)}</td>
                       <td>{r.invoice_no || r.id}</td>
-                      <td><b>{r.customer}</b></td>
+                      <td>
+                        <div style={{ fontWeight: 700 }}>{r.customer || "-"}</div>
+                        {r.phone && (
+                          <div style={{ fontSize: 12, color: COLORS.secondary }}>{r.phone}</div>
+                        )}
+                      </td>
                       <td>{r.qty}</td>
                       <td>{fmtIDR(r.total)}</td>
-                      <td style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <Button onClick={() => handlePayDebt(r)}>{loading ? "Memproses…" : "💳 Tandai Lunas"}</Button>
-                        <a href={buildWhatsappUrl(r)} target="_blank" rel="noreferrer">
-                          <Button className="secondary" type="button">📞 Hubungi</Button>
-                        </a>
-                        <Button className="secondary" type="button" onClick={() => handleAddNote(r)}>📝 Catatan</Button>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <Button
+                          className="primary"
+                          onClick={() => setPaying({ id: r.id, customer: r.customer, total: r.total })}
+                          disabled={loading}
+                        >
+                          💳 Tandai Lunas
+                        </Button>{" "}
+                        <a
+                          href={buildWaLink(r)}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ textDecoration: "none" }}
+                          title="Hubungi via WhatsApp"
+                        >
+                          <Button className="secondary">📞 Hubungi</Button>
+                        </a>{" "}
+                        <Button
+                          className="secondary"
+                          onClick={() => toast?.show?.({ type: "info", message: "📝 Catatan: (coming soon)" })}
+                        >
+                          📝 Catatan
+                        </Button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            {/* Modal pelunasan sederhana */}
+            {paying && (
+              <div style={{ marginTop: 12 }}>
+                <Card title={`Pelunasan — ${paying.customer || "PUBLIC"}`}>
+                  <form onSubmit={onPaid} className="grid" style={{ gap: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span>Total Tagihan</span>
+                      <b>{fmtIDR(paying.total)}</b>
+                    </div>
+                    {/* Dikunci: wajib lunas penuh */}
+                    <Input type="number" value={paying.total} readOnly />
+                    <div style={{ fontSize: 12, color: COLORS.secondary }}>
+                      *Pembayaran wajib <b>tepat sama</b> dengan sisa hutang.
+                    </div>
+                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                      <Button type="button" className="secondary" onClick={() => setPaying(null)} disabled={loading}>Batal</Button>
+                      <Button type="submit" disabled={loading}>{loading ? "Menyimpan…" : "Simpan"}</Button>
+                    </div>
+                  </form>
+                </Card>
+              </div>
+            )}
           </Card>
         </>
       )}
