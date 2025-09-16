@@ -1,226 +1,172 @@
+// src/components/views/RiwayatSections.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import Card from "../ui/Card.jsx";
 import Input from "../ui/Input.jsx";
 import Button from "../ui/Button.jsx";
-import { COLORS, MIN_DATE } from "../../utils/constants.js";
-import { fmtIDR, maxAllowedDate } from "../../utils/helpers.js";
+import { COLORS } from "../../utils/constants.js";
+import { fmtIDR } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
 import { useToast } from "../../context/ToastContext.jsx";
-
-const VOID_REASONS = [
-  "Salah Input Data",
-  "Batal oleh Pelanggan",
-  "Barang Rusak",
-  "Lainnya",
-];
 
 export default function RiwayatSections() {
   const toast = useToast();
   const [tab, setTab] = useState("transaksi"); // transaksi | hutang | stok
 
-  // ---------------- TRX ----------------
-  const [fFrom, setFFrom] = useState("");
-  const [fTo, setFTo] = useState("");
-  const [fMethod, setFMethod] = useState("ALL"); // ALL | TUNAI | HUTANG
-  const [fStatus, setFStatus] = useState("ALL"); // ALL | LUNAS | BELUM | DIBATALKAN
-  const [fCashier, setFCashier] = useState("");
-  const [q, setQ] = useState("");
-  const [trxRows, setTrxRows] = useState([]);
-  const [trxLoading, setTrxLoading] = useState(false);
+  // ====== State: Transaksi
+  const [tFrom, setTFrom] = useState("");
+  const [tTo, setTTo] = useState("");
+  const [tMethod, setTMethod] = useState("ALL"); // ALL | TUNAI | HUTANG
+  const [tStatus, setTStatus] = useState("ALL"); // ALL | LUNAS | BELUM
+  const [tCashier, setTCashier] = useState("");
+  const [tQ, setTQ] = useState("");
+  const [rowsTx, setRowsTx] = useState([]);
+  const [loadingTx, setLoadingTx] = useState(false);
 
-  // State untuk VOID
-  const [voidOpen, setVoidOpen] = useState(false);
-  const [voidSale, setVoidSale] = useState(null); // {id, customer, qty, total, created_at, status}
-  const [voidReason, setVoidReason] = useState("");
-  const [voidOther, setVoidOther] = useState("");
-  const finalReason = useMemo(
-    () => (voidReason === "Lainnya" ? voidOther.trim() : voidReason),
-    [voidReason, voidOther]
+  // ====== State: Hutang
+  const [qDebt, setQDebt] = useState("");
+  const [rowsDebt, setRowsDebt] = useState([]);
+  const [loadingDebt, setLoadingDebt] = useState(false);
+  const totalDebt = useMemo(
+    () => (rowsDebt || []).reduce((a, b) => a + Number(b.total || 0), 0),
+    [rowsDebt]
   );
 
-  const loadTrx = async () => {
-    try {
-      setTrxLoading(true);
-      const rows = await DataService.getSalesHistory({
-        from: fFrom || undefined,
-        to: fTo || undefined,
-        method: fMethod,
-        status: fStatus,
-        cashier: fCashier || undefined,
-        q: q || undefined,
-        limit: 300,
-      });
-      setTrxRows(rows);
-    } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
-    } finally {
-      setTrxLoading(false);
-    }
-  };
-
-  // ---------------- HUTANG ----------------
-  const [hNama, setHNama] = useState("");
-  const [hQ, setHQ] = useState("");
-  const [debts, setDebts] = useState([]);
-  const [debtLoading, setDebtLoading] = useState(false);
-  const totalHutang = useMemo(
-    () => debts.reduce((a, b) => a + (Number(b.total) || 0), 0),
-    [debts]
-  );
-
-  const loadDebts = async () => {
-    try {
-      setDebtLoading(true);
-      const keyword = [hNama, hQ].filter(Boolean).join(" ").trim();
-      const rows = await DataService.getDebts({ query: keyword, limit: 300 });
-      setDebts(rows);
-    } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
-    } finally {
-      setDebtLoading(false);
-    }
-  };
-
-  // ---------------- STOK ----------------
+  // ====== State: Stok
   const [sFrom, setSFrom] = useState("");
   const [sTo, setSTo] = useState("");
   const [sJenis, setSJenis] = useState("ALL"); // ALL | ISI | KOSONG
-  const [stokRows, setStokRows] = useState([]);
-  const [stokLoading, setStokLoading] = useState(false);
+  const [rowsStock, setRowsStock] = useState([]);
+  const [loadingStock, setLoadingStock] = useState(false);
 
-  const loadStok = async () => {
+  // ====== Loaders (dipanggil ketika tab aktif & filter berubah)
+  const loadTx = async () => {
     try {
-      setStokLoading(true);
-      const rows = await DataService.getStockHistory({
-        from: sFrom || undefined,
-        to: sTo || undefined,
-        jenis: sJenis,
-        limit: 300,
+      setLoadingTx(true);
+      const data = await DataService.getSalesHistory({
+        from: tFrom || undefined,
+        to: (tTo && (tTo.length === 10 ? tTo + " 23:59:59" : tTo)) || undefined,
+        method: tMethod,
+        status: tStatus,
+        cashier: tCashier || undefined,
+        q: tQ || undefined,
+        limit: 800,
       });
-      setStokRows(rows);
+      setRowsTx(data || []);
     } catch (e) {
       toast?.show?.({ type: "error", message: `❌ ${e.message}` });
     } finally {
-      setStokLoading(false);
+      setLoadingTx(false);
     }
   };
 
-  // muat saat tab pindah
+  const loadDebt = async () => {
+    try {
+      setLoadingDebt(true);
+      const data = await DataService.getDebts({
+        query: qDebt || "",
+        limit: 300,
+      });
+      // tampilkan invoice_display bila ada (DataService.getDebts mengembalikan id)
+      const mapped = (data || []).map((r) => ({
+        ...r,
+        invoice_display: r.invoice_display || `PLP/${String(r.created_at || "").slice(0,4)}/${String(r.created_at || "").slice(5,7)}/${String(r.id).padStart(3,"0")}`,
+      }));
+      setRowsDebt(mapped);
+    } catch (e) {
+      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+    } finally {
+      setLoadingDebt(false);
+    }
+  };
+
+  const loadStock = async () => {
+    try {
+      setLoadingStock(true);
+      const data = await DataService.getStockHistory({
+        from: sFrom || undefined,
+        to: (sTo && (sTo.length === 10 ? sTo + " 23:59:59" : sTo)) || undefined,
+        jenis: sJenis,
+        limit: 400,
+      });
+      setRowsStock(data || []);
+    } catch (e) {
+      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+    } finally {
+      setLoadingStock(false);
+    }
+  };
+
+  // Trigger load sesuai tab
   useEffect(() => {
-    if (tab === "transaksi") loadTrx();
-    if (tab === "hutang") loadDebts();
-    if (tab === "stok") loadStok();
+    if (tab === "transaksi") loadTx();
+    if (tab === "hutang") loadDebt();
+    if (tab === "stok") loadStock();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
-  // --- handler buka modal VOID ---
-  const openVoidModal = (row) => {
-    setVoidSale(row);
-    setVoidReason("");
-    setVoidOther("");
-    setVoidOpen(true);
-  };
-
-  const closeVoidModal = () => {
-    setVoidOpen(false);
-    setVoidSale(null);
-    setVoidReason("");
-    setVoidOther("");
-  };
-
-  // --- submit VOID ---
-  const onConfirmVoid = async (e) => {
-    e?.preventDefault?.();
-    if (!voidSale) return;
-    if (!finalReason) {
-      toast?.show?.({ type: "error", message: "Alasan wajib dipilih/diisi" });
-      return;
-    }
-    // pagar FE: pastikan eligible (<=2 hari & belum dibatalkan)
-    if (!DataService.canVoidOnClient(voidSale, 2)) {
-      toast?.show?.({ type: "error", message: "Transaksi tidak bisa dibatalkan (di luar batas waktu atau sudah dibatalkan)" });
-      return;
-    }
-    try {
-      await DataService.voidSale({ sale_id: voidSale.id, reason: finalReason });
-      toast?.show?.({ type: "success", message: "✅ Transaksi dibatalkan (VOID) dan stok dipulihkan" });
-      closeVoidModal();
-      // reload cepat
-      loadTrx();
-      loadStok();
-    } catch (err) {
-      toast?.show?.({ type: "error", message: `❌ ${err.message}` });
-    }
-  };
-
-  const selStyle = {
-    padding: "10px 12px",
-    border: "1px solid #cbd5e1",
-    borderRadius: 8,
-    width: "100%",
-  };
-
   return (
     <div>
-      {/* Header + Tabs */}
-      <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:16}}>
-        <h1 style={{margin:0}}>Riwayat</h1>
-        <div style={{marginLeft:"auto", display:"flex", gap:8}}>
-          <Button className={tab==="transaksi"?"primary":""} onClick={()=>setTab("transaksi")}>Transaksi</Button>
-          <Button className={tab==="hutang"?"primary":""} onClick={()=>setTab("hutang")}>Hutang</Button>
-          <Button className={tab==="stok"?"primary":""} onClick={()=>setTab("stok")}>Stok</Button>
+      {/* Header Tabs */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <h1 style={{ margin: 0 }}>Riwayat</h1>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <Button className={tab === "transaksi" ? "primary" : ""} onClick={() => setTab("transaksi")}>
+            Riwayat Transaksi
+          </Button>
+          <Button className={tab === "hutang" ? "primary" : ""} onClick={() => setTab("hutang")}>
+            Riwayat Hutang
+          </Button>
+          <Button className={tab === "stok" ? "primary" : ""} onClick={() => setTab("stok")}>
+            Riwayat Stok
+          </Button>
         </div>
       </div>
 
-      {/* ===== RIWAYAT TRANSAKSI ===== */}
-      {tab==="transaksi" && (
+      {/* ========= TRANSAKSI ========= */}
+      {tab === "transaksi" && (
         <>
-          <Card title="Filter">
-            <div className="grid" style={{gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))", gap:12}}>
+          <Card title="Filter Transaksi">
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
               <div>
-                <label>Tanggal Dari</label>
-                <Input type="date" min={MIN_DATE} max={maxAllowedDate()} value={fFrom} onChange={(e)=>setFFrom(e.target.value)} />
+                <label>Dari Tanggal</label>
+                <Input type="date" value={tFrom} onChange={(e) => setTFrom(e.target.value)} />
               </div>
               <div>
-                <label>Tanggal Sampai</label>
-                <Input type="date" min={MIN_DATE} max={maxAllowedDate()} value={fTo} onChange={(e)=>setFTo(e.target.value)} />
+                <label>Sampai</label>
+                <Input type="date" value={tTo} onChange={(e) => setTTo(e.target.value)} />
               </div>
               <div>
-                <label>Metode</label>
-                <select value={fMethod} onChange={(e)=>setFMethod(e.target.value)} style={selStyle}>
+                <label>Metode Bayar</label>
+                <select value={tMethod} onChange={(e) => setTMethod(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1" }}>
                   <option value="ALL">Semua</option>
                   <option value="TUNAI">TUNAI</option>
                   <option value="HUTANG">HUTANG</option>
                 </select>
               </div>
               <div>
-                <label>Status</label>
-                <select value={fStatus} onChange={(e)=>setFStatus(e.target.value)} style={selStyle}>
+                <label>Status Bayar</label>
+                <select value={tStatus} onChange={(e) => setTStatus(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1" }}>
                   <option value="ALL">Semua</option>
                   <option value="LUNAS">LUNAS</option>
                   <option value="BELUM">BELUM</option>
-                  <option value="DIBATALKAN">DIBATALKAN</option>
                 </select>
               </div>
               <div>
                 <label>Kasir</label>
-                <Input placeholder="Nama kasir" value={fCashier} onChange={(e)=>setFCashier(e.target.value)} />
+                <Input placeholder="Nama kasir" value={tCashier} onChange={(e) => setTCashier(e.target.value)} />
               </div>
               <div>
-                <label>Pencarian (ID/Nama)</label>
-                <Input placeholder="cth: 123 atau Ayu" value={q} onChange={(e)=>setQ(e.target.value)} />
+                <label>Pencarian (Invoice/Nama)</label>
+                <Input placeholder="INV / Nama" value={tQ} onChange={(e) => setTQ(e.target.value)} />
               </div>
-              <div style={{display:"flex", alignItems:"flex-end", gap:8}}>
-                <Button onClick={loadTrx} disabled={trxLoading}>{trxLoading?"Memuat…":"Terapkan"}</Button>
-                <Button className="secondary" onClick={()=>{
-                  setFFrom(""); setFTo(""); setFMethod("ALL"); setFStatus("ALL"); setFCashier(""); setQ(""); loadTrx();
-                }} disabled={trxLoading}>Reset</Button>
+              <div style={{ alignSelf: "end" }}>
+                <Button onClick={loadTx} disabled={loadingTx}>{loadingTx ? "Memuat…" : "Terapkan"}</Button>
               </div>
             </div>
           </Card>
 
-          <Card title={`Riwayat Transaksi ${trxLoading?"(memuat…)":""}`}>
-            <div style={{overflow:"auto"}}>
+          <Card title={`Riwayat Transaksi ${loadingTx ? "(memuat…)" : ""}`}>
+            <div style={{ overflow: "auto" }}>
               <table className="table">
                 <thead>
                   <tr>
@@ -232,157 +178,73 @@ export default function RiwayatSections() {
                     <th>Metode</th>
                     <th>Status</th>
                     <th>Kasir</th>
-                    <th>Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {!trxRows.length && !trxLoading && (
-                    <tr><td colSpan={9} style={{color:COLORS.secondary}}>Tidak ada data</td></tr>
+                  {!rowsTx.length && !loadingTx && (
+                    <tr><td colSpan={8} style={{ color: "#64748b" }}>Tidak ada data</td></tr>
                   )}
-                  {trxRows.map(r=>{
-                    const isCancelled = String(r.status||"").toUpperCase()==="DIBATALKAN";
-                    const canVoid = !isCancelled && DataService.canVoidOnClient(r, 2);
-                    return (
-                      <tr key={r.id} style={{opacity: isCancelled ? .7 : 1}}>
-                        <td>{String(r.created_at||"").slice(0,10)}</td>
-                        <td>{isCancelled ? `VOID-${r.id}` : r.id}</td>
-                        <td>{r.customer || "PUBLIC"}</td>
-                        <td>{r.qty}</td>
-                        <td>{fmtIDR(r.total || (r.qty||0)*(r.price||0))}</td>
-                        <td>{r.method}</td>
-                        <td>
-                          <span className="badge" style={{
-                            background: isCancelled ? "#e5e7eb" : (r.status==="LUNAS" ? "#dcfce7" : "#fee2e2"),
-                            color: isCancelled ? "#374151" : (r.status==="LUNAS" ? "#166534" : "#991b1b")
-                          }}>
-                            {r.status || "-"}
-                          </span>
-                        </td>
-                        <td>{r.cashier || r.kasir || "-"}</td>
-                        <td style={{whiteSpace:"nowrap"}}>
-                          <Button size="sm" className="secondary" title="Lihat Detail">📋</Button>{" "}
-                          <Button size="sm" className="secondary" title="Tambah Catatan">📝</Button>{" "}
-                          <Button
-                            size="sm"
-                            className={canVoid ? "danger" : "secondary"}
-                            disabled={!canVoid}
-                            title={canVoid ? "Batalkan (VOID)" : "Tidak dapat dibatalkan"}
-                            onClick={()=>openVoidModal(r)}
-                          >
-                            ❌ Void
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {rowsTx.map((r) => (
+                    <tr key={r.id} style={{ color: r.status === "DIBATALKAN" ? "#b91c1c" : "inherit", opacity: r.status === "DIBATALKAN" ? 0.8 : 1 }}>
+                      <td>{String(r.created_at || "").slice(0, 10)}</td>
+                      <td>{r.invoice_display || `PLP/${String(r.created_at || "").slice(0,4)}/${String(r.created_at || "").slice(5,7)}/${String(r.id).padStart(3,"0")}`}</td>
+                      <td>{r.customer || "PUBLIC"}</td>
+                      <td>{r.qty}</td>
+                      <td>{fmtIDR((Number(r.qty) || 0) * (Number(r.price) || 0))}</td>
+                      <td>{r.method}</td>
+                      <td>{r.status || "-"}</td>
+                      <td>{r.kasir || r.cashier || "-"}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </Card>
-
-          {/* Modal/Sheet Void */}
-          {voidOpen && (
-            <Card title={`Batalkan Transaksi (ID: ${voidSale?.id})`}>
-              <form onSubmit={onConfirmVoid} className="grid" style={{gap:12}}>
-                <div style={{display:"grid", gap:6}}>
-                  <div style={{display:"flex", justifyContent:"space-between"}}>
-                    <span>Pelanggan</span><b>{voidSale?.customer || "PUBLIC"}</b>
-                  </div>
-                  <div style={{display:"flex", justifyContent:"space-between"}}>
-                    <span>Qty</span><b>{voidSale?.qty}</b>
-                  </div>
-                  <div style={{display:"flex", justifyContent:"space-between"}}>
-                    <span>Total</span><b>{fmtIDR(voidSale?.total || (voidSale?.qty||0)*(voidSale?.price||0))}</b>
-                  </div>
-                  <div style={{display:"flex", justifyContent:"space-between"}}>
-                    <span>Tanggal</span><b>{String(voidSale?.created_at||"").slice(0,10)}</b>
-                  </div>
-                </div>
-
-                <div>
-                  <label>Alasan Pembatalan</label>
-                  <select value={voidReason} onChange={e=>setVoidReason(e.target.value)} style={{
-                    padding:"10px 12px", border:"1px solid #cbd5e1", borderRadius:8, width:"100%"
-                  }}>
-                    <option value="">Pilih alasan…</option>
-                    {VOID_REASONS.map(v=><option key={v} value={v}>{v}</option>)}
-                  </select>
-                </div>
-                {voidReason==="Lainnya" && (
-                  <div>
-                    <label>Alasan (ketik)</label>
-                    <Input value={voidOther} onChange={e=>setVoidOther(e.target.value)} placeholder="Tulis alasan…" />
-                  </div>
-                )}
-
-                <div style={{display:"flex", justifyContent:"flex-end", gap:8}}>
-                  <Button type="button" className="secondary" onClick={closeVoidModal}>Batal</Button>
-                  <Button type="submit" className="danger">Konfirmasi Void</Button>
-                </div>
-                <div style={{fontSize:12, color:COLORS.secondary}}>
-                  *Void akan mengembalikan stok, menandai transaksi asli sebagai <b>DIBATALKAN</b>, dan mencatat mutasi stok.
-                </div>
-              </form>
-            </Card>
-          )}
         </>
       )}
 
-      {/* ===== RIWAYAT HUTANG ===== */}
-      {tab==="hutang" && (
+      {/* ========= HUTANG ========= */}
+      {tab === "hutang" && (
         <>
           <Card title="Filter Hutang">
-            <div className="grid" style={{gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))", gap:12}}>
-              <div>
-                <label>Nama Pelanggan</label>
-                <Input placeholder="Cari nama pelanggan" value={hNama} onChange={(e)=>setHNama(e.target.value)} />
-              </div>
-              <div>
-                <label>Pencarian (ID/Nama)</label>
-                <Input placeholder="cth: 123 atau Ayu" value={hQ} onChange={(e)=>setHQ(e.target.value)} />
-              </div>
-              <div style={{display:"flex", alignItems:"flex-end", gap:8}}>
-                <Button onClick={loadDebts} disabled={debtLoading}>{debtLoading?"Memuat…":"Terapkan"}</Button>
-                <Button className="secondary" onClick={()=>{ setHNama(""); setHQ(""); loadDebts(); }} disabled={debtLoading}>Reset</Button>
-              </div>
+            <div className="grid" style={{ gridTemplateColumns: "1fr auto", gap: 12 }}>
+              <Input
+                placeholder="Nama pelanggan / invoice"
+                value={qDebt}
+                onChange={(e) => setQDebt(e.target.value)}
+              />
+              <Button onClick={loadDebt} disabled={loadingDebt}>
+                {loadingDebt ? "Memuat…" : "Terapkan"}
+              </Button>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, color: COLORS.secondary }}>
+              Menampilkan transaksi HUTANG dengan status <b>belum lunas</b>.
             </div>
           </Card>
 
-          <Card title={`Riwayat Hutang — Total Belum Lunas: ${fmtIDR(totalHutang)} ${debtLoading?"(memuat…)":""}`}>
-            <div style={{overflow:"auto"}}>
+          <Card title={`Riwayat Hutang — Total: ${fmtIDR(totalDebt)}`}>
+            <div style={{ overflow: "auto" }}>
               <table className="table">
                 <thead>
                   <tr>
                     <th>Tanggal</th>
                     <th>No. Invoice</th>
-                    <th style={{minWidth:140}}>Pelanggan</th>
+                    <th>Pelanggan</th>
                     <th>Qty</th>
                     <th>Total Hutang</th>
-                    <th>Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {!debts.length && !debtLoading && (
-                    <tr><td colSpan={6} style={{color:COLORS.secondary}}>Tidak ada hutang</td></tr>
+                  {!rowsDebt.length && !loadingDebt && (
+                    <tr><td colSpan={5} style={{ color: "#64748b" }}>Tidak ada data hutang</td></tr>
                   )}
-                  {debts.map(d=>(
+                  {rowsDebt.map((d) => (
                     <tr key={d.id}>
-                      <td>{String(d.created_at||"").slice(0,10)}</td>
-                      <td>{d.id}</td>
-                      <td style={{fontWeight:600}}>{d.customer}</td>
+                      <td>{String(d.created_at || "").slice(0, 10)}</td>
+                      <td>{d.invoice_display || `PLP/${String(d.created_at || "").slice(0,4)}/${String(d.created_at || "").slice(5,7)}/${String(d.id).padStart(3,"0")}`}</td>
+                      <td style={{ fontWeight: 600 }}>{d.customer || "PUBLIC"}</td>
                       <td>{d.qty}</td>
                       <td>{fmtIDR(d.total)}</td>
-                      <td style={{whiteSpace:"nowrap"}}>
-                        <Button size="sm" className="primary" onClick={()=>{
-                          toast?.show?.({type:"info", message:"Buka menu Transaksi > Bayar Hutang untuk melunasi."});
-                        }}>💳 Bayar</Button>{" "}
-                        <Button size="sm" className="secondary" onClick={()=>{
-                          toast?.show?.({type:"info", message:"Fitur kontak otomatis aktif bila nomor pelanggan tersimpan."});
-                        }}>📞 Hubungi</Button>{" "}
-                        <Button size="sm" className="secondary" onClick={()=>{
-                          toast?.show?.({type:"info", message:"Fitur catatan akan diaktifkan berikutnya."});
-                        }}>📝 Catatan</Button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -392,64 +254,60 @@ export default function RiwayatSections() {
         </>
       )}
 
-      {/* ===== RIWAYAT STOK ===== */}
-      {tab==="stok" && (
+      {/* ========= STOK ========= */}
+      {tab === "stok" && (
         <>
           <Card title="Filter Mutasi Stok">
-            <div className="grid" style={{gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))", gap:12}}>
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
               <div>
-                <label>Tanggal Dari</label>
-                <Input type="date" min={MIN_DATE} max={maxAllowedDate()} value={sFrom} onChange={(e)=>setSFrom(e.target.value)} />
+                <label>Dari Tanggal</label>
+                <Input type="date" value={sFrom} onChange={(e) => setSFrom(e.target.value)} />
               </div>
               <div>
-                <label>Tanggal Sampai</label>
-                <Input type="date" min={MIN_DATE} max={maxAllowedDate()} value={sTo} onChange={(e)=>setSTo(e.target.value)} />
+                <label>Sampai</label>
+                <Input type="date" value={sTo} onChange={(e) => setSTo(e.target.value)} />
               </div>
               <div>
                 <label>Jenis Stok</label>
-                <select value={sJenis} onChange={(e)=>setSJenis(e.target.value)} style={selStyle}>
+                <select value={sJenis} onChange={(e) => setSJenis(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1" }}>
                   <option value="ALL">Semua</option>
                   <option value="ISI">ISI</option>
                   <option value="KOSONG">KOSONG</option>
                 </select>
               </div>
-              <div style={{display:"flex", alignItems:"flex-end", gap:8}}>
-                <Button onClick={loadStok} disabled={stokLoading}>{stokLoading?"Memuat…":"Terapkan"}</Button>
-                <Button className="secondary" onClick={()=>{ setSFrom(""); setSTo(""); setSJenis("ALL"); loadStok(); }} disabled={stokLoading}>Reset</Button>
+              <div style={{ alignSelf: "end" }}>
+                <Button onClick={loadStock} disabled={loadingStock}>{loadingStock ? "Memuat…" : "Terapkan"}</Button>
               </div>
             </div>
           </Card>
 
-          <Card title={`Riwayat Mutasi Stok ${stokLoading?"(memuat…)":""}`}>
-            <div style={{overflow:"auto"}}>
+          <Card title={`Riwayat Mutasi Stok ${loadingStock ? "(memuat…)" : ""}`}>
+            <div style={{ overflow: "auto" }}>
               <table className="table">
                 <thead>
                   <tr>
                     <th>Tanggal</th>
                     <th>Keterangan</th>
-                    <th style={{textAlign:"right"}}>Masuk</th>
-                    <th style={{textAlign:"right"}}>Keluar</th>
-                    <th style={{textAlign:"right"}}>Sisa Stok</th>
+                    <th>Masuk</th>
+                    <th>Keluar</th>
+                    <th>Sisa Stok</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {!stokRows.length && !stokLoading && (
-                    <tr><td colSpan={5} style={{color:COLORS.secondary}}>Tidak ada data</td></tr>
+                  {!rowsStock.length && !loadingStock && (
+                    <tr><td colSpan={5} style={{ color: "#64748b" }}>Tidak ada data</td></tr>
                   )}
-                  {stokRows.map(r=>(
+                  {rowsStock.map((r) => (
                     <tr key={r.id}>
                       <td>{r.tanggal}</td>
                       <td>{r.keterangan}</td>
-                      <td style={{textAlign:"right"}}>{r.masuk || ""}</td>
-                      <td style={{textAlign:"right"}}>{r.keluar || ""}</td>
-                      <td style={{textAlign:"right"}}>{(r.sisa ?? "")==="" ? "-" : r.sisa}</td>
+                      <td>{r.masuk}</td>
+                      <td>{r.keluar}</td>
+                      <td>{r.sisa ?? "-"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-            <div style={{marginTop:8, fontSize:12, color:COLORS.secondary}}>
-              *Kolom “Sisa Stok” otomatis bila view <code>stock_logs_with_balance</code> tersedia.
             </div>
           </Card>
         </>
