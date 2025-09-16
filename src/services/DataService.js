@@ -45,24 +45,18 @@ export const DataService = {
     return rowsToStockObject(data);
   },
 
-  // Tambah stok ISI (HARUS menukar dari KOSONG yang cukup)
   async addIsi({ qty, date, note }) {
     if (!(qty > 0)) throw new Error("Jumlah harus > 0");
     const yyyy = Number(String(date).slice(0, 4));
     if (Number.isFinite(yyyy) && (yyyy < MIN_YEAR || yyyy > MAX_YEAR)) {
       throw new Error(`Tanggal harus antara ${MIN_YEAR}-${MAX_YEAR}`);
     }
-
-    // pagar tambahan (DB tetap validasi)
     try {
       const snap = await this.loadStocks();
       if (Number(qty) > Number(snap.KOSONG || 0)) {
         throw new Error("Stok KOSONG tidak cukup untuk ditukar menjadi ISI");
       }
-    } catch {
-      /* lanjut; DB akan validasi */
-    }
-
+    } catch {}
     const { data, error } = await supabase.rpc("stock_add_isi", {
       p_qty: qty,
       p_date: date,
@@ -79,7 +73,7 @@ export const DataService = {
       .select(
         "id,customer,qty,price,total,method,note,created_at,status,hpp,laba"
       )
-      .order("id", { ascending: false }) // urut invoice terbaru
+      .order("id", { ascending: false })
       .limit(limit);
     if (error) throw new Error(errMsg(error, "Gagal ambil penjualan"));
     return data || [];
@@ -89,16 +83,12 @@ export const DataService = {
     const { data, error } = await supabase
       .from("sales")
       .select("id,customer,qty,price,method,created_at,status")
-      .order("id", { ascending: false }) // urut invoice terbaru
+      .order("id", { ascending: false })
       .limit(limit);
     if (error) throw new Error(errMsg(error, "Gagal ambil transaksi terbaru"));
     return data || [];
   },
 
-  /**
-   * Simpan penjualan (6 arg utama).
-   * Catatan: tidak merusak logika yang sudah baik.
-   */
   async createSale({ customer = "PUBLIC", qty, price, method = "TUNAI", date, note = "" }) {
     if (!(qty > 0)) throw new Error("Qty harus > 0");
     if (!(price > 0)) throw new Error("Harga tidak valid");
@@ -150,25 +140,24 @@ export const DataService = {
     let resp = await tryWithCustomer6();
     if (resp.error) {
       const msg = (resp.error.message || "").toLowerCase();
-      const fnMissing =
-        msg.includes("could not find function") || msg.includes("does not exist");
-      if (fnMissing) resp = await tryV2_6();
+      if (msg.includes("could not find function") || msg.includes("does not exist")) {
+        resp = await tryV2_6();
+      }
     }
     if (resp.error) {
       const msg = (resp.error.message || "").toLowerCase();
-      const fnMissing =
-        msg.includes("could not find function") || msg.includes("does not exist");
-      if (fnMissing) resp = await tryV2_5();
+      if (msg.includes("could not find function") || msg.includes("does not exist")) {
+        resp = await tryV2_5();
+      }
     }
     if (resp.error) {
       const msg = (resp.error.message || "").toLowerCase();
-      const fnMissing =
-        msg.includes("could not find function") || msg.includes("does not exist");
-      if (fnMissing) resp = await tryV1();
+      if (msg.includes("could not find function") || msg.includes("does not exist")) {
+        resp = await tryV1();
+      }
     }
     if (resp.error)
       throw new Error(errMsg(resp.error, "Gagal menyimpan penjualan"));
-
     return rowsToStockObject(resp.data);
   },
 
@@ -189,7 +178,6 @@ export const DataService = {
     return { qty, money };
   },
 
-  // Grafik 7 hari: pakai view harian (sudah ada)
   async getSevenDaySales() {
     const { data, error } = await supabase
       .from("view_sales_daily")
@@ -213,52 +201,26 @@ export const DataService = {
     );
   },
 
-  // ====== RIWAYAT TRANSAKSI (dengan filter)
-  /**
-   * @param {Object} p
-   * @param {string} [p.from] 'YYYY-MM-DD'
-   * @param {string} [p.to]   'YYYY-MM-DD'
-   * @param {'ALL'|'TUNAI'|'HUTANG'} [p.method]
-   * @param {'ALL'|'LUNAS'|'BELUM'}  [p.status]
-   * @param {string} [p.cashier]   - fallback cari di note apabila kolom kasir tidak ada
-   * @param {string} [p.q]         - cari invoice/id atau nama customer (ilike)
-   * @param {number} [p.limit]
-   */
-  async getSalesHistory({
-    from,
-    to,
-    method = "ALL",
-    status = "ALL",
-    cashier,
-    q,
-    limit = 800,
-  } = {}) {
+  // ====== RIWAYAT TRANSAKSI ======
+  async getSalesHistory({ from, to, method = "ALL", status = "ALL", cashier, q, limit = 800 } = {}) {
     let s = supabase
       .from("sales")
-      .select(
-        "id,invoice,customer,qty,price,total,method,status,created_at,kasir,cashier,note"
-      )
+      .select("id,invoice,customer,qty,price,total,method,status,created_at,kasir,cashier,note")
       .order("id", { ascending: false })
       .limit(limit);
 
     if (from) s = s.gte("created_at", from);
     if (to) s = s.lte("created_at", to);
-    if (method === "TUNAI" || method === "HUTANG") s = s.eq("method", method);
-    if (status === "LUNAS" || status === "BELUM") s = s.eq("status", status);
+    if (method !== "ALL") s = s.eq("method", method);
+    if (status !== "ALL") s = s.eq("status", status);
 
-    // Kasir: bila kolom kasir/cashier tidak ada, fallback cari di note
     if (cashier) {
       s = s.or(
         "kasir.ilike.%"+cashier+"%,cashier.ilike.%"+cashier+"%,note.ilike.%"+cashier+"%"
       );
     }
-
-    // Pencarian invoice/nama
     if (q) {
-      // cari di id (cast text), invoice, customer
-      s = s.or(
-        "invoice.ilike.%"+q+"%,customer.ilike.%"+q+"%"
-      );
+      s = s.or("invoice.ilike.%"+q+"%,customer.ilike.%"+q+"%");
     }
 
     const { data, error } = await s;
@@ -303,26 +265,16 @@ export const DataService = {
   },
 
   // ====== RIWAYAT STOK ======
-  /**
-   * @param {Object} p
-   * @param {string} [p.from]  'YYYY-MM-DD'
-   * @param {string} [p.to]
-   * @param {'ALL'|'ISI'|'KOSONG'} [p.jenis]
-   * @param {number} [p.limit]
-   */
   async getStockHistory({ from, to, jenis = "ALL", limit = 300 } = {}) {
-    // coba view dengan balance dulu; fallback ke tabel stock_logs
     const base = async (source) => {
       let q = supabase
         .from(source)
         .select("id, code, qty_change, note, created_at, balance_after")
         .order("created_at", { ascending: false })
         .limit(limit);
-
       if (from) q = q.gte("created_at", from);
       if (to) q = q.lte("created_at", to);
-      if (jenis === "ISI" || jenis === "KOSONG") q = q.eq("code", jenis);
-
+      if (jenis !== "ALL") q = q.eq("code", jenis);
       return q;
     };
 
@@ -332,8 +284,7 @@ export const DataService = {
     }
     if (res.error) throw new Error(errMsg(res.error, "Gagal ambil riwayat stok"));
 
-    const data = res.data || [];
-    return data.map((r) => {
+    return (res.data || []).map((r) => {
       const change = Number(r.qty_change || 0);
       const masuk = change > 0 ? change : 0;
       const keluar = change < 0 ? Math.abs(change) : 0;
@@ -354,6 +305,26 @@ export const DataService = {
         sisa: r.balance_after ?? null,
       };
     });
+  },
+
+  // ====== VOID ======
+  canVoidOnClient(sale, maxDays = 2) {
+    if (!sale) return false;
+    if ((sale.status || "").toUpperCase() === "DIBATALKAN") return false;
+    const created = new Date(sale.created_at || Date.now());
+    const ageDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+    return ageDays <= maxDays;
+  },
+
+  async voidSale({ sale_id, reason }) {
+    if (!sale_id) throw new Error("sale_id wajib");
+    if (!reason || !reason.trim()) throw new Error("Alasan wajib diisi");
+    const { data, error } = await supabase.rpc("sales_void", {
+      p_sale_id: sale_id,
+      p_reason: reason,
+    });
+    if (error) throw new Error(errMsg(error, "Gagal membatalkan transaksi"));
+    return data;
   },
 
   // ====== RESET ======
