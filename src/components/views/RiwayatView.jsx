@@ -39,7 +39,6 @@ export default function RiwayatView() {
   const [fTo, setFTo] = useState("");
   const [fMethod, setFMethod] = useState("ALL"); // ALL | TUNAI | HUTANG
   const [fStatus, setFStatus] = useState("ALL"); // ALL | LUNAS | BELUM
-  const [fCashier, setFCashier] = useState("");
   const [q, setQ] = useState("");
   const [trxRows, setTrxRows] = useState([]);
   const [trxLoading, setTrxLoading] = useState(false);
@@ -52,7 +51,6 @@ export default function RiwayatView() {
         to: fTo || undefined,
         method: fMethod,
         status: fStatus,
-        cashier: fCashier || undefined,
         q: q || undefined,
         limit: 800,
       });
@@ -105,7 +103,6 @@ export default function RiwayatView() {
   const loadDebts = async () => {
     try {
       setDebtLoading(true);
-      // gabung keyword nama + q supaya fleksibel
       const keyword = [hNama, hQ].filter(Boolean).join(" ").trim();
       const rows = await DataService.getDebts({
         query: keyword,
@@ -201,14 +198,6 @@ export default function RiwayatView() {
                 </select>
               </div>
               <div>
-                <label>Kasir</label>
-                <Input
-                  placeholder="Nama kasir"
-                  value={fCashier}
-                  onChange={(e) => setFCashier(e.target.value)}
-                />
-              </div>
-              <div>
                 <label>Pencarian (Invoice/Nama)</label>
                 <Input
                   placeholder="INV-001 / Ayu"
@@ -228,7 +217,6 @@ export default function RiwayatView() {
                     setFTo("");
                     setFMethod("ALL");
                     setFStatus("ALL");
-                    setFCashier("");
                     setQ("");
                     loadTrx();
                   }}
@@ -252,14 +240,13 @@ export default function RiwayatView() {
                     <th>Total</th>
                     <th>Metode</th>
                     <th>Status</th>
-                    <th>Kasir</th>
                     <th>Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
                   {!trxRows.length && !trxLoading && (
                     <tr>
-                      <td colSpan={9} style={{ color: COLORS.secondary }}>
+                      <td colSpan={8} style={{ color: COLORS.secondary }}>
                         Tidak ada data
                       </td>
                     </tr>
@@ -284,7 +271,6 @@ export default function RiwayatView() {
                           {r.status || "-"}
                         </span>
                       </td>
-                      <td>{r.cashier || r.kasir || "-"}</td>
                       <td style={{ whiteSpace: "nowrap" }}>
                         <Button size="sm" className="secondary" title="Detail">
                           📋
@@ -405,8 +391,7 @@ export default function RiwayatView() {
               </table>
             </div>
             <div style={{ marginTop: 8, fontSize: 12, color: COLORS.secondary }}>
-              *Kolom “Sisa Stok” otomatis bila view{" "}
-              <code>stock_logs_with_balance</code> tersedia.
+              *Kolom “Sisa Stok” otomatis bila view <code>stock_logs_with_balance</code> tersedia.
             </div>
           </Card>
         </>
