@@ -1,4 +1,3 @@
-// src/components/views/RiwayatView.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import Card from "../ui/Card.jsx";
 import Input from "../ui/Input.jsx";
@@ -29,6 +28,42 @@ function Tabs({ active, onChange }) {
   );
 }
 
+function Modal({ open, title, children, onClose }) {
+  if (!open) return null;
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,.25)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 50,
+        padding: 16,
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: 560,
+          background: "#fff",
+          borderRadius: 12,
+          boxShadow: "0 10px 30px rgba(0,0,0,.15)",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ padding: 14, borderBottom: "1px solid #e5e7eb" }}>
+          <b>{title}</b>
+        </div>
+        <div style={{ padding: 16 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function RiwayatView() {
   const toast = useToast();
   const [tab, setTab] = useState("trx"); // 'trx' | 'stok' | 'hutang'
@@ -40,15 +75,13 @@ export default function RiwayatView() {
   const [fTo, setFTo] = useState("");
   const [fMethod, setFMethod] = useState("ALL"); // ALL | TUNAI | HUTANG
   const [fStatus, setFStatus] = useState("ALL"); // ALL | LUNAS | BELUM
-  const [fCashier, setFCashier] = useState("");
   const [q, setQ] = useState("");
   const [trxRows, setTrxRows] = useState([]);
   const [trxLoading, setTrxLoading] = useState(false);
 
-  const [detailSale, setDetailSale] = useState(null); // object sale utk modal detail
-  const [voidSale, setVoidSale] = useState(null);     // object sale utk modal void
+  const [detailSale, setDetailSale] = useState(null); // row
+  const [voidSale, setVoidSale] = useState(null);     // row
   const [voidReason, setVoidReason] = useState("");
-
   const VOID_REASONS = [
     "Salah Input Data",
     "Batal oleh Pelanggan",
@@ -64,7 +97,6 @@ export default function RiwayatView() {
         to: fTo || undefined,
         method: fMethod,
         status: fStatus,
-        cashier: fCashier || undefined,
         q: q || undefined,
         limit: 800,
       });
@@ -83,7 +115,7 @@ export default function RiwayatView() {
   const [sTo, setSTo] = useState("");
   const [sJenis, setSJenis] = useState("ALL"); // ALL | ISI | KOSONG
   const [stokRows, setStokRows] = useState([]);
-  const [stokLoading, setStokLoading] = useState(false);
+  the: "stokLoading", setStokLoading] = useState(false);
 
   const loadStok = async () => {
     try {
@@ -118,10 +150,7 @@ export default function RiwayatView() {
     try {
       setDebtLoading(true);
       const keyword = [hNama, hQ].filter(Boolean).join(" ").trim();
-      const rows = await DataService.getDebts({
-        query: keyword,
-        limit: 500,
-      });
+      const rows = await DataService.getDebts({ query: keyword, limit: 500 });
       setDebts(rows);
     } catch (e) {
       toast?.show?.({ type: "error", message: `❌ ${e.message}` });
@@ -138,20 +167,19 @@ export default function RiwayatView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
-  // aksi VOID
-  const doVoid = async (ev) => {
-    ev?.preventDefault?.();
+  // ---- aksi void ----
+  const submitVoid = async () => {
     if (!voidSale) return;
     try {
       if (!voidReason) {
-        toast?.show?.({ type: "warning", message: "Pilih alasannya dulu." });
+        toast?.show?.({ type: "error", message: "Pilih/isi alasan dulu." });
         return;
       }
       await DataService.voidSale({ sale_id: voidSale.id, reason: voidReason });
-      toast?.show?.({ type: "success", message: "✅ Transaksi dibatalkan (VOID)." });
+      toast?.show?.({ type: "success", message: "✅ Transaksi dibatalkan (void)." });
       setVoidSale(null);
       setVoidReason("");
-      await loadTrx();
+      loadTrx(); // refresh tabel
     } catch (e) {
       toast?.show?.({ type: "error", message: `❌ ${e.message}` });
     }
@@ -231,17 +259,9 @@ export default function RiwayatView() {
                 </select>
               </div>
               <div>
-                <label>Kasir</label>
-                <Input
-                  placeholder="Nama kasir"
-                  value={fCashier}
-                  onChange={(e) => setFCashier(e.target.value)}
-                />
-              </div>
-              <div>
                 <label>Pencarian (Invoice/Nama)</label>
                 <Input
-                  placeholder="PLP/2025/09/001 / Ayu"
+                  placeholder="INV-001 / Ayu"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
@@ -258,7 +278,6 @@ export default function RiwayatView() {
                     setFTo("");
                     setFMethod("ALL");
                     setFStatus("ALL");
-                    setFCashier("");
                     setQ("");
                     loadTrx();
                   }}
@@ -282,22 +301,25 @@ export default function RiwayatView() {
                     <th>Total</th>
                     <th>Metode</th>
                     <th>Status</th>
-                    <th>Kasir</th>
                     <th>Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
                   {!trxRows.length && !trxLoading && (
                     <tr>
-                      <td colSpan={9} style={{ color: COLORS.secondary }}>
+                      <td colSpan={8} style={{ color: COLORS.secondary }}>
                         Tidak ada data
                       </td>
                     </tr>
                   )}
                   {trxRows.map((r) => {
-                    const canVoid = DataService.canVoidOnClient(r, 2);
+                    const canVoid = DataService.canVoidOnClient?.(r, 2);
+                    const rowStyle =
+                      (r.status || "").toUpperCase() === "DIBATALKAN"
+                        ? { opacity: 0.7 }
+                        : {};
                     return (
-                      <tr key={r.id} style={r.status === "DIBATALKAN" ? { opacity: 0.6 } : {}}>
+                      <tr key={r.id} style={rowStyle}>
                         <td>{String(r.created_at || "").slice(0, 10)}</td>
                         <td>{r.invoice || r.id}</td>
                         <td>{r.customer || "PUBLIC"}</td>
@@ -309,17 +331,22 @@ export default function RiwayatView() {
                             className="badge"
                             style={{
                               background:
-                                r.status === "LUNAS" ? "#dcfce7"
-                                : r.status === "DIBATALKAN" ? "#fee2e2"
-                                : "#fee2e2",
+                                r.status === "LUNAS"
+                                  ? "#dcfce7"
+                                  : r.status === "DIBATALKAN"
+                                  ? "#fee2e2"
+                                  : "#fef9c3",
                               color:
-                                r.status === "LUNAS" ? "#166534" : "#991b1b",
+                                r.status === "LUNAS"
+                                  ? "#166534"
+                                  : r.status === "DIBATALKAN"
+                                  ? "#991b1b"
+                                  : "#854d0e",
                             }}
                           >
                             {r.status || "-"}
                           </span>
                         </td>
-                        <td>{r.cashier || r.kasir || "-"}</td>
                         <td style={{ whiteSpace: "nowrap" }}>
                           <Button
                             size="sm"
@@ -332,14 +359,11 @@ export default function RiwayatView() {
                           <Button
                             size="sm"
                             className="secondary"
-                            title="Void / Batalkan"
-                            disabled={!canVoid || r.status === "DIBATALKAN"}
-                            onClick={() => {
-                              setVoidSale(r);
-                              setVoidReason("");
-                            }}
+                            title="Void"
+                            onClick={() => setVoidSale(r)}
+                            disabled={!canVoid}
                           >
-                            ❌
+                            🗑️
                           </Button>
                         </td>
                       </tr>
@@ -349,86 +373,6 @@ export default function RiwayatView() {
               </table>
             </div>
           </Card>
-
-          {/* Modal DETAIL */}
-          {detailSale && (
-            <Card title={`Detail Transaksi — ${detailSale.invoice || detailSale.id}`}>
-              <div style={{ display: "grid", gap: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>Tanggal</span>
-                  <b>{String(detailSale.created_at || "").slice(0, 19).replace("T"," ")}</b>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>Pelanggan</span>
-                  <b>{detailSale.customer || "PUBLIC"}</b>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>Qty</span>
-                  <b>{detailSale.qty}</b>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>Harga</span>
-                  <b>{fmtIDR(detailSale.price)}</b>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>Total</span>
-                  <b>{fmtIDR(detailSale.total || detailSale.qty * detailSale.price)}</b>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>Metode</span>
-                  <b>{detailSale.method}</b>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>Status</span>
-                  <b>{detailSale.status}</b>
-                </div>
-                {detailSale.note && (
-                  <div style={{ marginTop: 8 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Catatan</div>
-                    <div style={{ whiteSpace: "pre-wrap" }}>{detailSale.note}</div>
-                  </div>
-                )}
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-                  <Button className="secondary" onClick={() => setDetailSale(null)}>Tutup</Button>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {/* Modal VOID */}
-          {voidSale && (
-            <Card title={`Batalkan (VOID) — ${voidSale.invoice || voidSale.id}`}>
-              <form onSubmit={doVoid} className="grid" style={{ gap: 8 }}>
-                <div>
-                  <label>Alasan Pembatalan</label>
-                  <select
-                    value={voidReason}
-                    onChange={(e) => setVoidReason(e.target.value)}
-                    style={{
-                      padding: "10px 12px",
-                      border: "1px solid #cbd5e1",
-                      borderRadius: 8,
-                      width: "100%",
-                    }}
-                  >
-                    <option value="">Pilih alasan…</option>
-                    {VOID_REASONS.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ fontSize: 12, color: COLORS.secondary }}>
-                  Stok akan otomatis dikembalikan, transaksi asli ditandai <b>DIBATALKAN</b>.
-                </div>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                  <Button type="button" className="secondary" onClick={() => setVoidSale(null)}>
-                    Batal
-                  </Button>
-                  <Button type="submit">Void Sekarang</Button>
-                </div>
-              </form>
-            </Card>
-          )}
         </>
       )}
 
@@ -563,7 +507,7 @@ export default function RiwayatView() {
               <div>
                 <label>Pencarian (Invoice/Nama)</label>
                 <Input
-                  placeholder="PLP/2025/09/001 / Ayu"
+                  placeholder="INV-001 / Ayu"
                   value={hQ}
                   onChange={(e) => setHQ(e.target.value)}
                 />
@@ -623,7 +567,7 @@ export default function RiwayatView() {
                         <Button
                           size="sm"
                           className="primary"
-                          title="Tandai Lunas (buka halaman Transaksi > Bayar Hutang)"
+                          title="Tandai Lunas (buka Transaksi > Bayar Hutang)"
                           onClick={() =>
                             toast?.show?.({
                               type: "info",
@@ -633,20 +577,6 @@ export default function RiwayatView() {
                           }
                         >
                           💳 Bayar
-                        </Button>{" "}
-                        <Button
-                          size="sm"
-                          className="secondary"
-                          title="Hubungi via WhatsApp"
-                          onClick={() =>
-                            toast?.show?.({
-                              type: "info",
-                              message:
-                                "Fitur kontak otomatis akan aktif setelah nomor pelanggan disimpan.",
-                            })
-                          }
-                        >
-                          📞 Hubungi
                         </Button>
                       </td>
                     </tr>
@@ -657,6 +587,110 @@ export default function RiwayatView() {
           </Card>
         </>
       )}
+
+      {/* ---------- MODAL DETAIL ---------- */}
+      <Modal
+        open={!!detailSale}
+        title={`Detail Transaksi — ${detailSale?.invoice || detailSale?.id || ""}`}
+        onClose={() => setDetailSale(null)}
+      >
+        {detailSale && (
+          <div style={{ display: "grid", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Tanggal</span>
+              <b>{String(detailSale.created_at || "").slice(0, 16).replace("T", " ")}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Pelanggan</span>
+              <b>{detailSale.customer || "PUBLIC"}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Qty</span>
+              <b>{detailSale.qty}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Total</span>
+              <b>{fmtIDR(detailSale.total || (detailSale.qty || 0) * (detailSale.price || 0))}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Metode</span>
+              <b>{detailSale.method}</b>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Status</span>
+              <b>{detailSale.status}</b>
+            </div>
+            {detailSale.note && (
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: 10,
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 8,
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>Catatan</div>
+                <div style={{ whiteSpace: "pre-wrap" }}>{detailSale.note}</div>
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+              <Button className="secondary" onClick={() => setDetailSale(null)}>
+                Tutup
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ---------- MODAL VOID ---------- */}
+      <Modal
+        open={!!voidSale}
+        title={`Batalkan (Void) — ${voidSale?.invoice || voidSale?.id || ""}`}
+        onClose={() => {
+          setVoidSale(null);
+          setVoidReason("");
+        }}
+      >
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ fontSize: 13, color: COLORS.secondary }}>
+            Pembatalan akan mengembalikan stok & menandai transaksi asli sebagai
+            <b> DIBATALKAN</b>.
+          </div>
+          <div>
+            <label>Alasan</label>
+            <select
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              style={{
+                padding: "10px 12px",
+                border: "1px solid #cbd5e1",
+                borderRadius: 8,
+                width: "100%",
+              }}
+            >
+              <option value="">— Pilih alasan —</option>
+              {VOID_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <Button
+              className="secondary"
+              onClick={() => {
+                setVoidSale(null);
+                setVoidReason("");
+              }}
+            >
+              Batal
+            </Button>
+            <Button onClick={submitVoid}>Void Sekarang</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
