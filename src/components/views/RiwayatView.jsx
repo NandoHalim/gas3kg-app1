@@ -115,7 +115,7 @@ export default function RiwayatView() {
   const [sTo, setSTo] = useState("");
   const [sJenis, setSJenis] = useState("ALL"); // ALL | ISI | KOSONG
   const [stokRows, setStokRows] = useState([]);
-  the: "stokLoading", setStokLoading] = useState(false);
+  const [stokLoading, setStokLoading] = useState(false); // ✅ perbaiki typo
 
   const loadStok = async () => {
     try {
