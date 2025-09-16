@@ -1,3 +1,4 @@
+// src/components/views/RiwayatView.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import Card from "../ui/Card.jsx";
 import Input from "../ui/Input.jsx";
@@ -39,9 +40,21 @@ export default function RiwayatView() {
   const [fTo, setFTo] = useState("");
   const [fMethod, setFMethod] = useState("ALL"); // ALL | TUNAI | HUTANG
   const [fStatus, setFStatus] = useState("ALL"); // ALL | LUNAS | BELUM
+  const [fCashier, setFCashier] = useState("");
   const [q, setQ] = useState("");
   const [trxRows, setTrxRows] = useState([]);
   const [trxLoading, setTrxLoading] = useState(false);
+
+  const [detailSale, setDetailSale] = useState(null); // object sale utk modal detail
+  const [voidSale, setVoidSale] = useState(null);     // object sale utk modal void
+  const [voidReason, setVoidReason] = useState("");
+
+  const VOID_REASONS = [
+    "Salah Input Data",
+    "Batal oleh Pelanggan",
+    "Barang Rusak",
+    "Lainnya",
+  ];
 
   const loadTrx = async () => {
     try {
@@ -51,6 +64,7 @@ export default function RiwayatView() {
         to: fTo || undefined,
         method: fMethod,
         status: fStatus,
+        cashier: fCashier || undefined,
         q: q || undefined,
         limit: 800,
       });
@@ -123,6 +137,25 @@ export default function RiwayatView() {
     if (tab === "hutang") loadDebts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
+
+  // aksi VOID
+  const doVoid = async (ev) => {
+    ev?.preventDefault?.();
+    if (!voidSale) return;
+    try {
+      if (!voidReason) {
+        toast?.show?.({ type: "warning", message: "Pilih alasannya dulu." });
+        return;
+      }
+      await DataService.voidSale({ sale_id: voidSale.id, reason: voidReason });
+      toast?.show?.({ type: "success", message: "✅ Transaksi dibatalkan (VOID)." });
+      setVoidSale(null);
+      setVoidReason("");
+      await loadTrx();
+    } catch (e) {
+      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+    }
+  };
 
   return (
     <div>
@@ -198,9 +231,17 @@ export default function RiwayatView() {
                 </select>
               </div>
               <div>
+                <label>Kasir</label>
+                <Input
+                  placeholder="Nama kasir"
+                  value={fCashier}
+                  onChange={(e) => setFCashier(e.target.value)}
+                />
+              </div>
+              <div>
                 <label>Pencarian (Invoice/Nama)</label>
                 <Input
-                  placeholder="INV-001 / Ayu"
+                  placeholder="PLP/2025/09/001 / Ayu"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
@@ -217,6 +258,7 @@ export default function RiwayatView() {
                     setFTo("");
                     setFMethod("ALL");
                     setFStatus("ALL");
+                    setFCashier("");
                     setQ("");
                     loadTrx();
                   }}
@@ -240,51 +282,153 @@ export default function RiwayatView() {
                     <th>Total</th>
                     <th>Metode</th>
                     <th>Status</th>
+                    <th>Kasir</th>
                     <th>Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
                   {!trxRows.length && !trxLoading && (
                     <tr>
-                      <td colSpan={8} style={{ color: COLORS.secondary }}>
+                      <td colSpan={9} style={{ color: COLORS.secondary }}>
                         Tidak ada data
                       </td>
                     </tr>
                   )}
-                  {trxRows.map((r) => (
-                    <tr key={r.id}>
-                      <td>{String(r.created_at || "").slice(0, 10)}</td>
-                      <td>{r.invoice || r.id}</td>
-                      <td>{r.customer || "PUBLIC"}</td>
-                      <td>{r.qty}</td>
-                      <td>{fmtIDR(r.total || (r.qty || 0) * (r.price || 0))}</td>
-                      <td>{r.method}</td>
-                      <td>
-                        <span
-                          className="badge"
-                          style={{
-                            background:
-                              r.status === "LUNAS" ? "#dcfce7" : "#fee2e2",
-                            color: r.status === "LUNAS" ? "#166534" : "#991b1b",
-                          }}
-                        >
-                          {r.status || "-"}
-                        </span>
-                      </td>
-                      <td style={{ whiteSpace: "nowrap" }}>
-                        <Button size="sm" className="secondary" title="Detail">
-                          📋
-                        </Button>{" "}
-                        <Button size="sm" className="secondary" title="Catatan">
-                          📝
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {trxRows.map((r) => {
+                    const canVoid = DataService.canVoidOnClient(r, 2);
+                    return (
+                      <tr key={r.id} style={r.status === "DIBATALKAN" ? { opacity: 0.6 } : {}}>
+                        <td>{String(r.created_at || "").slice(0, 10)}</td>
+                        <td>{r.invoice || r.id}</td>
+                        <td>{r.customer || "PUBLIC"}</td>
+                        <td>{r.qty}</td>
+                        <td>{fmtIDR(r.total || (r.qty || 0) * (r.price || 0))}</td>
+                        <td>{r.method}</td>
+                        <td>
+                          <span
+                            className="badge"
+                            style={{
+                              background:
+                                r.status === "LUNAS" ? "#dcfce7"
+                                : r.status === "DIBATALKAN" ? "#fee2e2"
+                                : "#fee2e2",
+                              color:
+                                r.status === "LUNAS" ? "#166534" : "#991b1b",
+                            }}
+                          >
+                            {r.status || "-"}
+                          </span>
+                        </td>
+                        <td>{r.cashier || r.kasir || "-"}</td>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          <Button
+                            size="sm"
+                            className="secondary"
+                            title="Detail"
+                            onClick={() => setDetailSale(r)}
+                          >
+                            📋
+                          </Button>{" "}
+                          <Button
+                            size="sm"
+                            className="secondary"
+                            title="Void / Batalkan"
+                            disabled={!canVoid || r.status === "DIBATALKAN"}
+                            onClick={() => {
+                              setVoidSale(r);
+                              setVoidReason("");
+                            }}
+                          >
+                            ❌
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </Card>
+
+          {/* Modal DETAIL */}
+          {detailSale && (
+            <Card title={`Detail Transaksi — ${detailSale.invoice || detailSale.id}`}>
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Tanggal</span>
+                  <b>{String(detailSale.created_at || "").slice(0, 19).replace("T"," ")}</b>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Pelanggan</span>
+                  <b>{detailSale.customer || "PUBLIC"}</b>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Qty</span>
+                  <b>{detailSale.qty}</b>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Harga</span>
+                  <b>{fmtIDR(detailSale.price)}</b>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Total</span>
+                  <b>{fmtIDR(detailSale.total || detailSale.qty * detailSale.price)}</b>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Metode</span>
+                  <b>{detailSale.method}</b>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Status</span>
+                  <b>{detailSale.status}</b>
+                </div>
+                {detailSale.note && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Catatan</div>
+                    <div style={{ whiteSpace: "pre-wrap" }}>{detailSale.note}</div>
+                  </div>
+                )}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+                  <Button className="secondary" onClick={() => setDetailSale(null)}>Tutup</Button>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Modal VOID */}
+          {voidSale && (
+            <Card title={`Batalkan (VOID) — ${voidSale.invoice || voidSale.id}`}>
+              <form onSubmit={doVoid} className="grid" style={{ gap: 8 }}>
+                <div>
+                  <label>Alasan Pembatalan</label>
+                  <select
+                    value={voidReason}
+                    onChange={(e) => setVoidReason(e.target.value)}
+                    style={{
+                      padding: "10px 12px",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: 8,
+                      width: "100%",
+                    }}
+                  >
+                    <option value="">Pilih alasan…</option>
+                    {VOID_REASONS.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ fontSize: 12, color: COLORS.secondary }}>
+                  Stok akan otomatis dikembalikan, transaksi asli ditandai <b>DIBATALKAN</b>.
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <Button type="button" className="secondary" onClick={() => setVoidSale(null)}>
+                    Batal
+                  </Button>
+                  <Button type="submit">Void Sekarang</Button>
+                </div>
+              </form>
+            </Card>
+          )}
         </>
       )}
 
@@ -419,7 +563,7 @@ export default function RiwayatView() {
               <div>
                 <label>Pencarian (Invoice/Nama)</label>
                 <Input
-                  placeholder="INV-001 / Ayu"
+                  placeholder="PLP/2025/09/001 / Ayu"
                   value={hQ}
                   onChange={(e) => setHQ(e.target.value)}
                 />
@@ -503,20 +647,6 @@ export default function RiwayatView() {
                           }
                         >
                           📞 Hubungi
-                        </Button>{" "}
-                        <Button
-                          size="sm"
-                          className="secondary"
-                          title="Tambah Catatan"
-                          onClick={() =>
-                            toast?.show?.({
-                              type: "info",
-                              message:
-                                "Fitur catatan akan diaktifkan di iterasi berikutnya.",
-                            })
-                          }
-                        >
-                          📝 Catatan
                         </Button>
                       </td>
                     </tr>
