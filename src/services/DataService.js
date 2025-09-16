@@ -1,3 +1,4 @@
+// src/services/DataService.js
 import { supabase } from "../lib/supabase";
 import { MIN_YEAR, MAX_YEAR } from "../utils/constants";
 
@@ -10,20 +11,6 @@ function rowsToStockObject(rows) {
     if (code in obj) obj[code] = Number(r.qty || 0);
   });
   return obj;
-}
-
-// ====== Helper Invoice ======
-function pad(n, size = 3) {
-  let s = String(n);
-  while (s.length < size) s = "0" + s;
-  return s;
-}
-
-export function formatInvoice({ store = "PLP", id, date }) {
-  const d = date ? new Date(date) : new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${store}/${yyyy}/${mm}/${pad(id)}`;
 }
 
 export const DataService = {
@@ -59,18 +46,21 @@ export const DataService = {
     return rowsToStockObject(data);
   },
 
+  // Tambah stok ISI (HARUS menukar dari KOSONG yang cukup)
   async addIsi({ qty, date, note }) {
     if (!(qty > 0)) throw new Error("Jumlah harus > 0");
     const yyyy = Number(String(date).slice(0, 4));
     if (Number.isFinite(yyyy) && (yyyy < MIN_YEAR || yyyy > MAX_YEAR)) {
       throw new Error(`Tanggal harus antara ${MIN_YEAR}-${MAX_YEAR}`);
     }
+
     try {
       const snap = await this.loadStocks();
       if (Number(qty) > Number(snap.KOSONG || 0)) {
         throw new Error("Stok KOSONG tidak cukup untuk ditukar menjadi ISI");
       }
     } catch {}
+
     const { data, error } = await supabase.rpc("stock_add_isi", {
       p_qty: qty,
       p_date: date,
@@ -84,9 +74,7 @@ export const DataService = {
   async loadSales(limit = 500) {
     const { data, error } = await supabase
       .from("sales")
-      .select(
-        "id,customer,qty,price,total,method,note,created_at,status,hpp,laba"
-      )
+      .select("id,customer,qty,price,total,method,note,created_at,status,hpp,laba")
       .order("id", { ascending: false })
       .limit(limit);
     if (error) throw new Error(errMsg(error, "Gagal ambil penjualan"));
@@ -103,14 +91,7 @@ export const DataService = {
     return data || [];
   },
 
-  async createSale({
-    customer = "PUBLIC",
-    qty,
-    price = 18000, // default harga Rp 18.000
-    method = "TUNAI",
-    date,
-    note = "",
-  }) {
+  async createSale({ customer = "PUBLIC", qty, price, method = "TUNAI", date, note = "" }) {
     if (!(qty > 0)) throw new Error("Qty harus > 0");
     if (!(price > 0)) throw new Error("Harga tidak valid");
 
@@ -177,8 +158,7 @@ export const DataService = {
         resp = await tryV1();
       }
     }
-    if (resp.error)
-      throw new Error(errMsg(resp.error, "Gagal menyimpan penjualan"));
+    if (resp.error) throw new Error(errMsg(resp.error, "Gagal menyimpan penjualan"));
     return rowsToStockObject(resp.data);
   },
 
@@ -222,10 +202,18 @@ export const DataService = {
     );
   },
 
-  // ====== RIWAYAT TRANSAKSI ======
-  async getSalesHistory({ from, to, method = "ALL", status = "ALL", q, limit = 800 } = {}) {
+  // ====== RIWAYAT TRANSAKSI (pakai VIEW agar ada 'invoice') ======
+  async getSalesHistory({
+    from,
+    to,
+    method = "ALL",
+    status = "ALL",
+    cashier,
+    q,
+    limit = 800,
+  } = {}) {
     let s = supabase
-      .from("sales")
+      .from("sales_with_invoice")
       .select("id,invoice,customer,qty,price,total,method,status,created_at,note")
       .order("id", { ascending: false })
       .limit(limit);
@@ -234,6 +222,11 @@ export const DataService = {
     if (to) s = s.lte("created_at", to);
     if (method !== "ALL") s = s.eq("method", method);
     if (status !== "ALL") s = s.eq("status", status);
+
+    // fallback cari nama kasir di note (jika ada)
+    if (cashier) {
+      s = s.or("note.ilike.%"+cashier+"%");
+    }
 
     if (q) {
       s = s.or("invoice.ilike.%"+q+"%,customer.ilike.%"+q+"%");
@@ -244,10 +237,10 @@ export const DataService = {
     return data || [];
   },
 
-  // ====== HUTANG ======
+  // ====== HUTANG (pakai VIEW agar ada 'invoice') ======
   async getDebts({ query = "", limit = 200 } = {}) {
-    let q = supabase
-      .from("sales")
+    let s = supabase
+      .from("sales_with_invoice")
       .select("id, invoice, customer, qty, price, method, status, note, created_at")
       .eq("method", "HUTANG")
       .neq("status", "LUNAS")
@@ -255,10 +248,10 @@ export const DataService = {
       .limit(limit);
 
     if (query && query.trim().length > 0) {
-      q = q.or(`customer.ilike.%${query}%,note.ilike.%${query}%`);
+      s = s.or(`invoice.ilike.%${query}%,customer.ilike.%${query}%,note.ilike.%${query}%`);
     }
 
-    const { data, error } = await q;
+    const { data, error } = await s;
     if (error) throw new Error(errMsg(error, "Gagal ambil daftar hutang"));
 
     return (data || []).map((r) => ({
