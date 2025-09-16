@@ -1,179 +1,246 @@
-// src/components/views/RiwayatView.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import Card from "../ui/Card.jsx";
 import Input from "../ui/Input.jsx";
 import Button from "../ui/Button.jsx";
-import { COLORS } from "../../utils/constants.js";
-import { fmtIDR } from "../../utils/helpers.js";
+import { COLORS, MIN_DATE } from "../../utils/constants.js";
+import { fmtIDR, maxAllowedDate } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
 import { useToast } from "../../context/ToastContext.jsx";
 
+function Tabs({ active, onChange }) {
+  const items = [
+    { k: "trx", label: "Riwayat Transaksi" },
+    { k: "stok", label: "Riwayat Stok" },
+    { k: "hutang", label: "Riwayat Hutang" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+      {items.map((t) => (
+        <Button
+          key={t.k}
+          className={active === t.k ? "primary" : ""}
+          onClick={() => onChange(t.k)}
+        >
+          {t.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 export default function RiwayatView() {
   const toast = useToast();
+  const [tab, setTab] = useState("trx"); // 'trx' | 'stok' | 'hutang'
 
-  // tab: transaksi | hutang
-  const [tab, setTab] = useState("transaksi");
+  // ---------------------------
+  // Riwayat Transaksi
+  // ---------------------------
+  const [fFrom, setFFrom] = useState("");
+  const [fTo, setFTo] = useState("");
+  const [fMethod, setFMethod] = useState("ALL"); // ALL | TUNAI | HUTANG
+  const [fStatus, setFStatus] = useState("ALL"); // ALL | LUNAS | BELUM
+  const [fCashier, setFCashier] = useState("");
+  const [q, setQ] = useState("");
+  const [trxRows, setTrxRows] = useState([]);
+  const [trxLoading, setTrxLoading] = useState(false);
 
-  // data dan loading
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const loadTrx = async () => {
+    try {
+      setTrxLoading(true);
+      const rows = await DataService.getSalesHistory({
+        from: fFrom || undefined,
+        to: fTo || undefined,
+        method: fMethod,
+        status: fStatus,
+        cashier: fCashier || undefined,
+        q: q || undefined,
+        limit: 800,
+      });
+      setTrxRows(rows);
+    } catch (e) {
+      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+    } finally {
+      setTrxLoading(false);
+    }
+  };
 
-  // ===== Filter: Riwayat Transaksi =====
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [method, setMethod] = useState(""); // "", "TUNAI", "HUTANG"
-  const [status, setStatus] = useState(""); // "", "LUNAS", "BELUM"
-  const [cashier, setCashier] = useState(""); // kasir (opsional)
-  const [q, setQ] = useState(""); // cari Invoice/Nama
+  // ---------------------------
+  // Riwayat Stok
+  // ---------------------------
+  const [sFrom, setSFrom] = useState("");
+  const [sTo, setSTo] = useState("");
+  const [sJenis, setSJenis] = useState("ALL"); // ALL | ISI | KOSONG
+  const [stokRows, setStokRows] = useState([]);
+  const [stokLoading, setStokLoading] = useState(false);
 
-  // ===== Filter: Riwayat Hutang =====
-  const [qDebt, setQDebt] = useState(""); // cari Invoice/Nama
-  const [nameDebt, setNameDebt] = useState(""); // nama pelanggan
+  const loadStok = async () => {
+    try {
+      setStokLoading(true);
+      const rows = await DataService.getStockHistory({
+        from: sFrom || undefined,
+        to: sTo || undefined,
+        jenis: sJenis,
+        limit: 500,
+      });
+      setStokRows(rows);
+    } catch (e) {
+      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+    } finally {
+      setStokLoading(false);
+    }
+  };
 
-  // Modal pelunasan (hutang)
-  const [paying, setPaying] = useState(null); // { id, customer, total }
-
+  // ---------------------------
+  // Riwayat Hutang (belum lunas)
+  // ---------------------------
+  const [hNama, setHNama] = useState("");
+  const [hQ, setHQ] = useState("");
+  const [debts, setDebts] = useState([]);
+  const [debtLoading, setDebtLoading] = useState(false);
   const totalHutang = useMemo(
-    () =>
-      (rows || []).reduce((a, r) => a + (Number(r.total) || 0), 0),
-    [rows]
+    () => debts.reduce((a, b) => a + (Number(b.total) || 0), 0),
+    [debts]
   );
 
-  const loadTransaksi = async () => {
-    setLoading(true);
+  const loadDebts = async () => {
     try {
-      const data = await DataService.getAllSales({
-        from,
-        to,
-        method,  // wajib di menu (boleh "Semua" = "")
-        status,  // wajib di menu (boleh "Semua" = "")
-        cashier,
-        query: q, // invoice / nama
-        limit: 800,
+      setDebtLoading(true);
+      // gabung keyword nama + q supaya fleksibel
+      const keyword = [hNama, hQ].filter(Boolean).join(" ").trim();
+      const rows = await DataService.getDebts({
+        query: keyword,
+        limit: 500,
       });
-      setRows(data || []);
+      setDebts(rows);
     } catch (e) {
       toast?.show?.({ type: "error", message: `❌ ${e.message}` });
-      setRows([]);
     } finally {
-      setLoading(false);
+      setDebtLoading(false);
     }
   };
 
-  const loadHutang = async () => {
-    setLoading(true);
-    try {
-      const data = await DataService.getDebtHistory({
-        query: qDebt,
-        customer: nameDebt,
-        limit: 800,
-      });
-      setRows(data || []);
-    } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // muat data saat tab diganti (sekali)
   useEffect(() => {
-    if (tab === "transaksi") loadTransaksi();
-    else if (tab === "hutang") loadHutang();
+    if (tab === "trx") loadTrx();
+    if (tab === "stok") loadStok();
+    if (tab === "hutang") loadDebts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
-  // Aksi pelunasan HUTANG (wajib lunas penuh)
-  const onPaid = async (ev) => {
-    ev?.preventDefault?.();
-    if (!paying) return;
-    try {
-      setLoading(true);
-      await DataService.payDebt({
-        sale_id: paying.id,
-        amount: paying.total, // lunas penuh
-        note: `Pelunasan via Riwayat Hutang: ${paying.customer || ""}`,
-      });
-      toast?.show?.({ type: "success", message: "✅ Hutang ditandai LUNAS" });
-      setPaying(null);
-      await loadHutang();
-    } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // helper WA link (jika tidak ada nomor, tetap bisa kirim nama)
-  const buildWaLink = (row) => {
-    const msg = encodeURIComponent(
-      `Halo ${row.customer || ""}, mohon konfirmasi pembayaran untuk transaksi LPG.\nTotal: ${fmtIDR(row.total)}\nInvoice: ${row.invoice_no || row.id}`
-    );
-    const phone = (row.phone || "").replace(/\D+/g, "");
-    return phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;
-  };
-
   return (
     <div>
-      {/* Header Tabs */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <h1 style={{ margin: 0 }}>Riwayat</h1>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <Button className={tab === "transaksi" ? "primary" : ""} onClick={() => setTab("transaksi")}>
-            Riwayat Transaksi
-          </Button>
-          <Button className={tab === "hutang" ? "primary" : ""} onClick={() => setTab("hutang")}>
-            Riwayat Hutang
-          </Button>
-        </div>
       </div>
 
-      {/* ===================== RIWAYAT TRANSAKSI ===================== */}
-      {tab === "transaksi" && (
+      <Tabs active={tab} onChange={setTab} />
+
+      {/* ----------------- RIWAYAT TRANSAKSI ----------------- */}
+      {tab === "trx" && (
         <>
-          <Card title="Filter">
-            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 8 }}>
+          <Card title="Filter Transaksi">
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+                gap: 12,
+              }}
+            >
               <div>
-                <label>Dari</label>
-                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+                <label>Dari Tanggal</label>
+                <Input
+                  type="date"
+                  min={MIN_DATE}
+                  max={maxAllowedDate()}
+                  value={fFrom}
+                  onChange={(e) => setFFrom(e.target.value)}
+                />
               </div>
               <div>
                 <label>Sampai</label>
-                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+                <Input
+                  type="date"
+                  min={MIN_DATE}
+                  max={maxAllowedDate()}
+                  value={fTo}
+                  onChange={(e) => setFTo(e.target.value)}
+                />
               </div>
               <div>
-                <label>Metode</label>
-                <select value={method} onChange={(e) => setMethod(e.target.value)} style={{ width: "100%", padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}>
-                  <option value="">Semua</option>
+                <label>Metode Bayar</label>
+                <select
+                  value={fMethod}
+                  onChange={(e) => setFMethod(e.target.value)}
+                  style={{
+                    padding: "10px 12px",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 8,
+                    width: "100%",
+                  }}
+                >
+                  <option value="ALL">Semua</option>
                   <option value="TUNAI">Tunai</option>
                   <option value="HUTANG">Hutang</option>
                 </select>
               </div>
               <div>
-                <label>Status</label>
-                <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: "100%", padding: 10, border: "1px solid #cbd5e1", borderRadius: 8 }}>
-                  <option value="">Semua</option>
+                <label>Status Bayar</label>
+                <select
+                  value={fStatus}
+                  onChange={(e) => setFStatus(e.target.value)}
+                  style={{
+                    padding: "10px 12px",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 8,
+                    width: "100%",
+                  }}
+                >
+                  <option value="ALL">Semua</option>
                   <option value="LUNAS">Lunas</option>
-                  <option value="BELUM">Belum</option>
+                  <option value="BELUM">Belum Lunas</option>
                 </select>
               </div>
               <div>
                 <label>Kasir</label>
-                <Input placeholder="Nama kasir" value={cashier} onChange={(e) => setCashier(e.target.value)} />
+                <Input
+                  placeholder="Nama kasir"
+                  value={fCashier}
+                  onChange={(e) => setFCashier(e.target.value)}
+                />
               </div>
               <div>
                 <label>Pencarian (Invoice/Nama)</label>
-                <Input placeholder="INV-001 / Ayu" value={q} onChange={(e) => setQ(e.target.value)} />
+                <Input
+                  placeholder="INV-001 / Ayu"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
               </div>
-              <div style={{ alignSelf: "end" }}>
-                <Button onClick={loadTransaksi} disabled={loading}>
-                  Terapkan
+
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+                <Button onClick={loadTrx} disabled={trxLoading}>
+                  {trxLoading ? "Memuat…" : "Terapkan"}
+                </Button>
+                <Button
+                  className="secondary"
+                  onClick={() => {
+                    setFFrom("");
+                    setFTo("");
+                    setFMethod("ALL");
+                    setFStatus("ALL");
+                    setFCashier("");
+                    setQ("");
+                    loadTrx();
+                  }}
+                  disabled={trxLoading}
+                >
+                  Reset
                 </Button>
               </div>
             </div>
           </Card>
 
-          <Card title={loading ? "Memuat…" : "Riwayat Transaksi"}>
+          <Card title={`Riwayat Transaksi ${trxLoading ? "(memuat…)" : ""}`}>
             <div style={{ overflow: "auto" }}>
               <table className="table">
                 <thead>
@@ -190,26 +257,41 @@ export default function RiwayatView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {!rows.length && !loading && (
+                  {!trxRows.length && !trxLoading && (
                     <tr>
-                      <td colSpan={9} style={{ color: "#64748b" }}>
-                        Tidak ada data transaksi
+                      <td colSpan={9} style={{ color: COLORS.secondary }}>
+                        Tidak ada data
                       </td>
                     </tr>
                   )}
-                  {rows.map((r) => (
+                  {trxRows.map((r) => (
                     <tr key={r.id}>
-                      <td>{(r.created_at || "").slice(0, 10)}</td>
-                      <td>{r.invoice_no || r.id}</td>
-                      <td>{r.customer || "-"}</td>
+                      <td>{String(r.created_at || "").slice(0, 10)}</td>
+                      <td>{r.invoice || r.id}</td>
+                      <td>{r.customer || "PUBLIC"}</td>
                       <td>{r.qty}</td>
-                      <td>{fmtIDR(r.total)}</td>
+                      <td>{fmtIDR(r.total || (r.qty || 0) * (r.price || 0))}</td>
                       <td>{r.method}</td>
-                      <td>{r.status}</td>
-                      <td>{r.cashier || "-"}</td>
+                      <td>
+                        <span
+                          className="badge"
+                          style={{
+                            background:
+                              r.status === "LUNAS" ? "#dcfce7" : "#fee2e2",
+                            color: r.status === "LUNAS" ? "#166534" : "#991b1b",
+                          }}
+                        >
+                          {r.status || "-"}
+                        </span>
+                      </td>
+                      <td>{r.cashier || r.kasir || "-"}</td>
                       <td style={{ whiteSpace: "nowrap" }}>
-                        <Button size="sm" className="secondary" onClick={() => alert(JSON.stringify(r, null, 2))}>📋 Detail</Button>{" "}
-                        <Button size="sm" className="secondary" onClick={() => toast?.show?.({ type: "info", message: "📝 Catatan: (coming soon)" })}>📝 Catatan</Button>
+                        <Button size="sm" className="secondary" title="Detail">
+                          📋
+                        </Button>{" "}
+                        <Button size="sm" className="secondary" title="Catatan">
+                          📝
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -220,95 +302,234 @@ export default function RiwayatView() {
         </>
       )}
 
-      {/* ===================== RIWAYAT HUTANG ===================== */}
-      {tab === "hutang" && (
+      {/* ----------------- RIWAYAT STOK ----------------- */}
+      {tab === "stok" && (
         <>
-          {/* Summary total hutang */}
-          <Card>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: 8,
-              background: "#fff7ed",
-              border: "1px solid #fed7aa",
-              borderRadius: 8
-            }}>
-              <b>Total Hutang Belum Lunas</b>
-              <span style={{ fontSize: 18, fontWeight: 800, color: "#c2410c" }}>{fmtIDR(totalHutang)}</span>
+          <Card title="Filter Riwayat Stok">
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+                gap: 12,
+              }}
+            >
+              <div>
+                <label>Dari Tanggal</label>
+                <Input
+                  type="date"
+                  min={MIN_DATE}
+                  max={maxAllowedDate()}
+                  value={sFrom}
+                  onChange={(e) => setSFrom(e.target.value)}
+                />
+              </div>
+              <div>
+                <label>Sampai</label>
+                <Input
+                  type="date"
+                  min={MIN_DATE}
+                  max={maxAllowedDate()}
+                  value={sTo}
+                  onChange={(e) => setSTo(e.target.value)}
+                />
+              </div>
+              <div>
+                <label>Jenis Stok</label>
+                <select
+                  value={sJenis}
+                  onChange={(e) => setSJenis(e.target.value)}
+                  style={{
+                    padding: "10px 12px",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 8,
+                    width: "100%",
+                  }}
+                >
+                  <option value="ALL">Semua</option>
+                  <option value="ISI">Isi</option>
+                  <option value="KOSONG">Kosong</option>
+                </select>
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+                <Button onClick={loadStok} disabled={stokLoading}>
+                  {stokLoading ? "Memuat…" : "Terapkan"}
+                </Button>
+                <Button
+                  className="secondary"
+                  onClick={() => {
+                    setSFrom("");
+                    setSTo("");
+                    setSJenis("ALL");
+                    loadStok();
+                  }}
+                  disabled={stokLoading}
+                >
+                  Reset
+                </Button>
+              </div>
             </div>
           </Card>
 
-          {/* Filter sederhana (nama + pencarian invoice/nama) */}
+          <Card title={`Riwayat Stok ${stokLoading ? "(memuat…)" : ""}`}>
+            <div style={{ overflow: "auto" }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Tanggal</th>
+                    <th>Keterangan</th>
+                    <th style={{ textAlign: "right" }}>Masuk</th>
+                    <th style={{ textAlign: "right" }}>Keluar</th>
+                    <th style={{ textAlign: "right" }}>Sisa Stok</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!stokRows.length && !stokLoading && (
+                    <tr>
+                      <td colSpan={5} style={{ color: COLORS.secondary }}>
+                        Tidak ada data
+                      </td>
+                    </tr>
+                  )}
+                  {stokRows.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.tanggal}</td>
+                      <td>{r.keterangan}</td>
+                      <td style={{ textAlign: "right" }}>{r.masuk || ""}</td>
+                      <td style={{ textAlign: "right" }}>{r.keluar || ""}</td>
+                      <td style={{ textAlign: "right" }}>
+                        {(r.sisa ?? "") === "" ? "-" : r.sisa}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, color: COLORS.secondary }}>
+              *Kolom “Sisa Stok” otomatis bila view{" "}
+              <code>stock_logs_with_balance</code> tersedia.
+            </div>
+          </Card>
+        </>
+      )}
+
+      {/* ----------------- RIWAYAT HUTANG ----------------- */}
+      {tab === "hutang" && (
+        <>
           <Card title="Filter Hutang">
-            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 8 }}>
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+                gap: 12,
+              }}
+            >
               <div>
                 <label>Nama Pelanggan</label>
-                <Input placeholder="cth: Ayu" value={nameDebt} onChange={(e) => setNameDebt(e.target.value)} />
+                <Input
+                  placeholder="Cari nama pelanggan"
+                  value={hNama}
+                  onChange={(e) => setHNama(e.target.value)}
+                />
               </div>
               <div>
                 <label>Pencarian (Invoice/Nama)</label>
-                <Input placeholder="INV-001 / Ayu" value={qDebt} onChange={(e) => setQDebt(e.target.value)} />
+                <Input
+                  placeholder="INV-001 / Ayu"
+                  value={hQ}
+                  onChange={(e) => setHQ(e.target.value)}
+                />
               </div>
-              <div style={{ alignSelf: "end" }}>
-                <Button onClick={loadHutang} disabled={loading}>Terapkan</Button>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+                <Button onClick={loadDebts} disabled={debtLoading}>
+                  {debtLoading ? "Memuat…" : "Terapkan"}
+                </Button>
+                <Button
+                  className="secondary"
+                  onClick={() => {
+                    setHNama("");
+                    setHQ("");
+                    loadDebts();
+                  }}
+                  disabled={debtLoading}
+                >
+                  Reset
+                </Button>
               </div>
             </div>
           </Card>
 
-          <Card title={loading ? "Memuat…" : "Riwayat Hutang (Belum Lunas)"}>
+          <Card
+            title={`Riwayat Hutang — Total Belum Lunas: ${fmtIDR(
+              totalHutang
+            )} ${debtLoading ? "(memuat…)" : ""}`}
+          >
             <div style={{ overflow: "auto" }}>
               <table className="table">
                 <thead>
                   <tr>
                     <th>Tanggal</th>
                     <th>No. Invoice</th>
-                    <th style={{ minWidth: 180 }}>Pelanggan</th>
+                    <th style={{ minWidth: 140 }}>Pelanggan</th>
                     <th>Qty</th>
                     <th>Total Hutang</th>
-                    <th style={{ minWidth: 260 }}>Aksi</th>
+                    <th>Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {!rows.length && !loading && (
+                  {!debts.length && !debtLoading && (
                     <tr>
-                      <td colSpan={6} style={{ color: "#64748b" }}>
-                        Tidak ada data hutang
+                      <td colSpan={6} style={{ color: COLORS.secondary }}>
+                        Tidak ada hutang
                       </td>
                     </tr>
                   )}
-                  {rows.map((r) => (
-                    <tr key={r.id}>
-                      <td>{(r.created_at || "").slice(0, 10)}</td>
-                      <td>{r.invoice_no || r.id}</td>
-                      <td>
-                        <div style={{ fontWeight: 700 }}>{r.customer || "-"}</div>
-                        {r.phone && (
-                          <div style={{ fontSize: 12, color: COLORS.secondary }}>{r.phone}</div>
-                        )}
-                      </td>
-                      <td>{r.qty}</td>
-                      <td>{fmtIDR(r.total)}</td>
+                  {debts.map((d) => (
+                    <tr key={d.id}>
+                      <td>{String(d.created_at || "").slice(0, 10)}</td>
+                      <td>{d.invoice || d.id}</td>
+                      <td style={{ fontWeight: 600 }}>{d.customer}</td>
+                      <td>{d.qty}</td>
+                      <td>{fmtIDR(d.total)}</td>
                       <td style={{ whiteSpace: "nowrap" }}>
                         <Button
+                          size="sm"
                           className="primary"
-                          onClick={() => setPaying({ id: r.id, customer: r.customer, total: r.total })}
-                          disabled={loading}
+                          title="Tandai Lunas (buka halaman Transaksi > Bayar Hutang)"
+                          onClick={() =>
+                            toast?.show?.({
+                              type: "info",
+                              message:
+                                "Buka menu Transaksi > Bayar Hutang untuk melunasi.",
+                            })
+                          }
                         >
-                          💳 Tandai Lunas
+                          💳 Bayar
                         </Button>{" "}
-                        <a
-                          href={buildWaLink(r)}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ textDecoration: "none" }}
-                          title="Hubungi via WhatsApp"
-                        >
-                          <Button className="secondary">📞 Hubungi</Button>
-                        </a>{" "}
                         <Button
+                          size="sm"
                           className="secondary"
-                          onClick={() => toast?.show?.({ type: "info", message: "📝 Catatan: (coming soon)" })}
+                          title="Hubungi via WhatsApp"
+                          onClick={() =>
+                            toast?.show?.({
+                              type: "info",
+                              message:
+                                "Fitur kontak otomatis akan aktif setelah nomor pelanggan disimpan.",
+                            })
+                          }
+                        >
+                          📞 Hubungi
+                        </Button>{" "}
+                        <Button
+                          size="sm"
+                          className="secondary"
+                          title="Tambah Catatan"
+                          onClick={() =>
+                            toast?.show?.({
+                              type: "info",
+                              message:
+                                "Fitur catatan akan diaktifkan di iterasi berikutnya.",
+                            })
+                          }
                         >
                           📝 Catatan
                         </Button>
@@ -318,29 +539,6 @@ export default function RiwayatView() {
                 </tbody>
               </table>
             </div>
-
-            {/* Modal pelunasan sederhana */}
-            {paying && (
-              <div style={{ marginTop: 12 }}>
-                <Card title={`Pelunasan — ${paying.customer || "PUBLIC"}`}>
-                  <form onSubmit={onPaid} className="grid" style={{ gap: 8 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>Total Tagihan</span>
-                      <b>{fmtIDR(paying.total)}</b>
-                    </div>
-                    {/* Dikunci: wajib lunas penuh */}
-                    <Input type="number" value={paying.total} readOnly />
-                    <div style={{ fontSize: 12, color: COLORS.secondary }}>
-                      *Pembayaran wajib <b>tepat sama</b> dengan sisa hutang.
-                    </div>
-                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                      <Button type="button" className="secondary" onClick={() => setPaying(null)} disabled={loading}>Batal</Button>
-                      <Button type="submit" disabled={loading}>{loading ? "Menyimpan…" : "Simpan"}</Button>
-                    </div>
-                  </form>
-                </Card>
-              </div>
-            )}
           </Card>
         </>
       )}
