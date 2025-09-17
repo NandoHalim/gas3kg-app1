@@ -4,7 +4,7 @@ import StatCard from "../ui/StatCard.jsx";
 import { COLORS, HPP } from "../../utils/constants.js";
 import { fmtIDR, todayStr } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
-import { supabase } from "../../lib/supabase.js";   // ⬅️ tambah: untuk realtime
+import { supabase } from "../../lib/supabase.js"; // realtime
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -27,9 +27,9 @@ function MiniBarChart({ data }) {
 }
 
 export default function DashboardView({ stocks = {} }) {
-  const isi = Number(stocks.ISI || 0),
-    kosong = Number(stocks.KOSONG || 0),
-    total = isi + kosong;
+  const isi = Number(stocks.ISI || 0);
+  const kosong = Number(stocks.KOSONG || 0);
+  const total = isi + kosong;
 
   const [sum, setSum] = useState({ qty: 0, omzet: 0, laba: 0 });
   const [today, setToday] = useState({ qty: 0, money: 0 });
@@ -38,33 +38,39 @@ export default function DashboardView({ stocks = {} }) {
   const [series7, setSeries7] = useState([]);
   const [err, setErr] = useState("");
 
-  // ⬇️ tarik data dashboard (dipanggil saat mount & saat ada event realtime)
   const fetchDashboard = async () => {
     try {
-      // Total riwayat (pakai limit agar tidak berat)
+      // Ambil maksimum 500 riwayat agar ringan
       const rows = await DataService.loadSales(500);
 
-      // Laba hanya dari transaksi yang SUDAH DIBAYAR:
-      // - method === 'TUNAI' ATAU status === 'LUNAS'
-      const paid = (rows || []).filter(
+      // ❌ Keluarkan transaksi yang DIBATALKAN dari semua agregasi
+      const notVoid = (rows || []).filter(
+        (r) => String(r.status || "").toUpperCase() !== "DIBATALKAN"
+      );
+
+      // Total terjual (riwayat) = semua yang tidak void
+      const qty = notVoid.reduce((a, b) => a + Number(b.qty || 0), 0);
+
+      // Omzet & Laba hanya dari transaksi yang sudah dibayar:
+      // - TUNAI ATAU status LUNAS (dan tidak void)
+      const paid = notVoid.filter(
         (r) =>
           String(r.method).toUpperCase() === "TUNAI" ||
           String(r.status || "").toUpperCase() === "LUNAS"
       );
 
-      const qty = rows.reduce((a, b) => a + Number(b.qty || 0), 0);
       const omzet = paid.reduce((a, b) => a + Number(b.total || 0), 0);
-      const hpp = paid.reduce((a, b) => a + (Number(b.qty || 0) * HPP), 0);
+      const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * HPP, 0);
       const laba = omzet - hpp;
 
-      // Hari ini (biarkan seperti semula)
+      // Hari ini (tetap)
       const todaySum =
         (await DataService.getSalesSummary?.({
           from: todayStr(),
           to: todayStr(),
         })) || { qty: 0, money: 0 };
 
-      // Piutang & 7 hari & recent
+      // Piutang, grafik 7 hari, dan transaksi terbaru
       const totalPiutang = await DataService.getTotalReceivables?.();
       const s7 = await DataService.getSevenDaySales?.();
       const r = await DataService.getRecentSales?.(5);
@@ -84,7 +90,7 @@ export default function DashboardView({ stocks = {} }) {
     let alive = true;
     fetchDashboard();
 
-    // ⬇️ realtime: refresh jika ada perubahan di sales / stocks
+    // Realtime: refresh jika ada perubahan di sales / stocks
     const ch = supabase
       .channel("dashboard-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, () => {
@@ -96,10 +102,12 @@ export default function DashboardView({ stocks = {} }) {
       .subscribe();
 
     return () => {
-      try { supabase.removeChannel(ch); } catch {}
+      try {
+        supabase.removeChannel(ch);
+      } catch {}
       alive = false;
     };
-  }, []); // mount once
+  }, []);
 
   return (
     <div className="grid">
@@ -159,9 +167,7 @@ export default function DashboardView({ stocks = {} }) {
         <StatCard
           title="Stok Kosong"
           value={kosong}
-          subtitle={
-            kosong <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Tabung kembali"
-          }
+          subtitle={kosong <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Tabung kembali"}
           color={COLORS.danger}
           icon="⚪"
         />
