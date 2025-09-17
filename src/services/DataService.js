@@ -344,4 +344,37 @@ export const DataService = {
     if (error) throw new Error(errMsg(error, "Reset ditolak (khusus admin)"));
     return this.loadStocks();
   },
+
+// Tambah di paling bawah bagian STOK (atau dekat addKosong/addIsi)
+
+  /**
+   * Penyesuaian stok langsung (bisa + atau −) untuk ISI/KOSONG.
+   * Tidak mengubah fungsi yang sudah baik — hanya penambahan fitur.
+   * @param {'ISI'|'KOSONG'} code
+   * @param {number} delta   - boleh negatif/positif, tidak boleh 0
+   * @param {string} date    - 'YYYY-MM-DD'
+   * @param {string} reason  - wajib isi
+   */
+  async adjustStock({ code, delta, date, reason }) {
+    const vCode = String(code || '').toUpperCase();
+    if (!['ISI','KOSONG'].includes(vCode)) throw new Error('Jenis stok tidak valid');
+    if (!Number.isFinite(delta) || Number(delta) === 0) throw new Error('Jumlah penyesuaian tidak boleh 0');
+    if (!reason || !reason.trim()) throw new Error('Alasan wajib diisi');
+
+    // Validasi tanggal ringan (opsional)
+    const yyyy = Number(String(date).slice(0, 4));
+    if (Number.isFinite(yyyy) && (yyyy < MIN_YEAR || yyyy > MAX_YEAR)) {
+      throw new Error(`Tanggal harus antara ${MIN_YEAR}-${MAX_YEAR}`);
+    }
+
+    const { data, error } = await supabase.rpc('stock_adjust', {
+      p_code: vCode,
+      p_delta: Number(delta),
+      p_date: date,
+      p_reason: reason,
+    });
+    if (error) throw new Error(errMsg(error, 'Gagal penyesuaian stok'));
+    return rowsToStockObject(data);
+  },
+
 };
