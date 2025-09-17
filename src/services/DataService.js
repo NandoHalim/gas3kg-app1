@@ -46,7 +46,6 @@ export const DataService = {
     return rowsToStockObject(data);
   },
 
-  // Tambah stok ISI (HARUS menukar dari KOSONG yang cukup)
   async addIsi({ qty, date, note }) {
     if (!(qty > 0)) throw new Error("Jumlah harus > 0");
     const yyyy = Number(String(date).slice(0, 4));
@@ -194,7 +193,8 @@ export const DataService = {
       .from("sales")
       .select("qty,price,method,status")
       .eq("method", "HUTANG")
-      .neq("status", "LUNAS");
+      .neq("status", "LUNAS")
+      .neq("status", "DIBATALKAN");   // ⬅️ supaya VOID tidak dihitung
     if (error) throw new Error(errMsg(error, "Gagal ambil piutang"));
     return (data || []).reduce(
       (a, b) => a + (Number(b.qty) || 0) * (Number(b.price) || 0),
@@ -202,16 +202,8 @@ export const DataService = {
     );
   },
 
-  // ====== RIWAYAT TRANSAKSI (pakai VIEW agar ada 'invoice') ======
-  async getSalesHistory({
-    from,
-    to,
-    method = "ALL",
-    status = "ALL",
-    cashier,
-    q,
-    limit = 800,
-  } = {}) {
+  // ====== RIWAYAT TRANSAKSI ======
+  async getSalesHistory({ from, to, method = "ALL", status = "ALL", cashier, q, limit = 800 } = {}) {
     let s = supabase
       .from("sales_with_invoice")
       .select("id,invoice,customer,qty,price,total,method,status,created_at,note")
@@ -223,11 +215,9 @@ export const DataService = {
     if (method !== "ALL") s = s.eq("method", method);
     if (status !== "ALL") s = s.eq("status", status);
 
-    // fallback cari nama kasir di note (jika ada)
     if (cashier) {
       s = s.or("note.ilike.%"+cashier+"%");
     }
-
     if (q) {
       s = s.or("invoice.ilike.%"+q+"%,customer.ilike.%"+q+"%");
     }
@@ -237,13 +227,14 @@ export const DataService = {
     return data || [];
   },
 
-  // ====== HUTANG (pakai VIEW agar ada 'invoice') ======
+  // ====== HUTANG ======
   async getDebts({ query = "", limit = 200 } = {}) {
     let s = supabase
       .from("sales_with_invoice")
       .select("id, invoice, customer, qty, price, method, status, note, created_at")
       .eq("method", "HUTANG")
       .neq("status", "LUNAS")
+      .neq("status", "DIBATALKAN")   // ⬅️ FIX supaya VOID tidak ikut hutang
       .order("id", { ascending: false })
       .limit(limit);
 
@@ -345,23 +336,13 @@ export const DataService = {
     return this.loadStocks();
   },
 
-// Tambah di paling bawah bagian STOK (atau dekat addKosong/addIsi)
-
-  /**
-   * Penyesuaian stok langsung (bisa + atau −) untuk ISI/KOSONG.
-   * Tidak mengubah fungsi yang sudah baik — hanya penambahan fitur.
-   * @param {'ISI'|'KOSONG'} code
-   * @param {number} delta   - boleh negatif/positif, tidak boleh 0
-   * @param {string} date    - 'YYYY-MM-DD'
-   * @param {string} reason  - wajib isi
-   */
+  // ====== PENYESUAIAN ======
   async adjustStock({ code, delta, date, reason }) {
     const vCode = String(code || '').toUpperCase();
     if (!['ISI','KOSONG'].includes(vCode)) throw new Error('Jenis stok tidak valid');
     if (!Number.isFinite(delta) || Number(delta) === 0) throw new Error('Jumlah penyesuaian tidak boleh 0');
     if (!reason || !reason.trim()) throw new Error('Alasan wajib diisi');
 
-    // Validasi tanggal ringan (opsional)
     const yyyy = Number(String(date).slice(0, 4));
     if (Number.isFinite(yyyy) && (yyyy < MIN_YEAR || yyyy > MAX_YEAR)) {
       throw new Error(`Tanggal harus antara ${MIN_YEAR}-${MAX_YEAR}`);
@@ -376,5 +357,4 @@ export const DataService = {
     if (error) throw new Error(errMsg(error, 'Gagal penyesuaian stok'));
     return rowsToStockObject(data);
   },
-
 };
