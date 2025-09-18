@@ -190,9 +190,8 @@ export const DataService = {
     return { qty, money };
   },
 
-  // Grafik 7 hari: pakai view harian bersih (exclude VOID) dengan fallback
+  // Grafik 7 hari: view "clean" (exclude void) dengan fallback
   async getSevenDaySales() {
-    // coba view baru *_clean dulu
     let q = supabase
       .from("view_sales_daily_clean")
       .select("tanggal,total_qty")
@@ -200,7 +199,6 @@ export const DataService = {
       .limit(7);
 
     let { data, error } = await q;
-    // fallback ke view lama jika view baru belum ada
     if (error && (error.message || "").toLowerCase().includes("does not exist")) {
       const res2 = await supabase
         .from("view_sales_daily")
@@ -227,7 +225,7 @@ export const DataService = {
     );
   },
 
-  // ====== RIWAYAT TRANSAKSI (pakai VIEW bersih + fallback) ======
+  // ====== RIWAYAT TRANSAKSI (tampilkan VOID) ======
   /**
    * @param {Object} p
    * @param {string} [p.from] 'YYYY-MM-DD'
@@ -247,10 +245,6 @@ export const DataService = {
     q,
     limit = 800,
   } = {}) {
-    // urutan prioritas sumber:
-    // 1) sales_with_invoice_clean (exclude VOID)
-    // 2) sales_with_invoice
-    // 3) sales (tabel asli)
     const build = (source) => {
       let s = supabase
         .from(source)
@@ -262,16 +256,19 @@ export const DataService = {
       if (to) s = s.lte("created_at", to);
       if (method !== "ALL") s = s.eq("method", method);
       if (status !== "ALL") s = s.eq("status", status);
-
       if (cashier) s = s.or("note.ilike.%"+cashier+"%");
       if (q) s = s.or("invoice.ilike.%"+q+"%,customer.ilike.%"+q+"%");
       return s;
     };
 
-    let { data, error } = await build("sales_with_invoice_clean");
+    // Utamakan view yang menampilkan semua transaksi (termasuk VOID)
+    let { data, error } = await build("sales_with_invoice");
+
     if (error && (error.message || "").toLowerCase().includes("does not exist")) {
-      const res2 = await build("sales_with_invoice");
+      // fallback: versi clean (exclude VOID)
+      const res2 = await build("sales_with_invoice_clean");
       data = res2.data; error = res2.error;
+
       if (error && (error.message || "").toLowerCase().includes("does not exist")) {
         // terakhir: dari tabel sales (tanpa kolom invoice)
         let s3 = supabase
@@ -294,7 +291,7 @@ export const DataService = {
     return data || [];
   },
 
-  // ====== HUTANG (pakai VIEW bersih + fallback) ======
+  // ====== HUTANG (exclude VOID, pakai view clean) ======
   async getDebts({ query = "", limit = 200 } = {}) {
     const build = (source) => {
       let s = supabase
@@ -302,7 +299,6 @@ export const DataService = {
         .select("id, invoice, customer, qty, price, method, status, note, created_at")
         .eq("method", "HUTANG")
         .neq("status", "LUNAS")
-        .neq("status", "DIBATALKAN") // ⬅️ pastikan VOID tidak ikut
         .order("id", { ascending: false })
         .limit(limit);
       if (query && query.trim().length > 0) {
@@ -322,7 +318,6 @@ export const DataService = {
           .select("id, customer, qty, price, method, status, note, created_at")
           .eq("method", "HUTANG")
           .neq("status", "LUNAS")
-          .neq("status", "DIBATALKAN")
           .order("id", { ascending: false })
           .limit(limit);
         if (query && query.trim().length > 0) {
@@ -333,7 +328,6 @@ export const DataService = {
         error = res3.error;
       }
     }
-
     if (error) throw new Error(errMsg(error, "Gagal ambil daftar hutang"));
 
     return (data || []).map((r) => ({
@@ -358,7 +352,6 @@ export const DataService = {
 
   // ====== RIWAYAT STOK ======
   async getStockHistory({ from, to, jenis = "ALL", limit = 300 } = {}) {
-    // coba view dengan balance dulu; fallback ke tabel stock_logs
     const base = async (source) => {
       let q = supabase
         .from(source)

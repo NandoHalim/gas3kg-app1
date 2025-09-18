@@ -66,21 +66,21 @@ function Modal({ open, title, children, onClose }) {
 
 export default function RiwayatView() {
   const toast = useToast();
-  const [tab, setTab] = useState("trx"); // 'trx' | 'stok' | 'hutang'
+  const [tab, setTab] = useState("trx");
 
   // ---------------------------
   // Riwayat Transaksi
   // ---------------------------
   const [fFrom, setFFrom] = useState("");
   const [fTo, setFTo] = useState("");
-  const [fMethod, setFMethod] = useState("ALL"); // ALL | TUNAI | HUTANG
-  const [fStatus, setFStatus] = useState("ALL"); // ALL | LUNAS | BELUM
+  const [fMethod, setFMethod] = useState("ALL");
+  const [fStatus, setFStatus] = useState("ALL");
   const [q, setQ] = useState("");
   const [trxRows, setTrxRows] = useState([]);
   const [trxLoading, setTrxLoading] = useState(false);
 
-  const [detailSale, setDetailSale] = useState(null); // row
-  const [voidSale, setVoidSale] = useState(null);     // row
+  const [detailSale, setDetailSale] = useState(null);
+  const [voidSale, setVoidSale] = useState(null);
   const [voidReason, setVoidReason] = useState("");
   const VOID_REASONS = [
     "Salah Input Data",
@@ -113,9 +113,9 @@ export default function RiwayatView() {
   // ---------------------------
   const [sFrom, setSFrom] = useState("");
   const [sTo, setSTo] = useState("");
-  const [sJenis, setSJenis] = useState("ALL"); // ALL | ISI | KOSONG
+  const [sJenis, setSJenis] = useState("ALL");
   const [stokRows, setStokRows] = useState([]);
-  const [stokLoading, setStokLoading] = useState(false); // ✅ perbaiki typo
+  const [stokLoading, setStokLoading] = useState(false);
 
   const loadStok = async () => {
     try {
@@ -135,7 +135,7 @@ export default function RiwayatView() {
   };
 
   // ---------------------------
-  // Riwayat Hutang (belum lunas)
+  // Riwayat Hutang
   // ---------------------------
   const [hNama, setHNama] = useState("");
   const [hQ, setHQ] = useState("");
@@ -159,7 +159,7 @@ export default function RiwayatView() {
     }
   };
 
-  // muat data saat tab diganti (sekali)
+  // muat data saat tab diganti
   useEffect(() => {
     if (tab === "trx") loadTrx();
     if (tab === "stok") loadStok();
@@ -179,7 +179,7 @@ export default function RiwayatView() {
       toast?.show?.({ type: "success", message: "✅ Transaksi dibatalkan (void)." });
       setVoidSale(null);
       setVoidReason("");
-      loadTrx(); // refresh tabel
+      loadTrx(); // refresh
     } catch (e) {
       toast?.show?.({ type: "error", message: `❌ ${e.message}` });
     }
@@ -256,6 +256,7 @@ export default function RiwayatView() {
                   <option value="ALL">Semua</option>
                   <option value="LUNAS">Lunas</option>
                   <option value="BELUM">Belum Lunas</option>
+                  <option value="DIBATALKAN">Dibatalkan</option>
                 </select>
               </div>
               <div>
