@@ -263,9 +263,7 @@ export const DataService = {
       if (method !== "ALL") s = s.eq("method", method);
       if (status !== "ALL") s = s.eq("status", status);
 
-      // fallback cari nama kasir di note (jika ada)
       if (cashier) s = s.or("note.ilike.%"+cashier+"%");
-
       if (q) s = s.or("invoice.ilike.%"+q+"%,customer.ilike.%"+q+"%");
       return s;
     };
@@ -304,6 +302,7 @@ export const DataService = {
         .select("id, invoice, customer, qty, price, method, status, note, created_at")
         .eq("method", "HUTANG")
         .neq("status", "LUNAS")
+        .neq("status", "DIBATALKAN") // ⬅️ pastikan VOID tidak ikut
         .order("id", { ascending: false })
         .limit(limit);
       if (query && query.trim().length > 0) {
@@ -323,6 +322,7 @@ export const DataService = {
           .select("id, customer, qty, price, method, status, note, created_at")
           .eq("method", "HUTANG")
           .neq("status", "LUNAS")
+          .neq("status", "DIBATALKAN")
           .order("id", { ascending: false })
           .limit(limit);
         if (query && query.trim().length > 0) {
@@ -357,13 +357,6 @@ export const DataService = {
   },
 
   // ====== RIWAYAT STOK ======
-  /**
-   * @param {Object} p
-   * @param {string} [p.from]  'YYYY-MM-DD'
-   * @param {string} [p.to]
-   * @param {'ALL'|'ISI'|'KOSONG'} [p.jenis]
-   * @param {number} [p.limit]
-   */
   async getStockHistory({ from, to, jenis = "ALL", limit = 300 } = {}) {
     // coba view dengan balance dulu; fallback ke tabel stock_logs
     const base = async (source) => {
@@ -440,14 +433,6 @@ export const DataService = {
   },
 
   // ====== Penyesuaian Stok (tambahan fitur) ======
-  /**
-   * Penyesuaian stok langsung (bisa + atau −) untuk ISI/KOSONG.
-   * Tidak mengubah fungsi yang sudah baik — hanya penambahan fitur.
-   * @param {'ISI'|'KOSONG'} code
-   * @param {number} delta   - boleh negatif/positif, tidak boleh 0
-   * @param {string} date    - 'YYYY-MM-DD'
-   * @param {string} reason  - wajib isi
-   */
   async adjustStock({ code, delta, date, reason }) {
     const vCode = String(code || '').toUpperCase();
     if (!['ISI','KOSONG'].includes(vCode)) throw new Error('Jenis stok tidak valid');
