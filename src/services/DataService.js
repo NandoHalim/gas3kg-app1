@@ -46,18 +46,24 @@ export const DataService = {
     return rowsToStockObject(data);
   },
 
+  // Tambah stok ISI (HARUS menukar dari KOSONG yang cukup)
   async addIsi({ qty, date, note }) {
     if (!(qty > 0)) throw new Error("Jumlah harus > 0");
     const yyyy = Number(String(date).slice(0, 4));
     if (Number.isFinite(yyyy) && (yyyy < MIN_YEAR || yyyy > MAX_YEAR)) {
       throw new Error(`Tanggal harus antara ${MIN_YEAR}-${MAX_YEAR}`);
     }
+
+    // pagar tambahan (DB tetap validasi)
     try {
       const snap = await this.loadStocks();
       if (Number(qty) > Number(snap.KOSONG || 0)) {
         throw new Error("Stok KOSONG tidak cukup untuk ditukar menjadi ISI");
       }
-    } catch {}
+    } catch {
+      /* lanjut; DB akan validasi */
+    }
+
     const { data, error } = await supabase.rpc("stock_add_isi", {
       p_qty: qty,
       p_date: date,
@@ -74,7 +80,7 @@ export const DataService = {
       .select(
         "id,invoice,customer,qty,price,total,method,note,created_at,status,hpp,laba"
       )
-      .order("id", { ascending: false })
+      .order("id", { ascending: false }) // urut invoice terbaru
       .limit(limit);
     if (error) throw new Error(errMsg(error, "Gagal ambil penjualan"));
     return data || [];
@@ -85,19 +91,25 @@ export const DataService = {
       .from("sales")
       .select("id,invoice,customer,qty,price,method,created_at,status")
       .neq("status", "DIBATALKAN") // ⬅️ exclude VOID
-      .order("id", { ascending: false })
+      .order("id", { ascending: false }) // urut invoice terbaru
       .limit(limit);
     if (error) throw new Error(errMsg(error, "Gagal ambil transaksi terbaru"));
     return data || [];
   },
 
+  /**
+   * Simpan penjualan (6 arg utama).
+   * Catatan: tidak merusak logika yang sudah baik.
+   */
   async createSale({ customer = "PUBLIC", qty, price, method = "TUNAI", date, note = "" }) {
     if (!(qty > 0)) throw new Error("Qty harus > 0");
     if (!(price > 0)) throw new Error("Harga tidak valid");
+
     const isoDate =
       date && String(date).length >= 10
         ? new Date(date).toISOString()
         : new Date().toISOString();
+
     const tryWithCustomer6 = () =>
       supabase.rpc("stock_sell_with_customer", {
         p_customer: customer,
@@ -107,6 +119,7 @@ export const DataService = {
         p_date: isoDate,
         p_note: note,
       });
+
     const tryV2_6 = () =>
       supabase.rpc("stock_sell_public_v2", {
         p_customer: customer,
@@ -116,6 +129,7 @@ export const DataService = {
         p_date: isoDate,
         p_note: note,
       });
+
     const tryV2_5 = () =>
       supabase.rpc("stock_sell_public_v2", {
         p_customer: customer,
@@ -124,6 +138,7 @@ export const DataService = {
         p_method: method,
         p_note: note,
       });
+
     const tryV1 = () => {
       const legacyNote = (note ? `${note} | ` : "") + `cust:${customer}`;
       return supabase.rpc("stock_sell_public", {
@@ -133,23 +148,29 @@ export const DataService = {
         p_note: legacyNote,
       });
     };
+
     let resp = await tryWithCustomer6();
     if (resp.error) {
       const msg = (resp.error.message || "").toLowerCase();
-      const fnMissing = msg.includes("could not find function") || msg.includes("does not exist");
+      const fnMissing =
+        msg.includes("could not find function") || msg.includes("does not exist");
       if (fnMissing) resp = await tryV2_6();
     }
     if (resp.error) {
       const msg = (resp.error.message || "").toLowerCase();
-      const fnMissing = msg.includes("could not find function") || msg.includes("does not exist");
+      const fnMissing =
+        msg.includes("could not find function") || msg.includes("does not exist");
       if (fnMissing) resp = await tryV2_5();
     }
     if (resp.error) {
       const msg = (resp.error.message || "").toLowerCase();
-      const fnMissing = msg.includes("could not find function") || msg.includes("does not exist");
+      const fnMissing =
+        msg.includes("could not find function") || msg.includes("does not exist");
       if (fnMissing) resp = await tryV1();
     }
-    if (resp.error) throw new Error(errMsg(resp.error, "Gagal menyimpan penjualan"));
+    if (resp.error)
+      throw new Error(errMsg(resp.error, "Gagal menyimpan penjualan"));
+
     return rowsToStockObject(resp.data);
   },
 
@@ -160,7 +181,7 @@ export const DataService = {
       .select("qty,price,method,created_at,status")
       .gte("created_at", from)
       .lte("created_at", to)
-      .eq("status", "LUNAS");
+      .eq("status", "LUNAS"); // ringkasan hanya transaksi lunas
     if (error) throw new Error(errMsg(error, "Gagal ambil ringkasan penjualan"));
     const qty = (data || []).reduce((a, b) => a + Number(b.qty || 0), 0);
     const money = (data || []).reduce(
@@ -170,13 +191,17 @@ export const DataService = {
     return { qty, money };
   },
 
+  // Grafik 7 hari: pakai view harian bersih (exclude VOID) dengan fallback
   async getSevenDaySales() {
+    // coba view baru *_clean dulu
     let q = supabase
       .from("view_sales_daily_clean")
       .select("tanggal,total_qty")
       .order("tanggal", { ascending: true })
       .limit(7);
+
     let { data, error } = await q;
+    // fallback ke view lama jika view baru belum ada
     if (error && (error.message || "").toLowerCase().includes("does not exist")) {
       const res2 = await supabase
         .from("view_sales_daily")
@@ -205,38 +230,112 @@ export const DataService = {
   },
 
   // ====== RIWAYAT TRANSAKSI ======
-  async getSalesHistory({ from, to, method = "ALL", status = "ALL", cashier, q, limit = 800 } = {}) {
-    let s = supabase
-      .from("sales")
-      .select("id,invoice,customer,qty,price,total,method,status,created_at,note")
-      .order("id", { ascending: false })
-      .limit(limit);
-    if (from) s = s.gte("created_at", from);
-    if (to) s = s.lte("created_at", to);
-    if (method !== "ALL") s = s.eq("method", method);
-    if (status !== "ALL") s = s.eq("status", status);
-    if (cashier) s = s.or(`note.ilike.%${cashier}%`);
-    if (q) s = s.or(`invoice.ilike.%${q}%,customer.ilike.%${q}%`);
-    const { data, error } = await s;
+  /**
+   * Penting: gunakan `sales_with_invoice` (BUKAN *_clean) agar transaksi VOID
+   * tetap muncul di tabel Riwayat.
+   */
+  async getSalesHistory({
+    from,
+    to,
+    method = "ALL",
+    status = "ALL",
+    cashier,
+    q,
+    limit = 800,
+  } = {}) {
+    const build = (source) => {
+      let s = supabase
+        .from(source)
+        .select(
+          "id,invoice,customer,qty,price,total,method,status,created_at,note"
+        )
+        .order("id", { ascending: false })
+        .limit(limit);
+
+      if (from) s = s.gte("created_at", from);
+      if (to) s = s.lte("created_at", to);
+      if (method !== "ALL") s = s.eq("method", method);
+      if (status !== "ALL") s = s.eq("status", status);
+      if (cashier) s = s.or(`note.ilike.%${cashier}%`);
+      if (q) s = s.or(`invoice.ilike.%${q}%,customer.ilike.%${q}%`);
+
+      return s;
+    };
+
+    // 1) sales_with_invoice (tampilkan semua status termasuk DIBATALKAN)
+    let { data, error } = await build("sales_with_invoice");
+
+    // 2) fallback: bila view belum ada, pakai tabel sales (tanpa invoice)
+    if (error && (error.message || "").toLowerCase().includes("does not exist")) {
+      let s3 = supabase
+        .from("sales")
+        .select("id, customer, qty, price, total, method, status, created_at, note")
+        .order("id", { ascending: false })
+        .limit(limit);
+      if (from) s3 = s3.gte("created_at", from);
+      if (to) s3 = s3.lte("created_at", to);
+      if (method !== "ALL") s3 = s3.eq("method", method);
+      if (status !== "ALL") s3 = s3.eq("status", status);
+      if (cashier) s3 = s3.or(`note.ilike.%${cashier}%`);
+      if (q) s3 = s3.or(`customer.ilike.%${q}%`);
+      const res3 = await s3;
+      data = (res3.data || []).map((r) => ({ ...r, invoice: null }));
+      error = res3.error;
+    }
+
     if (error) throw new Error(errMsg(error, "Gagal ambil riwayat transaksi"));
     return data || [];
   },
 
-  // ====== HUTANG ======
+  // ====== HUTANG (pakai VIEW bersih + fallback) ======
   async getDebts({ query = "", limit = 200 } = {}) {
-    let s = supabase
-      .from("sales")
-      .select("id, invoice, customer, qty, price, method, status, note, created_at")
-      .eq("method", "HUTANG")
-      .neq("status", "LUNAS")
-      .neq("status", "DIBATALKAN") // ⬅️ exclude VOID
-      .order("id", { ascending: false })
-      .limit(limit);
-    if (query && query.trim().length > 0) {
-      s = s.or(`invoice.ilike.%${query}%,customer.ilike.%${query}%,note.ilike.%${query}%`);
+    const build = (source) => {
+      let s = supabase
+        .from(source)
+        .select(
+          "id, invoice, customer, qty, price, method, status, note, created_at"
+        )
+        .eq("method", "HUTANG")
+        .neq("status", "LUNAS")
+        .neq("status", "DIBATALKAN") // ⬅️ pastikan VOID tidak nyangkut
+        .order("id", { ascending: false })
+        .limit(limit);
+      if (query && query.trim().length > 0) {
+        s = s.or(
+          `invoice.ilike.%${query}%,customer.ilike.%${query}%,note.ilike.%${query}%`
+        );
+      }
+      return s;
+    };
+
+    // untuk hutang, aman memakai *_clean agar transaksi VOID tidak masuk
+    let { data, error } = await build("sales_with_invoice_clean");
+    if (error && (error.message || "").toLowerCase().includes("does not exist")) {
+      const res2 = await build("sales_with_invoice");
+      data = res2.data;
+      error = res2.error;
+
+      if (error && (error.message || "").toLowerCase().includes("does not exist")) {
+        // fallback terakhir pakai tabel sales (tanpa invoice)
+        let s3 = supabase
+          .from("sales")
+          .select("id, customer, qty, price, method, status, note, created_at")
+          .eq("method", "HUTANG")
+          .neq("status", "LUNAS")
+          .neq("status", "DIBATALKAN") // ⬅️ exclude VOID di fallback
+          .order("id", { ascending: false })
+          .limit(limit);
+        if (query && query.trim().length > 0) {
+          s3 = s3.or(`customer.ilike.%${query}%,note.ilike.%${query}%`);
+        }
+        const res3 = await s3;
+        data = (res3.data || []).map((r) => ({ ...r, invoice: null }));
+        error = res3.error;
+      }
     }
-    const { data, error } = await s;
+
     if (error) throw new Error(errMsg(error, "Gagal ambil daftar hutang"));
+
     return (data || []).map((r) => ({
       ...r,
       total: (Number(r.qty) || 0) * (Number(r.price) || 0),
@@ -246,43 +345,59 @@ export const DataService = {
   async payDebt({ sale_id, amount, note = "" }) {
     if (!sale_id) throw new Error("sale_id wajib");
     if (!(amount > 0)) throw new Error("Nominal pembayaran harus > 0");
+
     const { data, error } = await supabase.rpc("sales_pay_debt", {
       p_sale_id: sale_id,
       p_amount: amount,
       p_note: note,
     });
+
     if (error) throw new Error(errMsg(error, "Gagal mencatat pembayaran hutang"));
     return data;
   },
 
   // ====== RIWAYAT STOK ======
+  /**
+   * @param {Object} p
+   * @param {string} [p.from]  'YYYY-MM-DD'
+   * @param {string} [p.to]
+   * @param {'ALL'|'ISI'|'KOSONG'} [p.jenis]
+   * @param {number} [p.limit]
+   */
   async getStockHistory({ from, to, jenis = "ALL", limit = 300 } = {}) {
+    // coba view dengan balance dulu; fallback ke tabel stock_logs
     const base = async (source) => {
       let q = supabase
         .from(source)
         .select("id, code, qty_change, note, created_at, balance_after")
         .order("created_at", { ascending: false })
         .limit(limit);
+
       if (from) q = q.gte("created_at", from);
       if (to) q = q.lte("created_at", to);
       if (jenis === "ISI" || jenis === "KOSONG") q = q.eq("code", jenis);
+
       return q;
     };
+
     let res = await base("stock_logs_with_balance");
     if (res.error && (res.error.message || "").toLowerCase().includes("does not exist")) {
       res = await base("stock_logs");
     }
     if (res.error) throw new Error(errMsg(res.error, "Gagal ambil riwayat stok"));
+
     const data = res.data || [];
     return data.map((r) => {
       const change = Number(r.qty_change || 0);
       const masuk = change > 0 ? change : 0;
       const keluar = change < 0 ? Math.abs(change) : 0;
+
       let ket;
       if (r.code === "ISI") ket = change > 0 ? "Stok ISI bertambah" : "Stok ISI berkurang";
       else if (r.code === "KOSONG") ket = change > 0 ? "Stok KOSONG bertambah" : "Stok KOSONG berkurang";
       else ket = "Mutasi stok";
       if (r.note) ket += ` — ${r.note}`;
+
       return {
         id: r.id,
         tanggal: String(r.created_at || "").slice(0, 10),
@@ -324,23 +439,33 @@ export const DataService = {
     return this.loadStocks();
   },
 
-  // ====== Penyesuaian Stok ======
+  // ====== Penyesuaian Stok (tambahan fitur) ======
+  /**
+   * Penyesuaian stok langsung (bisa + atau −) untuk ISI/KOSONG.
+   * Tidak mengubah fungsi yang sudah baik — hanya penambahan fitur.
+   * @param {'ISI'|'KOSONG'} code
+   * @param {number} delta   - boleh negatif/positif, tidak boleh 0
+   * @param {string} date    - 'YYYY-MM-DD'
+   * @param {string} reason  - wajib isi
+   */
   async adjustStock({ code, delta, date, reason }) {
-    const vCode = String(code || "").toUpperCase();
-    if (!["ISI", "KOSONG"].includes(vCode)) throw new Error("Jenis stok tidak valid");
-    if (!Number.isFinite(delta) || Number(delta) === 0) throw new Error("Jumlah penyesuaian tidak boleh 0");
-    if (!reason || !reason.trim()) throw new Error("Alasan wajib diisi");
+    const vCode = String(code || '').toUpperCase();
+    if (!['ISI','KOSONG'].includes(vCode)) throw new Error('Jenis stok tidak valid');
+    if (!Number.isFinite(delta) || Number(delta) === 0) throw new Error('Jumlah penyesuaian tidak boleh 0');
+    if (!reason || !reason.trim()) throw new Error('Alasan wajib diisi');
+
     const yyyy = Number(String(date).slice(0, 4));
     if (Number.isFinite(yyyy) && (yyyy < MIN_YEAR || yyyy > MAX_YEAR)) {
       throw new Error(`Tanggal harus antara ${MIN_YEAR}-${MAX_YEAR}`);
     }
-    const { data, error } = await supabase.rpc("stock_adjust", {
+
+    const { data, error } = await supabase.rpc('stock_adjust', {
       p_code: vCode,
       p_delta: Number(delta),
       p_date: date,
       p_reason: reason,
     });
-    if (error) throw new Error(errMsg(error, "Gagal penyesuaian stok"));
+    if (error) throw new Error(errMsg(error, 'Gagal penyesuaian stok'));
     return rowsToStockObject(data);
   },
 };
