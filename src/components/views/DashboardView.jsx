@@ -1,13 +1,57 @@
-import React, { useMemo, useEffect, useState } from "react";
+// src/views/DashboardView.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import Card from "../ui/Card.jsx";
 import StatCard from "../ui/StatCard.jsx";
 import { COLORS, HPP } from "../../utils/constants.js";
 import { fmtIDR, todayStr } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
-import { supabase } from "../../lib/supabase.js"; // realtime
+import { supabase } from "../../lib/supabase.js";
 
 const LOW_STOCK_THRESHOLD = 5;
 
+// ===== Progress bar stok (kosong vs total) =====
+function StockProgress({ isi, kosong }) {
+  const total = Math.max(isi + kosong, 1);
+  const pctKosong = Math.round((kosong / total) * 100);
+  const pctIsi = 100 - pctKosong;
+  return (
+    <div style={{ paddingTop: 6 }}>
+      <div
+        aria-label="progress stok"
+        style={{
+          height: 10,
+          width: "100%",
+          background: "#e5e7eb",
+          borderRadius: 999,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${pctIsi}%`,
+            height: "100%",
+            background: "#16a34a", // hijau isi
+          }}
+        />
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          fontSize: 12,
+          marginTop: 6,
+          color: "#64748b",
+        }}
+      >
+        <span>Isi: <b style={{ color: "#14532d" }}>{pctIsi}%</b></span>
+        <span>•</span>
+        <span>Kosong: <b style={{ color: "#7f1d1d" }}>{pctKosong}%</b></span>
+      </div>
+    </div>
+  );
+}
+
+// ===== Mini bar chart 7 hari =====
 function MiniBarChart({ data }) {
   const max = useMemo(() => Math.max(1, ...data.map((d) => d.qty)), [data]);
   return (
@@ -18,7 +62,12 @@ function MiniBarChart({ data }) {
           <div
             key={d.date}
             title={`${d.date} • ${d.qty} tabung`}
-            style={{ width: 20, height: h, background: "#1d4ed8", borderRadius: 6 }}
+            style={{
+              width: 20,
+              height: h,
+              background: "#1d4ed8",
+              borderRadius: 6,
+            }}
           />
         );
       })}
@@ -38,39 +87,30 @@ export default function DashboardView({ stocks = {} }) {
   const [series7, setSeries7] = useState([]);
   const [err, setErr] = useState("");
 
+  // Ambil data dashboard (on mount & on realtime)
   const fetchDashboard = async () => {
     try {
-      // Ambil maksimum 500 riwayat agar ringan
+      // total riwayat (pakai limit agar enteng)
       const rows = await DataService.loadSales(500);
 
-      // ❌ Keluarkan transaksi yang DIBATALKAN dari semua agregasi
-      const notVoid = (rows || []).filter(
-        (r) => String(r.status || "").toUpperCase() !== "DIBATALKAN"
-      );
-
-      // Total terjual (riwayat) = semua yang tidak void
-      const qty = notVoid.reduce((a, b) => a + Number(b.qty || 0), 0);
-
-      // Omzet & Laba hanya dari transaksi yang sudah dibayar:
-      // - TUNAI ATAU status LUNAS (dan tidak void)
-      const paid = notVoid.filter(
+      // hanya yang dibayar untuk omzet & laba (tunai atau status LUNAS)
+      const paid = (rows || []).filter(
         (r) =>
           String(r.method).toUpperCase() === "TUNAI" ||
           String(r.status || "").toUpperCase() === "LUNAS"
       );
 
+      const qty = rows.reduce((a, b) => a + Number(b.qty || 0), 0);
       const omzet = paid.reduce((a, b) => a + Number(b.total || 0), 0);
-      const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * HPP, 0);
+      const hpp = paid.reduce((a, b) => a + (Number(b.qty || 0) * HPP), 0);
       const laba = omzet - hpp;
 
-      // Hari ini (tetap)
       const todaySum =
         (await DataService.getSalesSummary?.({
           from: todayStr(),
           to: todayStr(),
         })) || { qty: 0, money: 0 };
 
-      // Piutang, grafik 7 hari, dan transaksi terbaru
       const totalPiutang = await DataService.getTotalReceivables?.();
       const s7 = await DataService.getSevenDaySales?.();
       const r = await DataService.getRecentSales?.(5);
@@ -90,7 +130,6 @@ export default function DashboardView({ stocks = {} }) {
     let alive = true;
     fetchDashboard();
 
-    // Realtime: refresh jika ada perubahan di sales / stocks
     const ch = supabase
       .channel("dashboard-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, () => {
@@ -102,23 +141,15 @@ export default function DashboardView({ stocks = {} }) {
       .subscribe();
 
     return () => {
-      try {
-        supabase.removeChannel(ch);
-      } catch {}
+      try { supabase.removeChannel(ch); } catch {}
       alive = false;
     };
   }, []);
 
   return (
-    <div className="grid">
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
+    <div className="grid" style={{ gap: 12 }}>
+      {/* Header mini total tabung */}
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <div>
           <h2 style={{ margin: 0 }}>Dashboard</h2>
           <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>
@@ -145,23 +176,22 @@ export default function DashboardView({ stocks = {} }) {
             border: "1px solid #fecaca",
             background: "#fee2e2",
             color: "#b91c1c",
-            marginTop: 8,
           }}
         >
           ⚠️ {err}
         </div>
       )}
 
-      {/* STAT CARDS */}
+      {/* ===== Bagian 1: Card Ringkasan Stok & Penjualan ===== */}
       <section
         className="grid"
-        style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}
+        style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}
       >
         <StatCard
           title="Stok Isi"
           value={isi}
           subtitle={isi <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Siap jual"}
-          color={COLORS.primary}
+          color={COLORS.success}
           icon="🟢"
         />
         <StatCard
@@ -185,26 +215,17 @@ export default function DashboardView({ stocks = {} }) {
           color={COLORS.warning}
           icon="📄"
         />
-        <StatCard
-          title="Total Terjual (riwayat)"
-          value={sum.qty}
-          subtitle="Akumulasi data"
-          color={COLORS.info}
-          icon="🧮"
-        />
-        <StatCard
-          title="Laba (akumulasi)"
-          value={fmtIDR(sum.laba)}
-          subtitle={`HPP @ ${fmtIDR(HPP)}`}
-          color={COLORS.success}
-          icon="💰"
-        />
       </section>
 
-      {/* RINGKASAN KEUANGAN */}
+      {/* Progress bar stok */}
+      <Card title="Kondisi Stok (Isi vs Kosong)">
+        <StockProgress isi={isi} kosong={kosong} />
+      </Card>
+
+      {/* ===== Bagian 2: Ringkasan Keuangan ===== */}
       <section
         className="grid"
-        style={{ gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))" }}
+        style={{ gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 12 }}
       >
         <Card title="Ringkasan Keuangan">
           <div style={{ display: "grid", gap: 6 }}>
@@ -222,13 +243,17 @@ export default function DashboardView({ stocks = {} }) {
             </div>
           </div>
         </Card>
+        <StatCard
+          title="Total Terjual (riwayat)"
+          value={sum.qty}
+          subtitle="Akumulasi data"
+          color={COLORS.info}
+          icon="🧮"
+        />
       </section>
 
-      {/* GRAFIK & TRANSAKSI */}
-      <section
-        className="grid"
-        style={{ gridTemplateColumns: "2fr 3fr", gap: 12, marginTop: 12 }}
-      >
+      {/* ===== Bagian 3: Grafik & Riwayat ===== */}
+      <section className="grid" style={{ gridTemplateColumns: "2fr 3fr", gap: 12 }}>
         <Card title="Penjualan 7 Hari Terakhir">
           {series7.length ? (
             <MiniBarChart data={series7} />
