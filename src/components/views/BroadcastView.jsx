@@ -56,6 +56,34 @@ const TEMPLATES = [
   },
 ];
 
+/* ============ DETEKSI DEVICE ============ */
+const isMobile = () =>
+  /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
+
+const buildWAUrl = (phone, text) => {
+  const apiUrl = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(
+    text
+  )}`;
+  const appUrl = `whatsapp://send?phone=${phone}&text=${encodeURIComponent(text)}`;
+  return { apiUrl, appUrl };
+};
+
+const sendToOne = (targetText, phone) => {
+  const { apiUrl, appUrl } = buildWAUrl(phone, targetText);
+  if (isMobile()) {
+    window.location.href = appUrl; // buka aplikasi WA di HP
+  } else {
+    window.location.href = apiUrl; // buka WhatsApp Web
+  }
+};
+
+const openPopup = (targetText, phone) => {
+  const { apiUrl, appUrl } = buildWAUrl(phone, targetText);
+  const url = isMobile() ? appUrl : apiUrl;
+  const win = window.open(url, "_blank");
+  return !!win;
+};
+
 /* ============ KOMPONEN UTAMA ============ */
 export default function BroadcastView() {
   const toast = useToast();
@@ -127,30 +155,62 @@ export default function BroadcastView() {
     }
 
     const salam = getSalam();
+
+    // Jika hanya 1 penerima → redirect tab ini
+    if (targets.length === 1) {
+      const t = targets[0];
+      const teks = message
+        .replace(/{{NAMA}}/g, t.name || "")
+        .replace(/{{SALAM}}/g, salam);
+      sendToOne(teks, t.phone);
+      return;
+    }
+
+    // >1 penerima → mode bertahap (pop-up per jeda)
     let idx = 0;
+    const total = targets.length;
+
+    const first = targets[idx++];
+    const firstText = message
+      .replace(/{{NAMA}}/g, first.name || "")
+      .replace(/{{SALAM}}/g, salam);
+    const okFirst = openPopup(firstText, first.phone);
+
+    if (!okFirst) {
+      toast?.show?.({
+        type: "error",
+        message: "Browser memblokir pop-up. Izinkan pop-up untuk mengirim broadcast.",
+      });
+      return;
+    }
 
     toast?.show?.({
       type: "info",
-      message: `Mengirim ke ${targets.length} pelanggan (jeda ${delaySec} detik)...`,
+      message: `Mengirim ke ${total} pelanggan (jeda ${delaySec} detik)...`,
     });
 
     const interval = setInterval(() => {
-      if (idx >= targets.length) {
+      if (idx >= total) {
         clearInterval(interval);
         toast?.show?.({ type: "success", message: "Broadcast selesai" });
         return;
       }
 
-      const t = targets[idx];
+      const t = targets[idx++];
       const teks = message
         .replace(/{{NAMA}}/g, t.name || "")
         .replace(/{{SALAM}}/g, salam);
 
-      const url = `https://wa.me/${t.phone}?text=${encodeURIComponent(teks)}`;
-      window.open(url, "_blank");
-
-      idx++;
-    }, delaySec * 1000);
+      const ok = openPopup(teks, t.phone);
+      if (!ok) {
+        clearInterval(interval);
+        toast?.show?.({
+          type: "error",
+          message:
+            "Pop-up diblokir saat mengirim. Izinkan pop-up di browser lalu klik Kirim lagi.",
+        });
+      }
+    }, Math.max(5, Number(delaySec) || 10) * 1000);
   };
 
   return (
