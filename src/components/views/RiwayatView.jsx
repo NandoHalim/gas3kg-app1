@@ -160,7 +160,7 @@ export default function RiwayatView() {
       });
       setTrxRows(rows);
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      toast?.show?.({ type: "error", message: `${e.message}` });
     } finally {
       setTrxLoading(false);
     }
@@ -231,7 +231,7 @@ export default function RiwayatView() {
       });
       setStokRows(rows);
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      toast?.show?.({ type: "error", message: `${e.message}` });
     } finally {
       setStokLoading(false);
     }
@@ -299,7 +299,7 @@ export default function RiwayatView() {
       const rows = await DataService.getDebts({ query: keyword, limit: 500 });
       setDebts(rows);
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      toast?.show?.({ type: "error", message: `${e.message}` });
     } finally {
       setDebtLoading(false);
     }
@@ -377,12 +377,12 @@ export default function RiwayatView() {
         return;
       }
       await DataService.voidSale({ sale_id: voidSale.id, reason: voidReason });
-      toast?.show?.({ type: "success", message: "✅ Transaksi dibatalkan (void)." });
+      toast?.show?.({ type: "success", message: "Transaksi dibatalkan (void)." });
       setVoidSale(null);
       setVoidReason("");
       loadTrx(); // refresh tabel
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      toast?.show?.({ type: "error", message: `${e.message}` });
     }
   };
 
