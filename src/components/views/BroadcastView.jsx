@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/components/views/BroadcastView.jsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Card from "../ui/Card.jsx";
 import Input from "../ui/Input.jsx";
 import Button from "../ui/Button.jsx";
@@ -56,7 +57,7 @@ const TEMPLATES = [
   },
 ];
 
-/* ============ DETEKSI DEVICE ============ */
+/* ============ DETEKSI DEVICE & URL WA ============ */
 const isMobile = () =>
   /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
 
@@ -68,20 +69,10 @@ const buildWAUrl = (phone, text) => {
   return { apiUrl, appUrl };
 };
 
-const sendToOne = (targetText, phone) => {
-  const { apiUrl, appUrl } = buildWAUrl(phone, targetText);
-  if (isMobile()) {
-    window.location.href = appUrl; // buka aplikasi WA di HP
-  } else {
-    window.location.href = apiUrl; // buka WhatsApp Web
-  }
-};
-
-const openPopup = (targetText, phone) => {
-  const { apiUrl, appUrl } = buildWAUrl(phone, targetText);
-  const url = isMobile() ? appUrl : apiUrl;
-  const win = window.open(url, "_blank");
-  return !!win;
+const openWAHere = (phone, text) => {
+  const { apiUrl, appUrl } = buildWAUrl(phone, text);
+  // Di mobile pakai app intent, di desktop pakai api.whatsapp.com
+  window.location.href = isMobile() ? appUrl : apiUrl;
 };
 
 /* ============ KOMPONEN UTAMA ============ */
@@ -98,6 +89,12 @@ export default function BroadcastView() {
 
   const [message, setMessage] = useState(TEMPLATES[0].text);
   const [delaySec, setDelaySec] = useState(12);
+
+  // STATE khusus mobile step-by-step
+  const [mobileMode, setMobileMode] = useState(isMobile());
+  const [stepActive, setStepActive] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
+  const queueRef = useRef([]);
 
   /* === Load pelanggan dari DataService === */
   const load = async () => {
@@ -142,8 +139,8 @@ export default function BroadcastView() {
     }
   };
 
-  /* === Kirim Broadcast (mode bertahap) === */
-  const sendBroadcast = () => {
+  /* === START BROADCAST === */
+  const startBroadcast = () => {
     if (!message.trim()) {
       toast?.show?.({ type: "error", message: "Isi pesan tidak boleh kosong" });
       return;
@@ -154,32 +151,51 @@ export default function BroadcastView() {
       return;
     }
 
+    if (mobileMode) {
+      // MOBILE: step-by-step (manual)
+      queueRef.current = targets;
+      setStepIndex(0);
+      setStepActive(true);
+      toast?.show?.({
+        type: "info",
+        message: `Mode mobile: ${targets.length} pelanggan. Tekan "Kirim Berikutnya" untuk lanjut.`,
+      });
+      // Kirim yang pertama langsung supaya flow jelas
+      sendCurrentStep();
+    } else {
+      // DESKTOP: bertahap otomatis
+      sendDesktopSequential(targets);
+    }
+  };
+
+  /* === DESKTOP: kirim bertahap otomatis === */
+  const sendDesktopSequential = (targets) => {
     const salam = getSalam();
 
-    // Jika hanya 1 penerima → redirect tab ini
+    // jika 1 target → redirect tab ini agar pasti kebuka
     if (targets.length === 1) {
       const t = targets[0];
       const teks = message
         .replace(/{{NAMA}}/g, t.name || "")
         .replace(/{{SALAM}}/g, salam);
-      sendToOne(teks, t.phone);
+      openWAHere(t.phone, teks);
       return;
     }
 
-    // >1 penerima → mode bertahap (pop-up per jeda)
     let idx = 0;
     const total = targets.length;
 
+    // kirim pertama dalam event klik
     const first = targets[idx++];
     const firstText = message
       .replace(/{{NAMA}}/g, first.name || "")
       .replace(/{{SALAM}}/g, salam);
-    const okFirst = openPopup(firstText, first.phone);
-
-    if (!okFirst) {
+    const { apiUrl } = buildWAUrl(first.phone, firstText);
+    const firstWin = window.open(apiUrl, "_blank");
+    if (!firstWin) {
       toast?.show?.({
         type: "error",
-        message: "Browser memblokir pop-up. Izinkan pop-up untuk mengirim broadcast.",
+        message: "Pop-up diblokir. Izinkan pop-up untuk mengirim broadcast.",
       });
       return;
     }
@@ -195,14 +211,13 @@ export default function BroadcastView() {
         toast?.show?.({ type: "success", message: "Broadcast selesai" });
         return;
       }
-
       const t = targets[idx++];
       const teks = message
         .replace(/{{NAMA}}/g, t.name || "")
         .replace(/{{SALAM}}/g, salam);
-
-      const ok = openPopup(teks, t.phone);
-      if (!ok) {
+      const { apiUrl: url } = buildWAUrl(t.phone, teks);
+      const w = window.open(url, "_blank");
+      if (!w) {
         clearInterval(interval);
         toast?.show?.({
           type: "error",
@@ -211,6 +226,45 @@ export default function BroadcastView() {
         });
       }
     }, Math.max(5, Number(delaySec) || 10) * 1000);
+  };
+
+  /* === MOBILE: kirim saat ini & siapkan tombol lanjut === */
+  const sendCurrentStep = () => {
+    const list = queueRef.current || [];
+    if (!list.length) return;
+
+    const salam = getSalam();
+    const t = list[stepIndex];
+    if (!t) return;
+
+    const teks = message
+      .replace(/{{NAMA}}/g, t.name || "")
+      .replace(/{{SALAM}}/g, salam);
+
+    // Di mobile: pakai app intent agar langsung buka aplikasi WhatsApp
+    const { appUrl } = buildWAUrl(t.phone, teks);
+    window.location.href = appUrl;
+    // Setelah user kembali ke app, dia bisa tekan "Kirim Berikutnya"
+  };
+
+  const nextStep = () => {
+    const list = queueRef.current || [];
+    const next = stepIndex + 1;
+    if (next >= list.length) {
+      setStepActive(false);
+      toast?.show?.({ type: "success", message: "Broadcast selesai" });
+      return;
+    }
+    setStepIndex(next);
+    // otomatis kirim ke penerima berikutnya
+    sendCurrentStep();
+  };
+
+  const stopSteps = () => {
+    setStepActive(false);
+    queueRef.current = [];
+    setStepIndex(0);
+    toast?.show?.({ type: "info", message: "Broadcast dihentikan." });
   };
 
   return (
@@ -228,13 +282,13 @@ export default function BroadcastView() {
             placeholder="Cari nama / nomor HP"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            disabled={loading}
+            disabled={loading || stepActive}
           />
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             style={{ padding: "10px 12px", borderRadius: 8 }}
-            disabled={loading}
+            disabled={loading || stepActive}
           >
             <option value="ALL">Semua</option>
             <option value="ACTIVE">Aktif</option>
@@ -248,6 +302,7 @@ export default function BroadcastView() {
                 <th>
                   <input
                     type="checkbox"
+                    disabled={stepActive}
                     checked={selected.size === computed.length && computed.length > 0}
                     onChange={toggleAll}
                   />
@@ -270,6 +325,7 @@ export default function BroadcastView() {
                   <td>
                     <input
                       type="checkbox"
+                      disabled={stepActive}
                       checked={selected.has(r.id)}
                       onChange={() => toggleOne(r.id)}
                     />
@@ -287,7 +343,12 @@ export default function BroadcastView() {
       <Card title="Isi Pesan">
         <div style={{ marginBottom: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
           {TEMPLATES.map((t) => (
-            <Button key={t.key} className="secondary" onClick={() => setMessage(t.text)}>
+            <Button
+              key={t.key}
+              className="secondary"
+              onClick={() => setMessage(t.text)}
+              disabled={stepActive}
+            >
               {t.label}
             </Button>
           ))}
@@ -296,21 +357,58 @@ export default function BroadcastView() {
           style={{ width: "100%", minHeight: 160, padding: 10 }}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          disabled={stepActive}
         />
-        <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
-          <label>Jeda (detik)</label>
-          <Input
-            type="number"
-            style={{ width: 80 }}
-            value={delaySec}
-            onChange={(e) => setDelaySec(Math.max(5, Number(e.target.value) || 10))}
-          />
-        </div>
+
+        {/* Jeda hanya relevan untuk desktop */}
+        {!mobileMode && (
+          <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
+            <label>Jeda (detik)</label>
+            <Input
+              type="number"
+              style={{ width: 80 }}
+              value={delaySec}
+              onChange={(e) => setDelaySec(Math.max(5, Number(e.target.value) || 10))}
+              disabled={stepActive}
+            />
+          </div>
+        )}
       </Card>
 
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <Button onClick={sendBroadcast}>Kirim Broadcast</Button>
-      </div>
+      {/* Tombol Aksi */}
+      {!stepActive ? (
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ color: COLORS.secondary, fontSize: 13 }}>
+            Mode: <b>{mobileMode ? "Mobile (manual per pelanggan)" : "Desktop (otomatis bertahap)"}</b>
+          </div>
+          <Button onClick={startBroadcast}>Kirim Broadcast</Button>
+        </div>
+      ) : (
+        // Panel kontrol saat step-by-step aktif (mobile)
+        <div
+          style={{
+            border: "1px solid #e5e7eb",
+            padding: 10,
+            borderRadius: 10,
+            background: "#fff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 700 }}>Broadcast Berjalan</div>
+            <div style={{ color: COLORS.secondary }}>
+              Penerima: {stepIndex + 1} / {queueRef.current.length}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button className="secondary" onClick={stopSteps}>Hentikan</Button>
+            <Button onClick={nextStep}>Kirim Berikutnya</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
