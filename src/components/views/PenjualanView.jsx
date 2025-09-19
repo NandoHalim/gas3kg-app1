@@ -73,13 +73,13 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
 
       toast?.show?.({
         type: 'success',
-        message: `✅ Penjualan tersimpan: ${qtyNum} tabung • Total ${fmtIDR(total)}`,
+        message: `Penjualan tersimpan: ${qtyNum} tabung • Total ${fmtIDR(total)}`,
       });
     } catch (e2) {
       setErr(e2.message || 'Gagal menyimpan penjualan');
       toast?.show?.({
         type: 'error',
-        message: `❌ ${e2.message || 'Gagal menyimpan penjualan'}`,
+        message: `${e2.message || 'Gagal menyimpan penjualan'}`,
       });
     } finally {
       setLoading(false);
