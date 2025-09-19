@@ -1,4 +1,3 @@
-// src/components/views/BroadcastView.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import Card from "../ui/Card.jsx";
 import Input from "../ui/Input.jsx";
@@ -115,8 +114,8 @@ export default function BroadcastView() {
     }
   };
 
-  /* === Kirim Broadcast === */
-  const sendBroadcast = async () => {
+  /* === Kirim Broadcast (mode bertahap) === */
+  const sendBroadcast = () => {
     if (!message.trim()) {
       toast?.show?.({ type: "error", message: "Isi pesan tidak boleh kosong" });
       return;
@@ -127,13 +126,13 @@ export default function BroadcastView() {
       return;
     }
 
+    const salam = getSalam();
+    let idx = 0;
+
     toast?.show?.({
       type: "info",
       message: `Mengirim ke ${targets.length} pelanggan (jeda ${delaySec} detik)...`,
     });
-
-    let idx = 0;
-    const salam = getSalam();
 
     const interval = setInterval(() => {
       if (idx >= targets.length) {
@@ -141,6 +140,7 @@ export default function BroadcastView() {
         toast?.show?.({ type: "success", message: "Broadcast selesai" });
         return;
       }
+
       const t = targets[idx];
       const teks = message
         .replace(/{{NAMA}}/g, t.name || "")
