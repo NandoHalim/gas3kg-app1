@@ -298,7 +298,7 @@ export const DataService = {
     return data || [];
   },
 
-  // ====== HUTANG ======
+  // ====== HUTANG (list sederhana) ======
   async getDebts({ query = "", limit = 200 } = {}) {
     const build = () => {
       let s = supabase
@@ -346,6 +346,81 @@ export const DataService = {
     }));
   },
 
+  // ====== HUTANG (pagination untuk RiwayatHutangView) ======
+  async getDebtsPaged({ limit = 20, qtext = "", customer = "", cursorId } = {}) {
+    const baseFilter = (q) =>
+      q
+        .eq("method", "HUTANG")
+        .neq("status", "LUNAS")
+        .neq("status", "DIBATALKAN");
+
+    // total count
+    let countRes = await baseFilter(
+      supabase
+        .from("view_sales_with_invoice")
+        .select("id", { count: "exact", head: true })
+    );
+    if (countRes.error && (countRes.error.message || "").toLowerCase().includes("does not exist")) {
+      countRes = await baseFilter(
+        supabase.from("sales").select("id", { count: "exact", head: true })
+      );
+    }
+    const total = countRes.count || 0;
+
+    // rows
+    const builder = (table) => {
+      let s = baseFilter(
+        supabase
+          .from(table)
+          .select(
+            table === "view_sales_with_invoice"
+              ? "id,invoice:invoice_display,customer,qty,price,method,status,note,created_at"
+              : "id,customer,qty,price,method,status,note,created_at"
+          )
+      ).order("id", { ascending: false }).limit(limit);
+
+      if (cursorId) s = s.lt("id", cursorId);
+      if (customer) s = s.ilike("customer", `%${customer}%`);
+      if (qtext) {
+        if (table === "view_sales_with_invoice") {
+          s = s.or(
+            `invoice_display.ilike.%${qtext}%,customer.ilike.%${qtext}%,note.ilike.%${qtext}%`
+          );
+        } else {
+          s = s.or(`customer.ilike.%${qtext}%,note.ilike.%${qtext}%`);
+        }
+      }
+      return s;
+    };
+
+    let res = await builder("view_sales_with_invoice");
+    if (res.error && (res.error.message || "").toLowerCase().includes("does not exist")) {
+      const res2 = await builder("sales");
+      if (res2.error) throw new Error(errMsg(res2.error, "Gagal ambil hutang"));
+      const rows = (res2.data || []).map((r) => ({
+        ...r,
+        invoice: null,
+        total: (Number(r.qty) || 0) * (Number(r.price) || 0),
+      }));
+      return {
+        rows,
+        total,
+        nextCursor: rows.length ? rows[rows.length - 1].id : null,
+      };
+    }
+
+    if (res.error) throw new Error(errMsg(res.error, "Gagal ambil hutang"));
+    const rows = (res.data || []).map((r) => ({
+      ...r,
+      total: (Number(r.qty) || 0) * (Number(r.price) || 0),
+    }));
+    return {
+      rows,
+      total,
+      nextCursor: rows.length ? rows[rows.length - 1].id : null,
+    };
+  },
+
   async payDebt({ sale_id, amount, note = "" }) {
     if (!sale_id) throw new Error("sale_id wajib");
     if (!(amount > 0)) throw new Error("Nominal pembayaran harus > 0");
@@ -358,6 +433,32 @@ export const DataService = {
 
     if (error) throw new Error(errMsg(error, "Gagal mencatat pembayaran hutang"));
     return data;
+  },
+
+  async addSaleNote({ sale_id, note }) {
+    if (!sale_id) throw new Error("sale_id wajib");
+    const { data, error } = await supabase
+      .from("sales")
+      .update({ note })
+      .eq("id", sale_id)
+      .select("id")
+      .limit(1)
+      .single();
+    if (error) throw new Error(errMsg(error, "Gagal menyimpan catatan"));
+    return data;
+  },
+
+  async getCustomerContact(name) {
+    if (!name) return null;
+    const { data, error } = await supabase
+      .from("customers")
+      .select("phone")
+      .ilike("name", `%${name}%`)
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return null;
+    return data?.phone || null;
   },
 
   // ====== RIWAYAT STOK ======
@@ -528,5 +629,127 @@ export const DataService = {
     });
     if (error) throw new Error(errMsg(error, "Gagal penyesuaian stok"));
     return rowsToStockObject(data);
+  },
+
+  // ====== PELANGGAN ======
+  async getCustomers({ q = "", filter = "ALL", limit = 300 } = {}) {
+    // coba view ringkasan dulu
+    let qry = supabase
+      .from("view_customers_overview")
+      .select("id,name,phone,address,note,active,total_tx,total_value,has_debt")
+      .order("name", { ascending: true })
+      .limit(limit);
+
+    if (q) {
+      qry = qry.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
+    }
+    if (filter === "ACTIVE") qry = qry.eq("active", true);
+    if (filter === "DEBT") qry = qry.eq("has_debt", true);
+
+    let { data, error } = await qry;
+
+    // fallback ke tabel dasar
+    if (error && (error.message || "").toLowerCase().includes("does not exist")) {
+      let q2 = supabase
+        .from("customers")
+        .select("id,name,phone,address,note,active")
+        .order("name", { ascending: true })
+        .limit(limit);
+      if (q) q2 = q2.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
+      const r2 = await q2;
+      if (r2.error) throw new Error(errMsg(r2.error, "Gagal ambil pelanggan"));
+      // tanpa metrik, isi default
+      data = (r2.data || []).map((c) => ({
+        ...c,
+        total_tx: 0,
+        total_value: 0,
+        has_debt: false,
+      }));
+      error = null;
+    }
+
+    if (error) throw new Error(errMsg(error, "Gagal ambil pelanggan"));
+    return data || [];
+  },
+
+  async createCustomer({ name, phone = "", address = "", note = "" }) {
+    if (!name || !name.trim()) throw new Error("Nama wajib diisi");
+    const payload = {
+      name: name.trim(),
+      phone: phone.trim(),
+      address: address.trim(),
+      note: note.trim(),
+      active: true,
+    };
+    const { data, error } = await supabase
+      .from("customers")
+      .insert(payload)
+      .select("id")
+      .single();
+    if (error) throw new Error(errMsg(error, "Gagal menambah pelanggan"));
+    return data;
+  },
+
+  async updateCustomer({ id, name, phone = "", address = "", note = "" }) {
+    if (!id) throw new Error("id wajib");
+    const payload = {
+      ...(name != null ? { name: name.trim() } : {}),
+      ...(phone != null ? { phone: phone.trim() } : {}),
+      ...(address != null ? { address: address.trim() } : {}),
+      ...(note != null ? { note: note.trim() } : {}),
+    };
+    const { data, error } = await supabase
+      .from("customers")
+      .update(payload)
+      .eq("id", id)
+      .select("id")
+      .single();
+    if (error) throw new Error(errMsg(error, "Gagal memperbarui pelanggan"));
+    return data;
+  },
+
+  async toggleCustomerActive({ id, active }) {
+    if (!id) throw new Error("id wajib");
+    const { data, error } = await supabase
+      .from("customers")
+      .update({ active: !!active })
+      .eq("id", id)
+      .select("id,active")
+      .single();
+    if (error) throw new Error(errMsg(error, "Gagal mengubah status pelanggan"));
+    return data;
+  },
+
+  async getCustomerStats({ customer_id, name }) {
+    // coba RPC/view (jika ada)
+    let rpc = await supabase.rpc("get_customer_stats", { p_customer_id: customer_id, p_name: name });
+    if (!rpc.error && rpc.data) return rpc.data;
+
+    // fallback: hitung dari tabel sales
+    let q = supabase
+      .from("sales")
+      .select("qty,price,method,status,customer,created_at")
+      .neq("status", "DIBATALKAN");
+
+    if (customer_id) {
+      // kalau skema menyimpan relasi id → perlu kolom customer_id
+      // fallback gunakan name
+      q = q.ilike("customer", `%${name || ""}%`);
+    } else if (name) {
+      q = q.ilike("customer", `%${name}%`);
+    }
+
+    const { data, error } = await q;
+    if (error) throw new Error(errMsg(error, "Gagal ambil statistik pelanggan"));
+
+    const tx = data || [];
+    const totalTransaksi = tx.length;
+    const totalNilai = tx.reduce((a, r) => a + (Number(r.qty) || 0) * (Number(r.price) || 0), 0);
+    const rataRata = totalTransaksi ? Math.round(totalNilai / totalTransaksi) : 0;
+    const hutangAktif = tx
+      .filter((r) => r.method === "HUTANG" && r.status !== "LUNAS")
+      .reduce((a, r) => a + (Number(r.qty) || 0) * (Number(r.price) || 0), 0);
+
+    return { totalTransaksi, totalNilai, rataRata, hutangAktif };
   },
 };
