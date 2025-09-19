@@ -46,6 +46,7 @@ export const DataService = {
     return rowsToStockObject(data);
   },
 
+  // Tambah stok ISI (HARUS menukar dari KOSONG yang cukup)
   async addIsi({ qty, date, note }) {
     if (!(qty > 0)) throw new Error("Jumlah harus > 0");
     const yyyy = Number(String(date).slice(0, 4));
@@ -53,6 +54,7 @@ export const DataService = {
       throw new Error(`Tanggal harus antara ${MIN_YEAR}-${MAX_YEAR}`);
     }
 
+    // pagar tambahan (DB tetap validasi)
     try {
       const snap = await this.loadStocks();
       if (Number(qty) > Number(snap.KOSONG || 0)) {
@@ -82,10 +84,13 @@ export const DataService = {
       .order("id", { ascending: false })
       .limit(limit);
 
+    // fallback ke tabel sales (tanpa 'invoice_display')
     if (error && (error.message || "").toLowerCase().includes("does not exist")) {
       const res2 = await supabase
         .from("sales")
-        .select("id,customer,qty,price,total,method,note,created_at,status,hpp,laba")
+        .select(
+          "id,customer,qty,price,total,method,note,created_at,status,hpp,laba"
+        )
         .order("id", { ascending: false })
         .limit(limit);
       data = (res2.data || []).map((r) => ({ ...r, invoice: null }));
@@ -104,6 +109,7 @@ export const DataService = {
       .order("id", { ascending: false })
       .limit(limit);
 
+    // fallback ke tabel sales (tanpa 'invoice_display')
     if (error && (error.message || "").toLowerCase().includes("does not exist")) {
       const res2 = await supabase
         .from("sales")
@@ -264,13 +270,14 @@ export const DataService = {
       if (to) s = s.lte("created_at", to);
       if (method !== "ALL") s = s.eq("method", method);
       if (status !== "ALL") s = s.eq("status", status);
-      if (cashier) s = s.or(`note.ilike.%${cashier}%`);
+      if (cashier) s = s.ilike("note", `%${cashier}%`);
       if (q) s = s.or(`invoice_display.ilike.%${q}%,customer.ilike.%${q}%`);
       return s;
     };
 
     let { data, error } = await build();
     if (error && (error.message || "").toLowerCase().includes("does not exist")) {
+      // fallback: tabel sales (tanpa kolom invoice)
       let s3 = supabase
         .from("sales")
         .select("id,customer,qty,price,total,method,status,created_at,note")
@@ -280,7 +287,7 @@ export const DataService = {
       if (to) s3 = s3.lte("created_at", to);
       if (method !== "ALL") s3 = s3.eq("method", method);
       if (status !== "ALL") s3 = s3.eq("status", status);
-      if (cashier) s3 = s3.or(`note.ilike.%${cashier}%`);
+      if (cashier) s3 = s3.ilike("note", `%${cashier}%`);
       if (q) s3 = s3.or(`customer.ilike.%${q}%`);
       const res3 = await s3;
       data = (res3.data || []).map((r) => ({ ...r, invoice: null }));
@@ -313,8 +320,10 @@ export const DataService = {
     };
 
     let { data, error } = await build();
+
     if (error && (error.message || "").toLowerCase().includes("does not exist")) {
-      const res2 = await supabase
+      // ✅ perbaikan: build query dahulu, baru await (sebelumnya salah)
+      let s2 = supabase
         .from("sales")
         .select("id,customer,qty,price,method,status,note,created_at")
         .eq("method", "HUTANG")
@@ -323,8 +332,9 @@ export const DataService = {
         .order("id", { ascending: false })
         .limit(limit);
       if (query && query.trim().length > 0) {
-        res2.or(`customer.ilike.%${query}%,note.ilike.%${query}%`);
+        s2 = s2.or(`customer.ilike.%${query}%,note.ilike.%${query}%`);
       }
+      const res2 = await s2;
       data = (res2.data || []).map((r) => ({ ...r, invoice: null }));
       error = res2.error;
     }
