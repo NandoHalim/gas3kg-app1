@@ -26,7 +26,7 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
         const rows = await DataService.getDebts({ query: q, limit: 200 });
         if (on) setDebts(rows);
       } catch (e) {
-        toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+        toast?.show?.({ type: "error", message: `${e.message}` });
       } finally {
         if (on) setLoading(false);
       }
@@ -40,7 +40,7 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
     if (!paying) return;
     const amount = Number(paying.total || 0);
     if (!(amount > 0)) {
-      toast?.show?.({ type: "error", message: "❌ Nominal tidak valid" });
+      toast?.show?.({ type: "error", message: "Nominal tidak valid" });
       return;
     }
 
@@ -51,13 +51,13 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
         amount,
         note: `pelunasan: ${paying.customer || ""}`,
       });
-      toast?.show?.({ type: "success", message: `✅ Hutang lunas: ${paying.customer || "Pelanggan"}` });
+      toast?.show?.({ type: "success", message: `Hutang lunas: ${paying.customer || "Pelanggan"}` });
       setPaying(null);
       const rows = await DataService.getDebts({ query: q, limit: 200 });
       setDebts(rows);
       onSaved?.();
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message || "Gagal membayar hutang"}` });
+      toast?.show?.({ type: "error", message: `${e.message || "Gagal membayar hutang"}` });
     } finally {
       setLoading(false);
     }
