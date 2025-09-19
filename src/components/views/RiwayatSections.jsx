@@ -53,7 +53,7 @@ export default function RiwayatSections() {
       });
       setRowsTx(data || []);
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      toast?.show?.({ type: "error", message: `${e.message}` });
     } finally {
       setLoadingTx(false);
     }
@@ -73,7 +73,7 @@ export default function RiwayatSections() {
       }));
       setRowsDebt(mapped);
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      toast?.show?.({ type: "error", message: `${e.message}` });
     } finally {
       setLoadingDebt(false);
     }
@@ -90,7 +90,7 @@ export default function RiwayatSections() {
       });
       setRowsStock(data || []);
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      toast?.show?.({ type: "error", message: `${e.message}` });
     } finally {
       setLoadingStock(false);
     }
