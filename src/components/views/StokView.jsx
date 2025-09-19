@@ -75,7 +75,7 @@ function TambahKosong({ onSaved }) {
     e.preventDefault();
     const qtyNum = Number(form.qty) || 0;
     if (qtyNum <= 0) {
-      toast?.show?.({ type: "error", message: "❌ Jumlah harus > 0" });
+      toast?.show?.({ type: "error", message: "Jumlah harus > 0" });
       return;
     }
     try {
@@ -85,11 +85,11 @@ function TambahKosong({ onSaved }) {
         date: form.date,
         note: form.note,
       });
-      toast?.show?.({ type: "success", message: `✅ Stok KOSONG +${qtyNum}` });
+      toast?.show?.({ type: "success", message: `Stok KOSONG +${qtyNum}` });
       setForm({ qty: "", date: todayStr(), note: "" });
       onSaved?.(snap);
     } catch (e2) {
-      toast?.show?.({ type: "error", message: `❌ ${e2.message || "Gagal tambah KOSONG"}` });
+      toast?.show?.({ type: "error", message: `${e2.message || "Gagal tambah KOSONG"}` });
     } finally {
       setLoading(false);
     }
@@ -161,7 +161,7 @@ function RestokIsi({ onSaved }) {
     e.preventDefault();
     const qtyNum = Number(form.qty) || 0;
     if (qtyNum <= 0) {
-      toast?.show?.({ type: "error", message: "❌ Jumlah harus > 0" });
+      toast?.show?.({ type: "error", message: "Jumlah harus > 0" });
       return;
     }
     try {
@@ -171,11 +171,11 @@ function RestokIsi({ onSaved }) {
         date: form.date,
         note: form.note || "restok agen (tukar kosong)",
       });
-      toast?.show?.({ type: "success", message: `✅ Stok ISI +${qtyNum} (tukar kosong)` });
+      toast?.show?.({ type: "success", message: `Stok ISI +${qtyNum} (tukar kosong)` });
       setForm({ qty: "", date: todayStr(), note: "" });
       onSaved?.(snap);
     } catch (e2) {
-      toast?.show?.({ type: "error", message: `❌ ${e2.message || "Gagal restok ISI"}` });
+      toast?.show?.({ type: "error", message: `${e2.message || "Gagal restok ISI"}` });
     } finally {
       setLoading(false);
     }
@@ -253,11 +253,11 @@ function PenyesuaianStok({ onSaved }) {
     e.preventDefault();
     const qtyNum = Number(form.qty) || 0;
     if (qtyNum <= 0) {
-      toast?.show?.({ type: "error", message: "❌ Jumlah harus > 0" });
+      toast?.show?.({ type: "error", message: "Jumlah harus > 0" });
       return;
     }
     if (!form.reason.trim()) {
-      toast?.show?.({ type: "error", message: "❌ Alasan wajib diisi" });
+      toast?.show?.({ type: "error", message: "Alasan wajib diisi" });
       return;
     }
 
@@ -265,7 +265,7 @@ function PenyesuaianStok({ onSaved }) {
     if (form.code === "ISI" && form.dir === "IN") {
       toast?.show?.({
         type: "error",
-        message: "❌ Tidak boleh menambah stok ISI via penyesuaian. Gunakan 'Restok Isi (Tukar Kosong)'.",
+        message: "Tidak boleh menambah stok ISI via penyesuaian. Gunakan 'Restok Isi (Tukar Kosong)'.",
       });
       return;
     }
@@ -283,12 +283,12 @@ function PenyesuaianStok({ onSaved }) {
       const verb = delta > 0 ? `+${qtyNum}` : `-${qtyNum}`;
       toast?.show?.({
         type: "success",
-        message: `✅ Penyesuaian ${form.code} ${verb} tersimpan.`,
+        message: `Penyesuaian ${form.code} ${verb} tersimpan.`,
       });
       setForm({ code: "KOSONG", dir: "OUT", qty: "", date: todayStr(), reason: "" });
       onSaved?.(snap);
     } catch (e2) {
-      toast?.show?.({ type: "error", message: `❌ ${e2.message || "Gagal penyesuaian stok"}` });
+      toast?.show?.({ type: "error", message: `${e2.message || "Gagal penyesuaian stok"}` });
     } finally {
       setLoading(false);
     }
