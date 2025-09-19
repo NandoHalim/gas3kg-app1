@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   AppBar,
   Box,
@@ -43,7 +43,7 @@ export default function AppLayout({ children }) {
     setMobileOpen(!mobileOpen);
   };
 
-  // Daftar menu utama
+  // daftar menu
   const menuItems = [
     { label: "Dashboard", icon: <HomeIcon />, path: "/" },
     { label: "Transaksi", icon: <SwapHorizIcon />, path: "/transaksi" },
@@ -55,10 +55,10 @@ export default function AppLayout({ children }) {
     { label: "Pengaturan", icon: <SettingsIcon />, path: "/pengaturan" },
   ];
 
-  // Sinkronkan Bottom Nav dengan route aktif
-  React.useEffect(() => {
+  // sync bottom nav dengan route aktif
+  useEffect(() => {
     const idx = menuItems.findIndex((m, i) => {
-      if (i > 3) return false; // hanya 4 pertama utk bottom nav
+      if (i > 3) return false; // hanya 4 menu utama di bottom nav
       return location.pathname === m.path;
     });
     if (idx >= 0) setBottomNav(idx);
@@ -105,12 +105,12 @@ export default function AppLayout({ children }) {
         </Toolbar>
       </AppBar>
 
-      {/* Drawer untuk sidebar */}
+      {/* Drawer */}
       <Box
         component="nav"
         sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
       >
-        {/* Mobile drawer */}
+        {/* mobile drawer */}
         <Drawer
           variant="temporary"
           open={mobileOpen}
@@ -123,7 +123,8 @@ export default function AppLayout({ children }) {
         >
           {drawer}
         </Drawer>
-        {/* Desktop drawer */}
+
+        {/* desktop drawer */}
         <Drawer
           variant="permanent"
           sx={{
@@ -136,7 +137,7 @@ export default function AppLayout({ children }) {
         </Drawer>
       </Box>
 
-      {/* Konten utama */}
+      {/* konten utama */}
       <Box
         component="main"
         sx={{
@@ -145,11 +146,11 @@ export default function AppLayout({ children }) {
           width: { sm: `calc(100% - ${drawerWidth}px)` },
         }}
       >
-        <Toolbar /> {/* spacer utk AppBar */}
+        <Toolbar /> {/* spacer */}
         {children}
       </Box>
 
-      {/* Bottom Navigation untuk mobile */}
+      {/* bottom nav untuk mobile */}
       <Paper
         sx={{
           position: "fixed",
