@@ -1,3 +1,4 @@
+// src/views/RiwayatView.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import Card from "../ui/Card.jsx";
 import Input from "../ui/Input.jsx";
@@ -6,6 +7,34 @@ import { COLORS, MIN_DATE } from "../../utils/constants.js";
 import { fmtIDR, maxAllowedDate } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
 import { useToast } from "../../context/ToastContext.jsx";
+
+/* ---------- util kecil: label & humanize ---------- */
+const Badge = ({ children, tone = "neutral" }) => {
+  const map = {
+    neutral: { bg: "#eef2ff", fg: "#3730a3" },
+    plus: { bg: "#dcfce7", fg: "#166534" },
+    minus: { bg: "#fee2e2", fg: "#991b1b" },
+    isi: { bg: "#e0f2fe", fg: "#075985" },
+    kosong: { bg: "#fef3c7", fg: "#92400e" },
+  };
+  const c = map[tone] || map.neutral;
+  return (
+    <span style={{ background: c.bg, color: c.fg, fontSize: 12, padding: "3px 8px", borderRadius: 999 }}>
+      {children}
+    </span>
+  );
+};
+
+function humanize(note = "", fallback = "Mutasi Stok") {
+  const n = (note || "").toLowerCase();
+  if (!n) return fallback;
+  if (n.includes("void") || n.includes("dibatalkan") || n.includes("reason")) return "Pembatalan (Void)";
+  if (n.includes("jual") || n.includes("terjual") || n.includes("penjualan")) return "Penjualan";
+  if (n.includes("beli") || n.includes("supplier") || n.includes("agen")) return "Pembelian / Dari Agen";
+  if (n.includes("tukar kosong") || n.includes("restok")) return "Restok ISI (tukar kosong)";
+  if (n.includes("koreksi") || n.includes("adjust")) return "Koreksi Stok";
+  return note;
+}
 
 function Tabs({ active, onChange }) {
   const items = [
@@ -16,11 +45,7 @@ function Tabs({ active, onChange }) {
   return (
     <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
       {items.map((t) => (
-        <Button
-          key={t.k}
-          className={active === t.k ? "primary" : ""}
-          onClick={() => onChange(t.k)}
-        >
+        <Button key={t.k} className={active === t.k ? "primary" : ""} onClick={() => onChange(t.k)}>
           {t.label}
         </Button>
       ))}
@@ -32,28 +57,12 @@ function Modal({ open, title, children, onClose }) {
   if (!open) return null;
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.25)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 50,
-        padding: 16,
-      }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.25)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth: 560,
-          background: "#fff",
-          borderRadius: 12,
-          boxShadow: "0 10px 30px rgba(0,0,0,.15)",
-          overflow: "hidden",
-        }}
+        style={{ width: "100%", maxWidth: 560, background: "#fff", borderRadius: 12, boxShadow: "0 10px 30px rgba(0,0,0,.15)", overflow: "hidden" }}
       >
         <div style={{ padding: 14, borderBottom: "1px solid #e5e7eb" }}>
           <b>{title}</b>
@@ -82,12 +91,7 @@ export default function RiwayatView() {
   const [detailSale, setDetailSale] = useState(null);
   const [voidSale, setVoidSale] = useState(null);
   const [voidReason, setVoidReason] = useState("");
-  const VOID_REASONS = [
-    "Salah Input Data",
-    "Batal oleh Pelanggan",
-    "Barang Rusak",
-    "Lainnya",
-  ];
+  const VOID_REASONS = ["Salah Input Data", "Batal oleh Pelanggan", "Barang Rusak", "Lainnya"];
 
   const loadTrx = async () => {
     try {
@@ -113,7 +117,9 @@ export default function RiwayatView() {
   // ---------------------------
   const [sFrom, setSFrom] = useState("");
   const [sTo, setSTo] = useState("");
-  const [sJenis, setSJenis] = useState("ALL");
+  const [sJenis, setSJenis] = useState("ALL"); // ALL | ISI | KOSONG
+  const [sMutasi, setSMutasi] = useState("ALL"); // ALL | MASUK | KELUAR
+  const [sKeyword, setSKeyword] = useState("");
   const [stokRows, setStokRows] = useState([]);
   const [stokLoading, setStokLoading] = useState(false);
 
@@ -124,7 +130,7 @@ export default function RiwayatView() {
         from: sFrom || undefined,
         to: sTo || undefined,
         jenis: sJenis,
-        limit: 500,
+        limit: 600,
       });
       setStokRows(rows);
     } catch (e) {
@@ -134,6 +140,30 @@ export default function RiwayatView() {
     }
   };
 
+  const stokFiltered = useMemo(() => {
+    return (stokRows || []).filter((r) => {
+      if (sMutasi === "MASUK" && !(Number(r.masuk) > 0)) return false;
+      if (sMutasi === "KELUAR" && !(Number(r.keluar) > 0)) return false;
+      const kw = sKeyword.trim().toLowerCase();
+      if (kw) {
+        const hay = ((r.keterangan || "") + " " + (r.raw_note || "")).toLowerCase();
+        if (!hay.includes(kw)) return false;
+      }
+      return true;
+    });
+  }, [stokRows, sMutasi, sKeyword]);
+
+  const stokNormalized = useMemo(() => {
+    return stokFiltered.map((r) => {
+      const friendly = humanize(r.raw_note || r.keterangan, r.keterangan);
+      const time = r.waktu || r.tanggal || "";
+      return { ...r, _friendly: friendly, _time: time };
+    });
+  }, [stokFiltered]);
+
+  const totalMasuk = useMemo(() => stokNormalized.reduce((a, b) => a + (Number(b.masuk) || 0), 0), [stokNormalized]);
+  const totalKeluar = useMemo(() => stokNormalized.reduce((a, b) => a + (Number(b.keluar) || 0), 0), [stokNormalized]);
+
   // ---------------------------
   // Riwayat Hutang
   // ---------------------------
@@ -141,10 +171,7 @@ export default function RiwayatView() {
   const [hQ, setHQ] = useState("");
   const [debts, setDebts] = useState([]);
   const [debtLoading, setDebtLoading] = useState(false);
-  const totalHutang = useMemo(
-    () => debts.reduce((a, b) => a + (Number(b.total) || 0), 0),
-    [debts]
-  );
+  const totalHutang = useMemo(() => debts.reduce((a, b) => a + (Number(b.total) || 0), 0), [debts]);
 
   const loadDebts = async () => {
     try {
@@ -185,6 +212,58 @@ export default function RiwayatView() {
     }
   };
 
+  /* ==================== EXPORT XLSX ==================== */
+  const writeXLSX = async (rows, sheetName, filename) => {
+    if (!rows?.length) return;
+    const XLSX = await import("xlsx"); // import dinamis biar bundle awal ringan
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`);
+  };
+
+  const exportTrx = async () => {
+    const rows = (trxRows || []).map((r) => ({
+      Tanggal: String(r.created_at || "").slice(0, 10),
+      Invoice: r.invoice || r.id,
+      Pelanggan: r.customer,
+      Qty: r.qty,
+      Harga: r.price,
+      Total: r.total || (Number(r.qty) || 0) * (Number(r.price) || 0),
+      Metode: r.method,
+      Status: r.status,
+      Catatan: r.note || "",
+    }));
+    await writeXLSX(rows, "Transaksi", `riwayat-transaksi_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const exportStok = async () => {
+    const rows = (stokNormalized || []).map((r) => ({
+      "Tanggal & Waktu": r._time,
+      Jenis: r.code,
+      Keterangan: r._friendly,
+      Masuk: r.masuk || "",
+      Keluar: r.keluar || "",
+      "Sisa Stok": r.sisa ?? "",
+    }));
+    await writeXLSX(rows, "Stok", `riwayat-stok_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const exportHutang = async () => {
+    const rows = (debts || []).map((d) => ({
+      Tanggal: String(d.created_at || "").slice(0, 10),
+      Invoice: d.invoice || d.id,
+      Pelanggan: d.customer,
+      Qty: d.qty,
+      Harga: d.price,
+      "Total Hutang": d.total,
+      Status: d.status,
+      Catatan: d.note || "",
+    }));
+    await writeXLSX(rows, "Hutang", `riwayat-hutang_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+  /* ===================================================== */
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -197,45 +276,18 @@ export default function RiwayatView() {
       {tab === "trx" && (
         <>
           <Card title="Filter Transaksi">
-            <div
-              className="grid"
-              style={{
-                gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-                gap: 12,
-              }}
-            >
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 12 }}>
               <div>
                 <label>Dari Tanggal</label>
-                <Input
-                  type="date"
-                  min={MIN_DATE}
-                  max={maxAllowedDate()}
-                  value={fFrom}
-                  onChange={(e) => setFFrom(e.target.value)}
-                />
+                <Input type="date" min={MIN_DATE} max={maxAllowedDate()} value={fFrom} onChange={(e) => setFFrom(e.target.value)} />
               </div>
               <div>
                 <label>Sampai</label>
-                <Input
-                  type="date"
-                  min={MIN_DATE}
-                  max={maxAllowedDate()}
-                  value={fTo}
-                  onChange={(e) => setFTo(e.target.value)}
-                />
+                <Input type="date" min={MIN_DATE} max={maxAllowedDate()} value={fTo} onChange={(e) => setFTo(e.target.value)} />
               </div>
               <div>
                 <label>Metode Bayar</label>
-                <select
-                  value={fMethod}
-                  onChange={(e) => setFMethod(e.target.value)}
-                  style={{
-                    padding: "10px 12px",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 8,
-                    width: "100%",
-                  }}
-                >
+                <select value={fMethod} onChange={(e) => setFMethod(e.target.value)} style={selStyle}>
                   <option value="ALL">Semua</option>
                   <option value="TUNAI">Tunai</option>
                   <option value="HUTANG">Hutang</option>
@@ -243,16 +295,7 @@ export default function RiwayatView() {
               </div>
               <div>
                 <label>Status Bayar</label>
-                <select
-                  value={fStatus}
-                  onChange={(e) => setFStatus(e.target.value)}
-                  style={{
-                    padding: "10px 12px",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 8,
-                    width: "100%",
-                  }}
-                >
+                <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} style={selStyle}>
                   <option value="ALL">Semua</option>
                   <option value="LUNAS">Lunas</option>
                   <option value="BELUM">Belum Lunas</option>
@@ -261,30 +304,22 @@ export default function RiwayatView() {
               </div>
               <div>
                 <label>Pencarian (Invoice/Nama)</label>
-                <Input
-                  placeholder="INV-001 / Ayu"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
+                <Input placeholder="INV-001 / Ayu" value={q} onChange={(e) => setQ(e.target.value)} />
               </div>
 
               <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
-                <Button onClick={loadTrx} disabled={trxLoading}>
-                  {trxLoading ? "Memuat…" : "Terapkan"}
-                </Button>
+                <Button onClick={loadTrx} disabled={trxLoading}>{trxLoading ? "Memuat…" : "Terapkan"}</Button>
                 <Button
                   className="secondary"
                   onClick={() => {
-                    setFFrom("");
-                    setFTo("");
-                    setFMethod("ALL");
-                    setFStatus("ALL");
-                    setQ("");
-                    loadTrx();
+                    setFFrom(""); setFTo(""); setFMethod("ALL"); setFStatus("ALL"); setQ(""); loadTrx();
                   }}
                   disabled={trxLoading}
                 >
                   Reset
+                </Button>
+                <Button className="secondary" onClick={exportTrx} disabled={!trxRows.length}>
+                  ⬇️ Ekspor (.xlsx)
                 </Button>
               </div>
             </div>
@@ -308,17 +343,12 @@ export default function RiwayatView() {
                 <tbody>
                   {!trxRows.length && !trxLoading && (
                     <tr>
-                      <td colSpan={8} style={{ color: COLORS.secondary }}>
-                        Tidak ada data
-                      </td>
+                      <td colSpan={8} style={{ color: COLORS.secondary }}>Tidak ada data</td>
                     </tr>
                   )}
                   {trxRows.map((r) => {
                     const canVoid = DataService.canVoidOnClient?.(r, 2);
-                    const rowStyle =
-                      (r.status || "").toUpperCase() === "DIBATALKAN"
-                        ? { opacity: 0.7 }
-                        : {};
+                    const rowStyle = (r.status || "").toUpperCase() === "DIBATALKAN" ? { opacity: 0.7 } : {};
                     return (
                       <tr key={r.id} style={rowStyle}>
                         <td>{String(r.created_at || "").slice(0, 10)}</td>
@@ -331,41 +361,16 @@ export default function RiwayatView() {
                           <span
                             className="badge"
                             style={{
-                              background:
-                                r.status === "LUNAS"
-                                  ? "#dcfce7"
-                                  : r.status === "DIBATALKAN"
-                                  ? "#fee2e2"
-                                  : "#fef9c3",
-                              color:
-                                r.status === "LUNAS"
-                                  ? "#166534"
-                                  : r.status === "DIBATALKAN"
-                                  ? "#991b1b"
-                                  : "#854d0e",
+                              background: r.status === "LUNAS" ? "#dcfce7" : r.status === "DIBATALKAN" ? "#fee2e2" : "#fef9c3",
+                              color: r.status === "LUNAS" ? "#166534" : r.status === "DIBATALKAN" ? "#991b1b" : "#854d0e",
                             }}
                           >
                             {r.status || "-"}
                           </span>
                         </td>
                         <td style={{ whiteSpace: "nowrap" }}>
-                          <Button
-                            size="sm"
-                            className="secondary"
-                            title="Detail"
-                            onClick={() => setDetailSale(r)}
-                          >
-                            📋
-                          </Button>{" "}
-                          <Button
-                            size="sm"
-                            className="secondary"
-                            title="Void"
-                            onClick={() => setVoidSale(r)}
-                            disabled={!canVoid}
-                          >
-                            🗑️
-                          </Button>
+                          <Button size="sm" className="secondary" title="Detail" onClick={() => setDetailSale(r)}>📋</Button>{" "}
+                          <Button size="sm" className="secondary" title="Void" onClick={() => setVoidSale(r)} disabled={!canVoid}>🗑️</Button>
                         </td>
                       </tr>
                     );
@@ -381,99 +386,81 @@ export default function RiwayatView() {
       {tab === "stok" && (
         <>
           <Card title="Filter Riwayat Stok">
-            <div
-              className="grid"
-              style={{
-                gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-                gap: 12,
-              }}
-            >
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 12 }}>
               <div>
                 <label>Dari Tanggal</label>
-                <Input
-                  type="date"
-                  min={MIN_DATE}
-                  max={maxAllowedDate()}
-                  value={sFrom}
-                  onChange={(e) => setSFrom(e.target.value)}
-                />
+                <Input type="date" min={MIN_DATE} max={maxAllowedDate()} value={sFrom} onChange={(e) => setSFrom(e.target.value)} />
               </div>
               <div>
                 <label>Sampai</label>
-                <Input
-                  type="date"
-                  min={MIN_DATE}
-                  max={maxAllowedDate()}
-                  value={sTo}
-                  onChange={(e) => setSTo(e.target.value)}
-                />
+                <Input type="date" min={MIN_DATE} max={maxAllowedDate()} value={sTo} onChange={(e) => setSTo(e.target.value)} />
               </div>
               <div>
                 <label>Jenis Stok</label>
-                <select
-                  value={sJenis}
-                  onChange={(e) => setSJenis(e.target.value)}
-                  style={{
-                    padding: "10px 12px",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 8,
-                    width: "100%",
-                  }}
-                >
+                <select value={sJenis} onChange={(e) => setSJenis(e.target.value)} style={selStyle}>
                   <option value="ALL">Semua</option>
                   <option value="ISI">Isi</option>
                   <option value="KOSONG">Kosong</option>
                 </select>
               </div>
+              <div>
+                <label>Jenis Mutasi</label>
+                <select value={sMutasi} onChange={(e) => setSMutasi(e.target.value)} style={selStyle}>
+                  <option value="ALL">Semua</option>
+                  <option value="MASUK">Masuk (+)</option>
+                  <option value="KELUAR">Keluar (−)</option>
+                </select>
+              </div>
+              <div>
+                <label>Keterangan / Kata Kunci</label>
+                <Input placeholder="mis: void, penjualan, agen, koreksi…" value={sKeyword} onChange={(e) => setSKeyword(e.target.value)} />
+              </div>
               <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
-                <Button onClick={loadStok} disabled={stokLoading}>
-                  {stokLoading ? "Memuat…" : "Terapkan"}
-                </Button>
+                <Button onClick={loadStok} disabled={stokLoading}>{stokLoading ? "Memuat…" : "Terapkan"}</Button>
                 <Button
                   className="secondary"
-                  onClick={() => {
-                    setSFrom("");
-                    setSTo("");
-                    setSJenis("ALL");
-                    loadStok();
-                  }}
+                  onClick={() => { setSFrom(""); setSTo(""); setSJenis("ALL"); setSMutasi("ALL"); setSKeyword(""); loadStok(); }}
                   disabled={stokLoading}
                 >
                   Reset
                 </Button>
+                <Button className="secondary" onClick={exportStok} disabled={!stokNormalized.length}>⬇️ Ekspor (.xlsx)</Button>
               </div>
             </div>
           </Card>
 
           <Card title={`Riwayat Stok ${stokLoading ? "(memuat…)" : ""}`}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+              <Badge tone="plus">Total Masuk: {totalMasuk}</Badge>
+              <Badge tone="minus">Total Keluar: {totalKeluar}</Badge>
+            </div>
+
             <div style={{ overflow: "auto" }}>
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Tanggal</th>
-                    <th>Keterangan</th>
+                    <th style={{ minWidth: 130 }}>Tanggal & Waktu</th>
+                    <th>Jenis</th>
+                    <th style={{ minWidth: 220 }}>Keterangan</th>
                     <th style={{ textAlign: "right" }}>Masuk</th>
                     <th style={{ textAlign: "right" }}>Keluar</th>
                     <th style={{ textAlign: "right" }}>Sisa Stok</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {!stokRows.length && !stokLoading && (
+                  {!stokNormalized.length && !stokLoading && (
                     <tr>
-                      <td colSpan={5} style={{ color: COLORS.secondary }}>
-                        Tidak ada data
-                      </td>
+                      <td colSpan={6} style={{ color: COLORS.secondary }}>Tidak ada data</td>
                     </tr>
                   )}
-                  {stokRows.map((r) => (
+                  {stokNormalized.map((r) => (
                     <tr key={r.id}>
-                      <td>{r.tanggal}</td>
-                      <td>{r.keterangan}</td>
-                      <td style={{ textAlign: "right" }}>{r.masuk || ""}</td>
-                      <td style={{ textAlign: "right" }}>{r.keluar || ""}</td>
-                      <td style={{ textAlign: "right" }}>
-                        {(r.sisa ?? "") === "" ? "-" : r.sisa}
-                      </td>
+                      <td>{r._time}</td>
+                      <td><Badge tone={r.code === "ISI" ? "isi" : "kosong"}>{r.code}</Badge></td>
+                      <td>{r._friendly}</td>
+                      <td style={{ textAlign: "right", color: r.masuk ? "#166534" : undefined }}>{r.masuk || ""}</td>
+                      <td style={{ textAlign: "right", color: r.keluar ? "#991b1b" : undefined }}>{r.keluar || ""}</td>
+                      <td style={{ textAlign: "right" }}>{(r.sisa ?? "") === "" ? "-" : r.sisa}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -490,53 +477,26 @@ export default function RiwayatView() {
       {tab === "hutang" && (
         <>
           <Card title="Filter Hutang">
-            <div
-              className="grid"
-              style={{
-                gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-                gap: 12,
-              }}
-            >
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 12 }}>
               <div>
                 <label>Nama Pelanggan</label>
-                <Input
-                  placeholder="Cari nama pelanggan"
-                  value={hNama}
-                  onChange={(e) => setHNama(e.target.value)}
-                />
+                <Input placeholder="Cari nama pelanggan" value={hNama} onChange={(e) => setHNama(e.target.value)} />
               </div>
               <div>
                 <label>Pencarian (Invoice/Nama)</label>
-                <Input
-                  placeholder="INV-001 / Ayu"
-                  value={hQ}
-                  onChange={(e) => setHQ(e.target.value)}
-                />
+                <Input placeholder="INV-001 / Ayu" value={hQ} onChange={(e) => setHQ(e.target.value)} />
               </div>
               <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
-                <Button onClick={loadDebts} disabled={debtLoading}>
-                  {debtLoading ? "Memuat…" : "Terapkan"}
-                </Button>
-                <Button
-                  className="secondary"
-                  onClick={() => {
-                    setHNama("");
-                    setHQ("");
-                    loadDebts();
-                  }}
-                  disabled={debtLoading}
-                >
+                <Button onClick={loadDebts} disabled={debtLoading}>{debtLoading ? "Memuat…" : "Terapkan"}</Button>
+                <Button className="secondary" onClick={() => { setHNama(""); setHQ(""); loadDebts(); }} disabled={debtLoading}>
                   Reset
                 </Button>
+                <Button className="secondary" onClick={exportHutang} disabled={!debts.length}>⬇️ Ekspor (.xlsx)</Button>
               </div>
             </div>
           </Card>
 
-          <Card
-            title={`Riwayat Hutang — Total Belum Lunas: ${fmtIDR(
-              totalHutang
-            )} ${debtLoading ? "(memuat…)" : ""}`}
-          >
+          <Card title={`Riwayat Hutang — Total Belum Lunas: ${fmtIDR(totalHutang)} ${debtLoading ? "(memuat…)" : ""}`}>
             <div style={{ overflow: "auto" }}>
               <table className="table">
                 <thead>
@@ -552,9 +512,7 @@ export default function RiwayatView() {
                 <tbody>
                   {!debts.length && !debtLoading && (
                     <tr>
-                      <td colSpan={6} style={{ color: COLORS.secondary }}>
-                        Tidak ada hutang
-                      </td>
+                      <td colSpan={6} style={{ color: COLORS.secondary }}>Tidak ada hutang</td>
                     </tr>
                   )}
                   {debts.map((d) => (
@@ -572,8 +530,7 @@ export default function RiwayatView() {
                           onClick={() =>
                             toast?.show?.({
                               type: "info",
-                              message:
-                                "Buka menu Transaksi > Bayar Hutang untuk melunasi.",
+                              message: "Buka menu Transaksi > Bayar Hutang untuk melunasi.",
                             })
                           }
                         >
@@ -622,23 +579,13 @@ export default function RiwayatView() {
               <b>{detailSale.status}</b>
             </div>
             {detailSale.note && (
-              <div
-                style={{
-                  marginTop: 8,
-                  padding: 10,
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 8,
-                }}
-              >
+              <div style={{ marginTop: 8, padding: 10, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8 }}>
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>Catatan</div>
                 <div style={{ whiteSpace: "pre-wrap" }}>{detailSale.note}</div>
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-              <Button className="secondary" onClick={() => setDetailSale(null)}>
-                Tutup
-              </Button>
+              <Button className="secondary" onClick={() => setDetailSale(null)}>Tutup</Button>
             </div>
           </div>
         )}
@@ -648,46 +595,27 @@ export default function RiwayatView() {
       <Modal
         open={!!voidSale}
         title={`Batalkan (Void) — ${voidSale?.invoice || voidSale?.id || ""}`}
-        onClose={() => {
-          setVoidSale(null);
-          setVoidReason("");
-        }}
+        onClose={() => { setVoidSale(null); setVoidReason(""); }}
       >
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ fontSize: 13, color: COLORS.secondary }}>
-            Pembatalan akan mengembalikan stok & menandai transaksi asli sebagai
-            <b> DIBATALKAN</b>.
+            Pembatalan akan mengembalikan stok & menandai transaksi asli sebagai<b> DIBATALKAN</b>.
           </div>
           <div>
             <label>Alasan</label>
             <select
               value={voidReason}
               onChange={(e) => setVoidReason(e.target.value)}
-              style={{
-                padding: "10px 12px",
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                width: "100%",
-              }}
+              style={{ padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: 8, width: "100%" }}
             >
               <option value="">— Pilih alasan —</option>
               {VOID_REASONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
+                <option key={r} value={r}>{r}</option>
               ))}
             </select>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <Button
-              className="secondary"
-              onClick={() => {
-                setVoidSale(null);
-                setVoidReason("");
-              }}
-            >
-              Batal
-            </Button>
+            <Button className="secondary" onClick={() => { setVoidSale(null); setVoidReason(""); }}>Batal</Button>
             <Button onClick={submitVoid}>Void Sekarang</Button>
           </div>
         </div>
@@ -695,3 +623,10 @@ export default function RiwayatView() {
     </div>
   );
 }
+
+const selStyle = {
+  padding: "10px 12px",
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
+  width: "100%",
+};
