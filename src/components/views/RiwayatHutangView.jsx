@@ -36,7 +36,7 @@ export default function RiwayatHutangView() {
       setNextCursor(nextCursor);
       setTotal(total);
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      toast?.show?.({ type: "error", message: `${e.message}` });
     } finally {
       setLoading(false);
     }
@@ -55,7 +55,7 @@ export default function RiwayatHutangView() {
       setRows((prev) => [...prev, ...more]);
       setNextCursor(nc);
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      toast?.show?.({ type: "error", message: `${e.message}` });
     } finally {
       setLoading(false);
     }
@@ -77,11 +77,11 @@ export default function RiwayatHutangView() {
         amount: paying.total, // dikunci lunas
         note: `Pelunasan: ${paying.customer || ""}`,
       });
-      toast?.show?.({ type: "success", message: "✅ Hutang dilunasi" });
+      toast?.show?.({ type: "success", message: "Hutang dilunasi" });
       setPaying(null);
       await loadFirst();
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      toast?.show?.({ type: "error", message: `${e.message}` });
     } finally {
       setLoading(false);
     }
@@ -94,12 +94,12 @@ export default function RiwayatHutangView() {
     try {
       setLoading(true);
       await DataService.addSaleNote({ sale_id: noteSale.id, note: noteText });
-      toast?.show?.({ type: "success", message: "📝 Catatan disimpan" });
+      toast?.show?.({ type: "success", message: "Catatan disimpan" });
       setNoteSale(null);
       setNoteText("");
       await loadFirst();
     } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
+      toast?.show?.({ type: "error", message: `${e.message}` });
     } finally {
       setLoading(false);
     }
