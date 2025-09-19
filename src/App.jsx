@@ -13,6 +13,8 @@ import TransaksiView from "./components/views/TransaksiView.jsx";
 import PelangganView from "./components/views/PelangganView.jsx";
 import LaporanView from "./components/views/LaporanView.jsx";
 import PengaturanView from "./components/views/PengaturanView.jsx";
+// ✅ Tambahan: Broadcast
+import BroadcastView from "./components/views/BroadcastView.jsx";
 
 import { useToast } from "./context/ToastContext.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
@@ -148,6 +150,8 @@ export default function App() {
               element={<TransaksiView stocks={stocks} onSaved={setStocks} />}
             />
             <Route path="/pelanggan" element={<PelangganView />} />
+            {/* ✅ route baru: Broadcast */}
+            <Route path="/broadcast" element={<BroadcastView />} />
             <Route path="/laporan" element={<LaporanView />} />
             <Route path="/pengaturan" element={<PengaturanView />} />
           </Routes>
