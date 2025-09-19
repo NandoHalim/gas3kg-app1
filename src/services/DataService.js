@@ -322,7 +322,6 @@ export const DataService = {
     let { data, error } = await build();
 
     if (error && (error.message || "").toLowerCase().includes("does not exist")) {
-      // ✅ perbaikan: build query dahulu, baru await (sebelumnya salah)
       let s2 = supabase
         .from("sales")
         .select("id,customer,qty,price,method,status,note,created_at")
@@ -362,16 +361,25 @@ export const DataService = {
   },
 
   // ====== RIWAYAT STOK ======
+  /**
+   * Menghasilkan keterangan manusiawi:
+   * - VOID: tampilkan nomor invoice + alasan
+   * - Penyesuaian/Koreksi: tampilkan arah + alasan
+   * - Lainnya: fallback keterangan default
+   */
   async getStockHistory({ from, to, jenis = "ALL", limit = 300 } = {}) {
+    // coba view dengan balance dulu; fallback ke tabel stock_logs
     const base = async (source) => {
       let q = supabase
         .from(source)
-        .select("id,code,qty_change,note,created_at,balance_after")
+        .select("id, code, qty_change, note, created_at, balance_after")
         .order("created_at", { ascending: false })
         .limit(limit);
+
       if (from) q = q.gte("created_at", from);
       if (to) q = q.lte("created_at", to);
       if (jenis === "ISI" || jenis === "KOSONG") q = q.eq("code", jenis);
+
       return q;
     };
 
@@ -381,18 +389,75 @@ export const DataService = {
     }
     if (res.error) throw new Error(errMsg(res.error, "Gagal ambil riwayat stok"));
 
-    const data = res.data || [];
-    return data.map((r) => {
+    const rows = res.data || [];
+
+    // Ambil semua sale_id dari note untuk kasus VOID
+    const saleIds = Array.from(
+      new Set(
+        rows
+          .map((r) => {
+            const m = String(r.note || "").match(/sale_id\s*=\s*(\d+)/i);
+            return m ? Number(m[1]) : null;
+          })
+          .filter(Boolean)
+      )
+    );
+
+    // Peta sale_id -> invoice_display
+    let invoiceMap = {};
+    if (saleIds.length > 0) {
+      const { data: invRows, error: invErr } = await supabase
+        .from("view_sales_with_invoice")
+        .select("id, invoice_display")
+        .in("id", saleIds);
+
+      if (!invErr && Array.isArray(invRows)) {
+        invRows.forEach((r) => (invoiceMap[r.id] = r.invoice_display));
+      } else {
+        // fallback minimal
+        saleIds.forEach((id) => (invoiceMap[id] = `INV#${id}`));
+      }
+    }
+
+    // Bentuk keterangan ramah
+    const pretty = rows.map((r) => {
       const change = Number(r.qty_change || 0);
       const masuk = change > 0 ? change : 0;
       const keluar = change < 0 ? Math.abs(change) : 0;
 
-      let ket;
-      if (r.code === "ISI") ket = change > 0 ? "Stok ISI bertambah" : "Stok ISI berkurang";
-      else if (r.code === "KOSONG")
-        ket = change > 0 ? "Stok KOSONG bertambah" : "Stok KOSONG berkurang";
-      else ket = "Mutasi stok";
-      if (r.note) ket += ` — ${r.note}`;
+      const note = String(r.note || "");
+      const isVoid = /void/i.test(note);
+      const isAdjust = /(adjust|penyesuaian|koreksi)/i.test(note);
+
+      const labelJenis =
+        r.code === "ISI" ? "Stok ISI" : r.code === "KOSONG" ? "Stok KOSONG" : "Stok";
+
+      let ket = "";
+
+      if (isVoid) {
+        const m = note.match(/sale_id\s*=\s*(\d+)/i);
+        const sid = m ? Number(m[1]) : null;
+        const inv = sid && invoiceMap[sid] ? invoiceMap[sid] : sid ? `INV#${sid}` : "";
+        const reason =
+          (note.split(/alasan:|reason:/i)[1] || note.split("—")[1] || "")
+            .trim()
+            .replace(/^[-–—]\s*/, "");
+        ket = `${labelJenis} — VOID ${inv ? `(${inv})` : ""}${reason ? ` — ${reason}` : ""}`;
+      } else if (isAdjust) {
+        const arah = change > 0 ? "Penyesuaian masuk" : "Penyesuaian keluar";
+        const reason =
+          (note.split(/alasan:|reason:/i)[1] || note.split("—")[1] || "")
+            .trim()
+            .replace(/^[-–—]\s*/, "");
+        ket = `${labelJenis} — ${arah}${reason ? ` — ${reason}` : ""}`;
+      } else {
+        // default lama
+        if (r.code === "ISI") ket = change > 0 ? "Stok ISI bertambah" : "Stok ISI berkurang";
+        else if (r.code === "KOSONG")
+          ket = change > 0 ? "Stok KOSONG bertambah" : "Stok KOSONG berkurang";
+        else ket = "Mutasi stok";
+        if (note) ket += ` — ${note}`;
+      }
 
       return {
         id: r.id,
@@ -404,6 +469,8 @@ export const DataService = {
         sisa: r.balance_after ?? null,
       };
     });
+
+    return pretty;
   },
 
   // ====== VOID ======
