@@ -26,7 +26,13 @@ export default function Navigation() {
     { to: "/transaksi", label: "💰 Transaksi" },
     { to: "/stok", label: "📦 Stok" },
     { to: "/riwayat", label: "📊 Riwayat" },
-    { to: "/pelanggan", label: "👥 Pelanggan" },
+    {
+      label: "👥 Pelanggan",
+      children: [
+        { to: "/pelanggan", label: "👥 Daftar Pelanggan" },
+        { to: "/broadcast", label: "📢 Broadcast" },
+      ],
+    },
   ];
 
   // Menu tambahan khusus admin
@@ -54,11 +60,31 @@ export default function Navigation() {
           top: 0,
         }}
       >
-        {menu.map((m) => (
-          <NavLink key={m.to} to={m.to} style={style} end={m.end}>
-            {m.label}
-          </NavLink>
-        ))}
+        {menu.map((m) =>
+          m.children ? (
+            <div key={m.label} style={{ display: "grid", gap: 4 }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  margin: "8px 0 4px 4px",
+                  color: "#64748b",
+                }}
+              >
+                {m.label}
+              </div>
+              {m.children.map((sub) => (
+                <NavLink key={sub.to} to={sub.to} style={style} end={sub.end}>
+                  {sub.label}
+                </NavLink>
+              ))}
+            </div>
+          ) : (
+            <NavLink key={m.to} to={m.to} style={style} end={m.end}>
+              {m.label}
+            </NavLink>
+          )
+        )}
       </aside>
 
       {/* Top tabs (HP/Tablet ≤1024px) — STICKY under header */}
@@ -81,22 +107,41 @@ export default function Navigation() {
             padding: "6px 8px",
           }}
         >
-          {menu.map((m) => (
-            <NavLink
-              key={m.to}
-              to={m.to}
-              end={m.end}
-              style={({ isActive }) => ({
-                ...base,
-                background: isActive ? "#1d4ed8" : "#e2e8f0",
-                color: isActive ? "#fff" : "#0f172a",
-                fontWeight: isActive ? 700 : 500,
-                padding: "10px 12px",
-              })}
-            >
-              {m.label}
-            </NavLink>
-          ))}
+          {menu.map((m) =>
+            m.children ? (
+              m.children.map((sub) => (
+                <NavLink
+                  key={sub.to}
+                  to={sub.to}
+                  end={sub.end}
+                  style={({ isActive }) => ({
+                    ...base,
+                    background: isActive ? "#1d4ed8" : "#e2e8f0",
+                    color: isActive ? "#fff" : "#0f172a",
+                    fontWeight: isActive ? 700 : 500,
+                    padding: "10px 12px",
+                  })}
+                >
+                  {sub.label}
+                </NavLink>
+              ))
+            ) : (
+              <NavLink
+                key={m.to}
+                to={m.to}
+                end={m.end}
+                style={({ isActive }) => ({
+                  ...base,
+                  background: isActive ? "#1d4ed8" : "#e2e8f0",
+                  color: isActive ? "#fff" : "#0f172a",
+                  fontWeight: isActive ? 700 : 500,
+                  padding: "10px 12px",
+                })}
+              >
+                {m.label}
+              </NavLink>
+            )
+          )}
         </div>
       </nav>
     </>
