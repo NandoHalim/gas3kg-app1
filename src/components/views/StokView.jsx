@@ -5,7 +5,7 @@ import { useToast } from "../../context/ToastContext.jsx";
 import { COLORS, MIN_DATE } from "../../utils/constants.js";
 import { todayStr, maxAllowedDate } from "../../utils/helpers.js";
 
-// 🔵 MUI
+// MUI
 import {
   Box,
   Stack,
@@ -21,50 +21,34 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Tooltip,
   Chip,
+  Tooltip,
 } from "@mui/material";
 
-export default function StokView({ stocks = {}, onSaved, onCancel }) {
+export default function StokView({ stocks = {}, onSaved }) {
   const toast = useToast();
   const [snap, setSnap] = useState({
     ISI: Number(stocks.ISI || 0),
     KOSONG: Number(stocks.KOSONG || 0),
   });
 
-  // sinkron dengan props
   useEffect(() => {
     setSnap({ ISI: Number(stocks.ISI || 0), KOSONG: Number(stocks.KOSONG || 0) });
   }, [stocks]);
 
   return (
     <Stack spacing={2}>
-      {/* Header */}
-      <Stack direction="row" spacing={2} alignItems="center">
-        <Button variant="outlined" onClick={onCancel}>
-          ← Kembali
-        </Button>
+      {/* Header tanpa tombol kembali */}
+      <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
         <Typography variant="h5" fontWeight={700}>
-          Kelola Stok
+          Stok
         </Typography>
-
-        {/* Snapshot stok langsung */}
         <Stack direction="row" spacing={1} sx={{ ml: "auto" }}>
           <Tooltip title="Stok ISI">
-            <Chip
-              label={`ISI: ${snap.ISI}`}
-              color="success"
-              variant="outlined"
-              sx={{ fontWeight: 700 }}
-            />
+            <Chip label={`ISI: ${snap.ISI}`} color="success" variant="outlined" sx={{ fontWeight: 700 }} />
           </Tooltip>
           <Tooltip title="Stok KOSONG">
-            <Chip
-              label={`KOSONG: ${snap.KOSONG}`}
-              color="primary"
-              variant="outlined"
-              sx={{ fontWeight: 700 }}
-            />
+            <Chip label={`KOSONG: ${snap.KOSONG}`} color="primary" variant="outlined" sx={{ fontWeight: 700 }} />
           </Tooltip>
         </Stack>
       </Stack>
@@ -84,7 +68,7 @@ export default function StokView({ stocks = {}, onSaved, onCancel }) {
   );
 }
 
-/* ----------- Tambah Stok KOSONG ----------- */
+/* ========== Tambah Stok KOSONG ========== */
 function TambahKosong({ onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({ qty: "", date: todayStr(), note: "" });
@@ -94,78 +78,53 @@ function TambahKosong({ onSaved }) {
   const submit = async (e) => {
     e.preventDefault();
     const qtyNum = Number(form.qty) || 0;
-    if (qtyNum <= 0) {
-      setErr("Jumlah harus > 0");
-      return;
-    }
+    if (qtyNum <= 0) { setErr("Jumlah harus > 0"); return; }
+
     try {
       setErr("");
       setLoading(true);
       const snap = await DataService.addKosong({
-        qty: qtyNum,
-        date: form.date,
-        note: form.note,
+        qty: qtyNum, date: form.date, note: form.note,
       });
       toast?.show?.({ type: "success", message: `Stok KOSONG +${qtyNum}` });
       setForm({ qty: "", date: todayStr(), note: "" });
       onSaved?.(snap);
     } catch (e2) {
       const msg = e2.message || "Gagal tambah KOSONG";
-      setErr(msg);
-      toast?.show?.({ type: "error", message: msg });
-    } finally {
-      setLoading(false);
-    }
+      setErr(msg); toast?.show?.({ type: "error", message: msg });
+    } finally { setLoading(false); }
   };
 
   return (
     <Card>
       <CardHeader title="Tambah Stok Kosong" />
       <CardContent>
-        {err && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
-            {err}
-          </Alert>
-        )}
+        {err && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>{err}</Alert>}
+
         <Box component="form" onSubmit={submit}>
-          <Stack spacing={2}>
+          <Stack spacing={1.5}>
             <TextField
-              label="Jumlah"
-              type="number"
-              inputProps={{ min: 1 }}
-              value={form.qty}
-              onChange={(e) => setForm({ ...form, qty: e.target.value })}
-              disabled={loading}
-              placeholder="contoh: 10"
+              fullWidth label="Jumlah" type="number" inputProps={{ min: 1 }}
+              value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })}
+              disabled={loading} placeholder="contoh: 10"
             />
 
             <TextField
-              label="Tanggal"
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              fullWidth label="Tanggal" type="date"
+              value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
               inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
-              disabled={loading}
-              InputLabelProps={{ shrink: true }}
+              disabled={loading} InputLabelProps={{ shrink: true }}
             />
 
             <TextField
-              label="Catatan (opsional)"
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-              disabled={loading}
-              placeholder="mis: titip pelanggan"
-              multiline
-              minRows={2}
+              fullWidth label="Catatan (opsional)" multiline minRows={2}
+              value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })}
+              disabled={loading} placeholder="mis: titip pelanggan"
             />
 
             <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button
-                variant="outlined"
-                type="button"
-                onClick={() => setForm({ qty: "", date: todayStr(), note: "" })}
-                disabled={loading}
-              >
+              <Button variant="outlined" type="button"
+                onClick={() => setForm({ qty: "", date: todayStr(), note: "" })} disabled={loading}>
                 Reset
               </Button>
               <Button variant="contained" type="submit" disabled={loading}>
@@ -179,7 +138,7 @@ function TambahKosong({ onSaved }) {
   );
 }
 
-/* ----------- Restok ISI (Tukar KOSONG) ----------- */
+/* ========== Restok ISI (Tukar KOSONG) ========== */
 function RestokIsi({ onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({ qty: "", date: todayStr(), note: "" });
@@ -189,78 +148,53 @@ function RestokIsi({ onSaved }) {
   const submit = async (e) => {
     e.preventDefault();
     const qtyNum = Number(form.qty) || 0;
-    if (qtyNum <= 0) {
-      setErr("Jumlah harus > 0");
-      return;
-    }
+    if (qtyNum <= 0) { setErr("Jumlah harus > 0"); return; }
+
     try {
       setErr("");
       setLoading(true);
       const snap = await DataService.addIsi({
-        qty: qtyNum,
-        date: form.date,
-        note: form.note || "restok agen (tukar kosong)",
+        qty: qtyNum, date: form.date, note: form.note || "restok agen (tukar kosong)",
       });
       toast?.show?.({ type: "success", message: `Stok ISI +${qtyNum} (tukar kosong)` });
       setForm({ qty: "", date: todayStr(), note: "" });
       onSaved?.(snap);
     } catch (e2) {
       const msg = e2.message || "Gagal restok ISI";
-      setErr(msg);
-      toast?.show?.({ type: "error", message: msg });
-    } finally {
-      setLoading(false);
-    }
+      setErr(msg); toast?.show?.({ type: "error", message: msg });
+    } finally { setLoading(false); }
   };
 
   return (
     <Card>
       <CardHeader title="Restok Isi (Tukar Kosong)" />
       <CardContent>
-        {err && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
-            {err}
-          </Alert>
-        )}
+        {err && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>{err}</Alert>}
+
         <Box component="form" onSubmit={submit}>
-          <Stack spacing={2}>
+          <Stack spacing={1.5}>
             <TextField
-              label="Jumlah"
-              type="number"
-              inputProps={{ min: 1 }}
-              value={form.qty}
-              onChange={(e) => setForm({ ...form, qty: e.target.value })}
-              disabled={loading}
-              placeholder="contoh: 10"
+              fullWidth label="Jumlah" type="number" inputProps={{ min: 1 }}
+              value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })}
+              disabled={loading} placeholder="contoh: 10"
             />
 
             <TextField
-              label="Tanggal"
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              fullWidth label="Tanggal" type="date"
+              value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
               inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
-              disabled={loading}
-              InputLabelProps={{ shrink: true }}
+              disabled={loading} InputLabelProps={{ shrink: true }}
             />
 
             <TextField
-              label="Catatan (opsional)"
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-              disabled={loading}
-              placeholder="mis: tukar kosong di agen"
-              multiline
-              minRows={2}
+              fullWidth label="Catatan (opsional)" multiline minRows={2}
+              value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })}
+              disabled={loading} placeholder="mis: tukar kosong di agen"
             />
 
             <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button
-                variant="outlined"
-                type="button"
-                onClick={() => setForm({ qty: "", date: todayStr(), note: "" })}
-                disabled={loading}
-              >
+              <Button variant="outlined" type="button"
+                onClick={() => setForm({ qty: "", date: todayStr(), note: "" })} disabled={loading}>
                 Reset
               </Button>
               <Button variant="contained" type="submit" disabled={loading}>
@@ -274,12 +208,12 @@ function RestokIsi({ onSaved }) {
   );
 }
 
-/* ----------- Penyesuaian Stok (Koreksi) ----------- */
+/* ========== Penyesuaian Stok (Koreksi) ========== */
 function PenyesuaianStok({ onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({
-    code: "KOSONG", // ISI | KOSONG
-    dir: "OUT",     // IN | OUT
+    code: "KOSONG",   // ISI | KOSONG
+    dir: "OUT",       // IN | OUT
     qty: "",
     date: todayStr(),
     reason: "",
@@ -290,30 +224,19 @@ function PenyesuaianStok({ onSaved }) {
   const submit = async (e) => {
     e.preventDefault();
     const qtyNum = Number(form.qty) || 0;
-    if (qtyNum <= 0) {
-      setErr("Jumlah harus > 0");
-      return;
-    }
-    if (!form.reason.trim()) {
-      setErr("Alasan wajib diisi");
-      return;
-    }
-    // aturan: tambah ISI wajib via Restok Isi
+    if (qtyNum <= 0) { setErr("Jumlah harus > 0"); return; }
+    if (!form.reason.trim()) { setErr("Alasan wajib diisi"); return; }
     if (form.code === "ISI" && form.dir === "IN") {
       setErr("Tidak boleh menambah stok ISI via penyesuaian. Gunakan 'Restok Isi'.");
       return;
     }
-
     const delta = form.dir === "IN" ? qtyNum : -qtyNum;
 
     try {
       setErr("");
       setLoading(true);
       const snap = await DataService.adjustStock({
-        code: form.code,
-        delta,
-        date: form.date,
-        reason: form.reason,
+        code: form.code, delta, date: form.date, reason: form.reason,
       });
       toast?.show?.({
         type: "success",
@@ -323,31 +246,23 @@ function PenyesuaianStok({ onSaved }) {
       onSaved?.(snap);
     } catch (e2) {
       const msg = e2.message || "Gagal penyesuaian stok";
-      setErr(msg);
-      toast?.show?.({ type: "error", message: msg });
-    } finally {
-      setLoading(false);
-    }
+      setErr(msg); toast?.show?.({ type: "error", message: msg });
+    } finally { setLoading(false); }
   };
 
   return (
     <Card>
       <CardHeader title="Penyesuaian Stok (Koreksi)" />
       <CardContent>
-        {err && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
-            {err}
-          </Alert>
-        )}
+        {err && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>{err}</Alert>}
+
         <Box component="form" onSubmit={submit}>
-          <Stack spacing={2}>
+          <Stack spacing={1.5}>
             <FormControl fullWidth>
               <InputLabel id="jenis-label">Jenis Stok</InputLabel>
               <Select
-                labelId="jenis-label"
-                value={form.code}
-                label="Jenis Stok"
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                labelId="jenis-label" label="Jenis Stok"
+                value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })}
                 disabled={loading}
               >
                 <MenuItem value="ISI">ISI</MenuItem>
@@ -358,57 +273,42 @@ function PenyesuaianStok({ onSaved }) {
             <FormControl fullWidth>
               <InputLabel id="arah-label">Arah Penyesuaian</InputLabel>
               <Select
-                labelId="arah-label"
-                value={form.dir}
-                label="Arah Penyesuaian"
-                onChange={(e) => setForm({ ...form, dir: e.target.value })}
+                labelId="arah-label" label="Arah Penyesuaian"
+                value={form.dir} onChange={(e) => setForm({ ...form, dir: e.target.value })}
                 disabled={loading}
               >
                 <MenuItem value="IN">Masuk (+)</MenuItem>
                 <MenuItem value="OUT">Keluar (−)</MenuItem>
               </Select>
             </FormControl>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+            <Typography variant="caption" color="text.secondary">
               *Tambah ISI tidak diperbolehkan di sini — gunakan Restok Isi.
             </Typography>
 
             <TextField
-              label="Jumlah"
-              type="number"
-              inputProps={{ min: 1 }}
-              value={form.qty}
-              onChange={(e) => setForm({ ...form, qty: e.target.value })}
-              disabled={loading}
-              placeholder="contoh: 2"
+              fullWidth label="Jumlah" type="number" inputProps={{ min: 1 }}
+              value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })}
+              disabled={loading} placeholder="contoh: 2"
             />
 
             <TextField
-              label="Tanggal"
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              fullWidth label="Tanggal" type="date"
+              value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
               inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
-              disabled={loading}
-              InputLabelProps={{ shrink: true }}
+              disabled={loading} InputLabelProps={{ shrink: true }}
             />
 
             <TextField
-              label="Alasan (wajib)"
-              value={form.reason}
-              onChange={(e) => setForm({ ...form, reason: e.target.value })}
+              fullWidth label="Alasan (wajib)" multiline minRows={2}
+              value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}
               disabled={loading}
               placeholder='mis: "Koreksi stok - kelebihan input" / "Stok hilang/rusak"'
-              multiline
-              minRows={2}
             />
 
             <Stack direction="row" spacing={1} justifyContent="flex-end">
               <Button
-                variant="outlined"
-                type="button"
-                onClick={() =>
-                  setForm({ code: "KOSONG", dir: "OUT", qty: "", date: todayStr(), reason: "" })
-                }
+                variant="outlined" type="button"
+                onClick={() => setForm({ code: "KOSONG", dir: "OUT", qty: "", date: todayStr(), reason: "" })}
                 disabled={loading}
               >
                 Reset
