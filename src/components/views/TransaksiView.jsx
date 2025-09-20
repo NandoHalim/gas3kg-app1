@@ -1,6 +1,6 @@
+// src/components/views/TransaksiView.jsx
 import React, { useEffect, useState } from "react";
 import Card from "../ui/Card.jsx";
-import Input from "../ui/Input.jsx";
 import Button from "../ui/Button.jsx";
 import PenjualanView from "./PenjualanView.jsx";
 import { DataService } from "../../services/DataService.js";
@@ -8,7 +8,7 @@ import { useToast } from "../../context/ToastContext.jsx";
 import { fmtIDR } from "../../utils/helpers.js";
 import { COLORS } from "../../utils/constants.js";
 
-// 🔵 MUI tambahan untuk interaktivitas
+// 🔵 MUI
 import {
   Box,
   Stack,
@@ -32,6 +32,8 @@ import {
   CircularProgress,
   Skeleton,
   Paper,
+  TextField, // ← pakai MUI TextField utk search
+  InputAdornment,
 } from "@mui/material";
 import PaidIcon from "@mui/icons-material/PriceCheck";
 import SearchIcon from "@mui/icons-material/Search";
@@ -157,7 +159,7 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
               <Tooltip title="Muat ulang">
                 <span>
                   <IconButton
-                    onClick={() => setQ((s) => s)} // trigger effect dengan nilai sama (atau bisa fetch manual)
+                    onClick={() => setQ((s) => s)} // trigger effect dengan nilai sama
                     disabled={loading}
                   >
                     <ReplayIcon />
@@ -168,12 +170,19 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
           >
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
               <Box sx={{ flex: 1 }}>
-                <Input
+                <TextField
+                  fullWidth
                   placeholder="Cari nama pelanggan / catatan…"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   disabled={loading}
-                  InputProps={{ startAdornment: <SearchIcon /> }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
                 />
               </Box>
               <Button
@@ -286,33 +295,19 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
         <DialogContent dividers>
           {paying ? (
             <Stack spacing={1.5}>
-              <Stack
-                direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-              >
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Typography color="text.secondary">Pelanggan</Typography>
-                <Typography fontWeight={700}>
-                  {paying.customer || "PUBLIC"}
-                </Typography>
+                <Typography fontWeight={700}>{paying.customer || "PUBLIC"}</Typography>
               </Stack>
 
-              <Stack
-                direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-              >
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Typography color="text.secondary">Tanggal</Typography>
                 <Typography>{(paying.created_at || "").slice(0, 10)}</Typography>
               </Stack>
 
               <Divider />
 
-              <Stack
-                direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-              >
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Typography>Total Tagihan</Typography>
                 <Typography variant="h6">{fmtIDR(payingTotal)}</Typography>
               </Stack>
