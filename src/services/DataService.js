@@ -827,3 +827,19 @@ DataService.importAll = async function (file) {
 DataService.hardResetAll = async function () {
   return this.resetAllData();
 };
+
+// ==== Role helper: cek apakah user adalah admin (berdasarkan daftar users di localStorage)
+DataService.isAdmin = async function () {
+  try {
+    const { data } = await supabase.auth.getUser();
+    const email = (data?.user?.email || "").toLowerCase();
+    if (!email) return false;
+
+    const users = await this.getUsers();
+    return !!users.find(
+      (u) => String(u.email || "").toLowerCase() === email && String(u.role) === "admin"
+    );
+  } catch {
+    return false;
+  }
+};
