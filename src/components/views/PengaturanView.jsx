@@ -1,9 +1,37 @@
+// src/components/views/PengaturanView.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box, Stack, Typography, Card, CardHeader, CardContent, Grid, TextField, Button,
-  Chip, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer,
-  MenuItem, Select, FormControl, InputLabel, IconButton, Tooltip, Alert, Dialog,
-  DialogTitle, DialogContent, DialogActions, Skeleton, Checkbox, ListItemText
+  Box,
+  Stack,
+  Typography,
+  Card,
+  CardHeader,
+  CardContent,
+  Grid,
+  TextField,
+  Button,
+  Chip,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Paper,
+  TableContainer,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  IconButton,
+  Tooltip,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Skeleton,
+  Checkbox,
+  ListItemText,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SaveIcon from "@mui/icons-material/Save";
@@ -23,20 +51,29 @@ import { fmtIDR } from "../../utils/helpers.js";
 
 /* ===== Komponen ===== */
 export default function PengaturanView() {
-  const { user } = useAuth();
-  const toast = useToast();
+  const { user, initializing } = useAuth();
   const navigate = useNavigate();
+
+  // Saat masih inisialisasi auth → tampilkan skeleton singkat supaya tidak “kosong”
+  if (initializing) {
+    return (
+      <Stack spacing={2}>
+        <Typography variant="h5" fontWeight={800}>Pengaturan</Typography>
+        <Skeleton height={36} />
+        <Skeleton height={180} />
+        <Skeleton height={240} />
+      </Stack>
+    );
+  }
+
   const role = (user?.role || "user").toLowerCase();
+  console.debug("[PengaturanView] user:", user?.email, "role:", role);
 
-  // 🚧 Paksa redirect bila bukan admin
-  useEffect(() => {
-    if (role !== "admin") {
-      toast?.show?.({ type: "warning", message: "Akses khusus admin." });
-      navigate("/", { replace: true });
-    }
-  }, [role, navigate, toast]);
-
-  if (role !== "admin") return null;
+  // Jika bukan admin → alihkan ke dashboard
+  if (role !== "admin") {
+    navigate("/", { replace: true });
+    return null;
+  }
 
   return <SettingsAdmin />;
 }
@@ -54,7 +91,7 @@ function SettingsAdmin() {
   const [hpp, setHpp] = useState(0);
   const [paymentMethods, setPaymentMethods] = useState(PAYMENT_METHODS);
 
-  // users
+  // users (placeholder FE)
   const [users, setUsers] = useState([]);
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState("user");
@@ -68,14 +105,19 @@ function SettingsAdmin() {
     (async () => {
       try {
         setLoading(true);
-        const s = await DataService.getSettings();
+        // Boleh kosong → isi default agar UI tidak blank
+        const s = (await DataService.getSettings()) || {};
         if (!alive) return;
         setBusinessName(s.business_name || "");
         setDefaultPrice(Number(s.default_price || DEFAULT_PRICE));
         setHpp(Number(s.hpp || 0));
-        setPaymentMethods(Array.isArray(s.payment_methods) ? s.payment_methods : PAYMENT_METHODS);
+        setPaymentMethods(
+          Array.isArray(s.payment_methods) && s.payment_methods.length
+            ? s.payment_methods
+            : PAYMENT_METHODS
+        );
 
-        const u = await DataService.getUsers();
+        const u = await DataService.getUsers().catch(() => []);
         if (!alive) return;
         setUsers(Array.isArray(u) ? u : []);
         setErr("");
@@ -86,7 +128,9 @@ function SettingsAdmin() {
         if (alive) setLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const summary = useMemo(() => {
@@ -139,12 +183,12 @@ function SettingsAdmin() {
     try {
       setBusy(true);
       await DataService.updateUserRole({ user_id: id, role });
-      const u = await DataService.getUsers();
-      setUsers(u || []);
-      toast?.show?.({ type: "success", message: "Role diperbarui." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal update role" });
     } finally {
+      // refresh list (placeholder)
+      const u = await DataService.getUsers().catch(() => []);
+      setUsers(u || []);
       setBusy(false);
     }
   };
@@ -203,12 +247,12 @@ function SettingsAdmin() {
     <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
       <Stack direction="row" alignItems="center" spacing={1}>
         <Typography variant="h5" fontWeight={800}>Pengaturan</Typography>
-        <Chip icon={<SettingsSuggestIcon />} label="Admin Only" size="small" color="default" sx={{ ml: 1 }} />
+        <Chip icon={<SettingsSuggestIcon />} label="Admin Only" size="small" sx={{ ml: 1 }} />
       </Stack>
 
       {err && <Alert severity="error" variant="outlined">{err}</Alert>}
 
-      {/* 1.1 — Pengaturan Dasar (Harga Default & HPP) */}
+      {/* 1.1 — Pengaturan Dasar */}
       <Card>
         <CardHeader title="Pengaturan Dasar" />
         <CardContent>
@@ -249,7 +293,7 @@ function SettingsAdmin() {
                   fullWidth
                   value={hpp}
                   onChange={(e) => setHpp(Math.max(0, Number(e.target.value || 0)))}
-                  helperText="Digunakan untuk hitung Laba Rugi"
+                  helperText="Untuk hitung Laba Rugi"
                   inputProps={{ min: 0 }}
                 />
               </Grid>
@@ -300,7 +344,7 @@ function SettingsAdmin() {
         </CardContent>
       </Card>
 
-      {/* 4 — Manajemen User */}
+      {/* 4 — Manajemen User (placeholder FE) */}
       <Card>
         <CardHeader
           title="Pengguna & Hak Akses"
@@ -435,7 +479,7 @@ function SettingsAdmin() {
             </Grid>
           </Grid>
           <Box sx={{ mt: 1, color: "text.secondary", fontSize: 12 }}>
-            Export akan menyimpan snapshot stok, penjualan, dan pelanggan.
+            Export menyimpan snapshot stok, penjualan, dan pelanggan.
           </Box>
         </CardContent>
       </Card>
@@ -445,8 +489,7 @@ function SettingsAdmin() {
         <CardHeader title="Hard Reset (Hapus Semua Data)" />
         <CardContent>
           <Alert severity="warning" sx={{ mb: 2 }}>
-            Tindakan ini akan menghapus seluruh data di database (stok, log, penjualan, pelanggan).
-            Gunakan hanya bila Anda benar-benar yakin.
+            Tindakan ini akan menghapus seluruh data di database. Gunakan dengan hati-hati.
           </Alert>
           <Button
             color="error"
