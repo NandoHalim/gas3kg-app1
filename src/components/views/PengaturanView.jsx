@@ -34,6 +34,8 @@ import {
   Checkbox,
   ListItemText,
 } from "@mui/material";
+import { useNavigate } from "react-router-dom";
+
 import DeleteIcon from "@mui/icons-material/Delete";
 import SaveIcon from "@mui/icons-material/Save";
 import UploadIcon from "@mui/icons-material/UploadFile";
@@ -53,20 +55,21 @@ import { fmtIDR } from "../../utils/helpers.js";
 export default function PengaturanView() {
   const { user } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
   const role = user?.role || "user";
 
-  // ---- akses admin only
+  // 🚨 Paksa redirect jika bukan admin
+  useEffect(() => {
+    if (role !== "admin") {
+      // opsional info singkat
+      toast?.show?.({ type: "warning", message: "Akses khusus admin." });
+      navigate("/", { replace: true });
+    }
+  }, [role, navigate, toast]);
+
   if (role !== "admin") {
-    return (
-      <Box>
-        <Typography variant="h5" fontWeight={800} gutterBottom>
-          Pengaturan
-        </Typography>
-        <Alert severity="warning" variant="outlined">
-          Menu ini hanya tersedia untuk <b>admin</b>.
-        </Alert>
-      </Box>
-    );
+    // render kosong sebentar agar tidak flicker sebelum redirect
+    return null;
   }
 
   return <SettingsAdmin />;
@@ -87,6 +90,7 @@ function SettingsAdmin() {
 
   // users
   const [users, setUsers] = useState([]);
+  the
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState("user");
   const [busy, setBusy] = useState(false);
