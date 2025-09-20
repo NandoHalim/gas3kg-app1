@@ -825,4 +825,4 @@ DataService.importAll = async function (file) {
 DataService.hardResetAll = async function () {
   return this.resetAllData();
 };
-};
+
