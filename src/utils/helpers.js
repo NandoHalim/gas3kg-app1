@@ -23,6 +23,15 @@ export const fmtIDR = (n) =>
     maximumFractionDigits: 0,
   }).format(Number(n || 0));
 
+// ====== DEBOUNCE (untuk batasi event cepat berulang) ======
+export function debounce(fn, delay = 300) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
 // ====== FORMAT INVOICE (PLP/YYYY/MM/NNN) ======
 /**
  * Membuat format invoice profesional:
