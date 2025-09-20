@@ -19,6 +19,9 @@ import {
   BottomNavigation,
   BottomNavigationAction,
   Paper,
+  Tooltip,
+  Stack,
+  Button,
 } from "@mui/material";
 
 import MenuIcon from "@mui/icons-material/Menu";
@@ -30,6 +33,8 @@ import CampaignIcon from "@mui/icons-material/Campaign";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import LogoutIcon from "@mui/icons-material/Logout";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 
 import { useAuth } from "../../context/AuthContext.jsx";
 
@@ -41,12 +46,12 @@ export default function AppLayout({ children }) {
   const [bottomNav, setBottomNav] = useState("dashboard");
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
 
   const handleDrawerToggle = () => setMobileOpen((s) => !s);
 
-  // daftar menu dasar
-  const baseMenuItems = [
+  // daftar menu
+  const menuItems = [
     { key: "dashboard", label: "Dashboard", icon: <HomeIcon />, path: "/" },
     { key: "transaksi", label: "Transaksi", icon: <SwapHorizIcon />, path: "/transaksi" },
     { key: "stok", label: "Stok", icon: <InventoryIcon />, path: "/stok" },
@@ -54,13 +59,8 @@ export default function AppLayout({ children }) {
     { key: "pelanggan", label: "Pelanggan", icon: <PeopleIcon />, path: "/pelanggan" },
     { key: "broadcast", label: "Broadcast", icon: <CampaignIcon />, path: "/broadcast" },
     { key: "laporan", label: "Laporan", icon: <DescriptionIcon />, path: "/laporan" },
+    { key: "pengaturan", label: "Pengaturan", icon: <SettingsIcon />, path: "/pengaturan" },
   ];
-
-  // tambahkan menu pengaturan hanya untuk admin
-  const menuItems =
-    user?.role === "admin"
-      ? [...baseMenuItems, { key: "pengaturan", label: "Pengaturan", icon: <SettingsIcon />, path: "/pengaturan" }]
-      : baseMenuItems;
 
   // key aktif untuk bottom-nav (pakai startsWith biar tahan /route/sub)
   const activeKey = useMemo(() => {
@@ -78,6 +78,16 @@ export default function AppLayout({ children }) {
     setBottomNav(activeKey);
   }, [activeKey]);
 
+  const onLogout = async () => {
+    try {
+      await signOut();
+      navigate("/", { replace: true });
+    } catch (e) {
+      // optional: tampilkan toast jika ada
+      console.error("Logout gagal:", e?.message || e);
+    }
+  };
+
   const drawer = (
     <Box role="presentation">
       <Toolbar>
@@ -89,7 +99,11 @@ export default function AppLayout({ children }) {
       <List>
         {menuItems.map((item) => (
           <ListItem key={item.key} disablePadding>
-            <ListItemButton component={NavLink} to={item.path} onClick={() => setMobileOpen(false)}>
+            <ListItemButton
+              component={NavLink}
+              to={item.path}
+              onClick={() => setMobileOpen(false)}
+            >
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.label} />
             </ListItemButton>
@@ -112,18 +126,53 @@ export default function AppLayout({ children }) {
 
       {/* AppBar */}
       <AppBar position="fixed" sx={{ zIndex: 1201 }}>
-        <Toolbar>
+        <Toolbar sx={{ gap: 1 }}>
           <IconButton
             color="inherit"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: "none" } }}
+            sx={{ mr: 1, display: { sm: "none" } }}
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap>
+
+          <Typography variant="h6" noWrap sx={{ flex: 1 }}>
             Gas 3KG Manager
           </Typography>
+
+          {/* Kanan atas: info user + tombol Logout */}
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={0.75}
+              alignItems="center"
+              sx={{ display: { xs: "none", sm: "flex" }, opacity: 0.9 }}
+            >
+              <AccountCircleIcon fontSize="small" />
+              <Typography variant="body2" noWrap maxWidth={220} title={user?.email || ""}>
+                {user?.email || ""}
+              </Typography>
+            </Stack>
+
+            {/* Desktop: tombol dengan label; Mobile: icon saja */}
+            <Box sx={{ display: { xs: "none", sm: "block" } }}>
+              <Button
+                color="inherit"
+                startIcon={<LogoutIcon />}
+                onClick={onLogout}
+                aria-label="Logout"
+              >
+                Logout
+              </Button>
+            </Box>
+            <Box sx={{ display: { xs: "block", sm: "none" } }}>
+              <Tooltip title="Logout">
+                <IconButton color="inherit" onClick={onLogout} aria-label="Logout">
+                  <LogoutIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Stack>
         </Toolbar>
       </AppBar>
 
@@ -167,10 +216,11 @@ export default function AppLayout({ children }) {
         }}
       >
         <Toolbar /> {/* spacer untuk AppBar */}
+        {/* dukung dua cara: children langsung atau via <Outlet/> */}
         {children ?? <Outlet />}
       </Box>
 
-      {/* Bottom Nav */}
+      {/* BOTTOM NAV — render via Portal agar fixed tidak terpengaruh parent */}
       {createPortal(
         <Paper
           elevation={8}
