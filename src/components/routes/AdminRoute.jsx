@@ -1,20 +1,22 @@
 // src/components/routes/AdminRoute.jsx
-import React, { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
-import { DataService } from "../../services/DataService";
+import React from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext.jsx";
 
+/**
+ * Hanya izinkan admin masuk.
+ * - Kalau belum login → redirect ke /login
+ * - Kalau login tapi bukan admin → redirect ke /login juga
+ */
 export default function AdminRoute({ children }) {
-  const [ok, setOk] = useState(null);
+  const { user, role, initializing } = useAuth();
+  const location = useLocation();
 
-  useEffect(() => {
-    let on = true;
-    (async () => {
-      const isAdmin = await DataService.isAdmin().catch(() => false);
-      if (on) setOk(isAdmin);
-    })();
-    return () => { on = false; };
-  }, []);
+  if (initializing) return <div className="p-4">Loading…</div>;
 
-  if (ok === null) return null; // atau spinner sederhana
-  return ok ? children : <Navigate to="/" replace />;
+  if (!user || role !== "admin") {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
 }
