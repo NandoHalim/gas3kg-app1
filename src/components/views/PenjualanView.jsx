@@ -1,31 +1,45 @@
 // src/components/views/PenjualanView.jsx
-import React, { useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  Typography,
-  TextField,
-  Button,
-  Select,
-  MenuItem,
-  InputLabel,
-  FormControl,
-  Stack,
-  Box,
-  Alert,
-} from "@mui/material";
+import React, { useState, useMemo } from "react";
+import { DataService } from "../../services/DataService.js";
+import { useToast } from "../../context/ToastContext.jsx";
 import {
   DEFAULT_PRICE,
   PRICE_OPTIONS,
   PAYMENT_METHODS,
-  COLORS,
   MIN_DATE,
 } from "../../utils/constants.js";
 import { todayStr, maxAllowedDate, fmtIDR } from "../../utils/helpers.js";
 import { isValidCustomerName } from "../../utils/validators.js";
-import { DataService } from "../../services/DataService.js";
-import { useToast } from "../../context/ToastContext.jsx";
+
+// MUI
+import {
+  Box,
+  Stack,
+  Typography,
+  Card,
+  CardHeader,
+  CardContent,
+  TextField,
+  Button,
+  Alert,
+  Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  IconButton,
+  InputAdornment,
+} from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
+
+// standarisasi field
+const FIELD_PROPS = { fullWidth: true, variant: "outlined", size: "medium" };
+const FIELD_SX = {
+  mt: 1,
+  "& .MuiOutlinedInput-root": { borderRadius: 2, minHeight: 48 },
+  "& input": { paddingTop: 1.25, paddingBottom: 1.25 },
+};
 
 export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
   const toast = useToast();
@@ -42,15 +56,16 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
 
   const stokISI = Number(stocks.ISI || 0);
   const qtyNum = Number(form.qty) || 0;
-  const total = qtyNum * (Number(form.price) || 0);
+  const total = useMemo(
+    () => qtyNum * (Number(form.price) || 0),
+    [qtyNum, form.price]
+  );
 
   const disabledBase =
     !Number.isFinite(qtyNum) ||
     qtyNum < 1 ||
     qtyNum > stokISI ||
     !isValidCustomerName(form.customer || "");
-
-  const disabled = loading || disabledBase;
 
   const inc = (d) =>
     setForm((p) => {
@@ -63,6 +78,7 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
   const submit = async (e) => {
     e?.preventDefault?.();
     if (loading || disabledBase) return;
+
     setLoading(true);
     setErr("");
     try {
@@ -82,204 +98,231 @@ export default function PenjualanView({ stocks = {}, onSaved, onCancel }) {
         price: DEFAULT_PRICE,
         method: "TUNAI",
       });
-
       toast?.show?.({
         type: "success",
         message: `Penjualan tersimpan: ${qtyNum} tabung • Total ${fmtIDR(total)}`,
       });
     } catch (e2) {
-      setErr(e2.message || "Gagal menyimpan penjualan");
-      toast?.show?.({
-        type: "error",
-        message: `${e2.message || "Gagal menyimpan penjualan"}`,
-      });
+      const msg = e2.message || "Gagal menyimpan penjualan";
+      setErr(msg);
+      toast?.show?.({ type: "error", message: msg });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Box>
-      {/* Header */}
-      <Stack direction="row" spacing={2} alignItems="center" mb={2}>
-        <Button variant="outlined" onClick={loading ? undefined : onCancel} disabled={loading}>
-          ← Kembali
-        </Button>
-        <Typography variant="h5">Penjualan Baru</Typography>
+    <Stack spacing={2}>
+      <Stack direction="row" alignItems="center" spacing={2}>
+        <Typography variant="h5" fontWeight={700}>
+          Penjualan Baru
+        </Typography>
         <Box
           sx={{
             ml: "auto",
-            px: 2,
+            px: 1.25,
             py: 0.5,
-            borderRadius: "999px",
-            fontSize: 12,
+            borderRadius: 99,
             bgcolor: "grey.100",
+            border: "1px solid",
+            borderColor: "grey.300",
+            fontSize: 12,
           }}
         >
           Stok Isi: <b>{stokISI}</b>
         </Box>
       </Stack>
 
-      {/* Card Form */}
       <Card>
         <CardHeader title="Form Penjualan" />
         <CardContent>
           {err && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              ⚠️ {err}
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
+              {err}
             </Alert>
           )}
 
-          <form onSubmit={submit}>
-            <Stack spacing={2}>
-              {/* Nama Pelanggan */}
-              <TextField
-                label="Nama Pelanggan"
-                placeholder="Contoh: Ayu"
-                value={form.customer}
-                onChange={(e) => setForm({ ...form, customer: e.target.value })}
-                disabled={loading}
-                error={
-                  !isValidCustomerName(form.customer || "") &&
-                  form.customer.trim().length > 0
-                }
-                helperText={
-                  !isValidCustomerName(form.customer || "") &&
-                  form.customer.trim().length > 0
-                    ? "Nama hanya huruf & spasi"
-                    : ""
-                }
-              />
+          <Box
+            component="form"
+            onSubmit={submit}
+            sx={{
+              opacity: loading ? 0.7 : 1,
+              pointerEvents: loading ? "none" : "auto",
+            }}
+          >
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  {...FIELD_PROPS}
+                  sx={FIELD_SX}
+                  label="Nama Pelanggan"
+                  placeholder="Contoh: Ayu"
+                  value={form.customer}
+                  onChange={(e) => setForm({ ...form, customer: e.target.value })}
+                />
+                {!isValidCustomerName(form.customer || "") &&
+                  form.customer.trim().length > 0 && (
+                    <Typography
+                      variant="caption"
+                      color="error"
+                      sx={{ display: "block", mt: 0.5 }}
+                    >
+                      Nama hanya huruf & spasi
+                    </Typography>
+                  )}
+              </Grid>
 
-              {/* Tanggal */}
-              <TextField
-                label="Tanggal"
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-                inputProps={{
-                  min: MIN_DATE,
-                  max: maxAllowedDate(),
-                }}
-                disabled={loading}
-                InputLabelProps={{ shrink: true }}
-              />
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  {...FIELD_PROPS}
+                  sx={FIELD_SX}
+                  label="Tanggal"
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                  inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
 
-              {/* Qty */}
-              <Box>
-                <InputLabel>Jumlah (Qty)</InputLabel>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Button
-                    variant="outlined"
-                    onClick={() => inc(-1)}
-                    disabled={loading || qtyNum <= 1}
-                  >
-                    −
-                  </Button>
-                  <TextField
-                    type="number"
-                    value={form.qty}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        qty:
-                          e.target.value === ""
-                            ? ""
-                            : Math.max(0, parseInt(e.target.value, 10) || 0),
-                      })
-                    }
-                    inputProps={{ min: 1, max: stokISI }}
-                    disabled={loading}
-                    sx={{ flex: 1 }}
-                  />
-                  <Button
-                    variant="outlined"
-                    onClick={() => inc(+1)}
-                    disabled={loading || qtyNum >= stokISI}
-                  >
-                    +
-                  </Button>
-                </Stack>
-                <Typography variant="caption" color="text.secondary">
-                  Stok isi tersedia: <b>{stokISI}</b>
-                </Typography>
-              </Box>
-
-              {/* Harga */}
-              <FormControl fullWidth>
-                <InputLabel id="price-label">Harga Satuan</InputLabel>
-                <Select
-                  labelId="price-label"
-                  value={form.price}
+              <Grid item xs={12} sm={6}>
+                {/* Qty dengan tombol +/- */}
+                <TextField
+                  {...FIELD_PROPS}
+                  sx={FIELD_SX}
+                  label="Jumlah (Qty)"
+                  type="number"
+                  value={form.qty}
                   onChange={(e) =>
-                    setForm({ ...form, price: parseInt(e.target.value, 10) })
+                    setForm({
+                      ...form,
+                      qty:
+                        e.target.value === ""
+                          ? ""
+                          : Math.max(0, parseInt(e.target.value, 10) || 0),
+                    })
                   }
-                  disabled={loading}
-                >
-                  {PRICE_OPTIONS.map((p) => (
-                    <MenuItem key={p} value={p}>
-                      {new Intl.NumberFormat("id-ID", {
-                        style: "currency",
-                        currency: "IDR",
-                        maximumFractionDigits: 0,
-                      }).format(p)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                  inputProps={{ min: 1, max: stokISI, inputMode: "numeric" }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <IconButton
+                          size="small"
+                          onClick={() => inc(-1)}
+                          edge="start"
+                          disabled={qtyNum <= 1}
+                        >
+                          <RemoveIcon />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          onClick={() => inc(+1)}
+                          edge="end"
+                          disabled={qtyNum >= stokISI}
+                        >
+                          <AddIcon />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                  helperText={
+                    <span>
+                      Stok isi tersedia: <b>{stokISI}</b>
+                    </span>
+                  }
+                />
+              </Grid>
 
-              {/* Metode Pembayaran */}
-              <FormControl fullWidth>
-                <InputLabel id="method-label">Metode Pembayaran</InputLabel>
-                <Select
-                  labelId="method-label"
-                  value={form.method}
-                  onChange={(e) => setForm({ ...form, method: e.target.value })}
-                  disabled={loading}
-                >
-                  {PAYMENT_METHODS.map((m) => (
-                    <MenuItem key={m} value={m}>
-                      {m}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              {/* Harga & Metode: rapi dan sama tinggi */}
+              <Grid item xs={12} sm={6}>
+                <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
+                  <InputLabel id="price-label">Harga Satuan</InputLabel>
+                  <Select
+                    labelId="price-label"
+                    label="Harga Satuan"
+                    value={form.price}
+                    onChange={(e) =>
+                      setForm({ ...form, price: parseInt(e.target.value, 10) })
+                    }
+                  >
+                    {PRICE_OPTIONS.map((p) => (
+                      <MenuItem key={p} value={p}>
+                        {new Intl.NumberFormat("id-ID", {
+                          style: "currency",
+                          currency: "IDR",
+                          maximumFractionDigits: 0,
+                        }).format(p)}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
 
-              {/* Total */}
-              <Box
-                sx={{
-                  p: 2,
-                  bgcolor: "grey.50",
-                  border: "1px solid",
-                  borderColor: "grey.200",
-                  borderRadius: 2,
-                }}
-              >
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Typography fontWeight={500}>Total:</Typography>
-                  <Typography fontSize={18} fontWeight="bold" color="success.main">
-                    {fmtIDR(total)}
-                  </Typography>
+              <Grid item xs={12} sm={6}>
+                <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
+                  <InputLabel id="method-label">Metode Pembayaran</InputLabel>
+                  <Select
+                    labelId="method-label"
+                    label="Metode Pembayaran"
+                    value={form.method}
+                    onChange={(e) =>
+                      setForm({ ...form, method: e.target.value })
+                    }
+                  >
+                    {PAYMENT_METHODS.map((m) => (
+                      <MenuItem key={m} value={m}>
+                        {m}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Box
+                  sx={{
+                    p: 2,
+                    bgcolor: "grey.50",
+                    border: "1px solid",
+                    borderColor: "grey.200",
+                    borderRadius: 2,
+                  }}
+                >
+                  <Stack direction="row" alignItems="center" justifyContent="space-between">
+                    <Typography fontWeight={600}>Total:</Typography>
+                    <Typography variant="h6" color="success.main" fontWeight={800}>
+                      {fmtIDR(total)}
+                    </Typography>
+                  </Stack>
+                </Box>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+                  <Button
+                    variant="outlined"
+                    type="button"
+                    onClick={loading ? undefined : onCancel}
+                  >
+                    Batal
+                  </Button>
+                  <Button
+                    variant="contained"
+                    type="submit"
+                    disabled={loading || disabledBase}
+                  >
+                    {loading ? "Menyimpan…" : "Simpan"}
+                  </Button>
                 </Stack>
-              </Box>
-
-              {/* Action */}
-              <Stack direction="row" spacing={2} justifyContent="flex-end">
-                <Button
-                  variant="outlined"
-                  onClick={loading ? undefined : onCancel}
-                  disabled={loading}
-                >
-                  Batal
-                </Button>
-                <Button variant="contained" type="submit" disabled={disabled}>
-                  {loading ? "Menyimpan…" : "Simpan"}
-                </Button>
-              </Stack>
-            </Stack>
-          </form>
+              </Grid>
+            </Grid>
+          </Box>
         </CardContent>
       </Card>
-    </Box>
+    </Stack>
   );
 }
