@@ -1,4 +1,4 @@
-// src/views/DashboardView.jsx
+// src/components/views/DashboardView.jsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { COLORS, HPP } from "../../utils/constants.js";
 import { fmtIDR, todayStr, debounce } from "../../utils/helpers.js";
@@ -19,7 +19,6 @@ import {
   Alert,
   Skeleton,
   Button,
-  // Paper, // (dibersihkan: tidak digunakan)
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
@@ -36,7 +35,7 @@ class DashboardErrorBoundary extends React.Component {
     this.state = { hasError: false, errorInfo: null };
   }
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError() {
     return { hasError: true };
   }
 
@@ -118,11 +117,8 @@ function StockProgress({ isi, kosong }) {
           borderRadius: 5,
           "& .MuiLinearProgress-bar": {
             borderRadius: 5,
-            // gunakan palette MUI agar konsisten
             backgroundColor: (theme) =>
-              pctIsi < 20
-                ? theme.palette.warning.main
-                : theme.palette.success.main,
+              pctIsi < 20 ? theme.palette.warning.main : theme.palette.success.main,
           },
         }}
       />
@@ -179,7 +175,6 @@ function MiniBarChart({ data }) {
 function DashboardSkeleton() {
   return (
     <Stack spacing={3}>
-      {/* Header Skeleton */}
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Box>
           <Skeleton variant="text" width={200} height={40} />
@@ -188,7 +183,6 @@ function DashboardSkeleton() {
         <Skeleton variant="rounded" width={150} height={32} />
       </Stack>
 
-      {/* Stats Grid Skeleton */}
       <Grid container spacing={3}>
         {[1, 2, 3, 4].map((item) => (
           <Grid item xs={12} sm={6} md={3} key={item}>
@@ -197,10 +191,8 @@ function DashboardSkeleton() {
         ))}
       </Grid>
 
-      {/* Stock Progress Skeleton */}
       <Skeleton variant="rounded" height={120} />
 
-      {/* Financial Summary Skeleton */}
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <Skeleton variant="rounded" height={200} />
@@ -210,7 +202,6 @@ function DashboardSkeleton() {
         </Grid>
       </Grid>
 
-      {/* Charts & Table Skeleton */}
       <Grid container spacing={3}>
         <Grid item xs={12} md={5}>
           <Skeleton variant="rounded" height={300} />
@@ -288,10 +279,8 @@ function DashboardViewContent({ stocks = {} }) {
         (r) => String(r.status || "").toUpperCase() !== "DIBATALKAN"
       );
 
-      // Total terjual
       const qty = notVoid.reduce((a, b) => a + Number(b.qty || 0), 0);
 
-      // Omzet & Laba: hanya transaksi yang sudah dibayar
       const paid = notVoid.filter(
         (r) =>
           String(r.method).toUpperCase() === "TUNAI" ||
@@ -316,7 +305,18 @@ function DashboardViewContent({ stocks = {} }) {
       setToday(todaySum);
       setPiutang(totalPiutang ?? 0);
       setSeries7(Array.isArray(s7) ? s7 : []);
-      setRecent(Array.isArray(r) ? r : []);
+      setRecent(
+        Array.isArray(r)
+          ? r.map((row, idx) => ({
+              id:
+                row.id ??
+                `${row.created_at ?? row.date ?? row.createdAt ?? "x"}-${
+                  row.customer ?? "public"
+                }-${row.total ?? row.qty ?? idx}`,
+              ...row,
+            }))
+          : []
+      );
     } catch (e) {
       console.error("Dashboard error:", e);
       setErr(e.message || "Gagal memuat data dashboard");
@@ -573,9 +573,7 @@ function DashboardViewContent({ stocks = {} }) {
                   density="comfortable"
                   sx={{
                     border: "none",
-                    "& .MuiDataGrid-cell": {
-                      border: "none",
-                    },
+                    "& .MuiDataGrid-cell": { border: "none" },
                     "& .MuiDataGrid-columnHeaders": {
                       backgroundColor: "grey.50",
                       border: "none",
