@@ -1,4 +1,3 @@
-// src/components/views/TransaksiView.jsx
 import React, { useEffect, useState } from "react";
 import Card from "../ui/Card.jsx";
 import Button from "../ui/Button.jsx";
@@ -8,32 +7,10 @@ import { useToast } from "../../context/ToastContext.jsx";
 import { fmtIDR } from "../../utils/helpers.js";
 import { COLORS } from "../../utils/constants.js";
 
-// 🔵 MUI
 import {
-  Box,
-  Stack,
-  Typography,
-  Tabs,
-  Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Chip,
-  IconButton,
-  Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Divider,
-  CircularProgress,
-  Skeleton,
-  Paper,
-  TextField, // ← pakai MUI TextField utk search
-  InputAdornment,
+  Box, Stack, Typography, Tabs, Tab, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Chip, IconButton, Tooltip, Dialog, DialogTitle, DialogContent,
+  DialogActions, Divider, CircularProgress, Skeleton, Paper, TextField, InputAdornment
 } from "@mui/material";
 import PaidIcon from "@mui/icons-material/PriceCheck";
 import SearchIcon from "@mui/icons-material/Search";
@@ -42,17 +19,15 @@ import CreditScoreIcon from "@mui/icons-material/CreditScore";
 
 export default function TransaksiView({ stocks = {}, onSaved }) {
   const toast = useToast();
-
   const [tab, setTab] = useState("penjualan"); // 'penjualan' | 'hutang'
   const [q, setQ] = useState("");
   const [debts, setDebts] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Dialog bayar hutang
-  const [paying, setPaying] = useState(null); // { id, customer, total, created_at }
+  const [paying, setPaying] = useState(null);
   const payingTotal = Number(paying?.total || 0);
 
-  // Load daftar hutang ketika tab hutang aktif / keyword berubah
   useEffect(() => {
     let on = true;
     (async () => {
@@ -67,13 +42,10 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
         if (on) setLoading(false);
       }
     })();
-    return () => {
-      on = false;
-    };
+    return () => { on = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, q]);
 
-  // Pelunasan hutang (nominal DIKUNCI == total)
   const onPaid = async () => {
     if (!paying) return;
     const amount = Number(paying.total || 0);
@@ -81,73 +53,36 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
       toast?.show?.({ type: "error", message: "Nominal tidak valid" });
       return;
     }
-
     try {
       setLoading(true);
       await DataService.payDebt({
-        sale_id: paying.id,
-        amount,
-        note: `pelunasan: ${paying.customer || ""}`,
+        sale_id: paying.id, amount, note: `pelunasan: ${paying.customer || ""}`,
       });
-      toast?.show?.({
-        type: "success",
-        message: `Hutang lunas: ${paying.customer || "Pelanggan"}`,
-      });
+      toast?.show?.({ type: "success", message: `Hutang lunas: ${paying.customer || "Pelanggan"}` });
       setPaying(null);
       const rows = await DataService.getDebts({ query: q, limit: 200 });
       setDebts(rows);
       onSaved?.();
     } catch (e) {
-      toast?.show?.({
-        type: "error",
-        message: `${e.message || "Gagal membayar hutang"}`,
-      });
-    } finally {
-      setLoading(false);
-    }
+      toast?.show?.({ type: "error", message: `${e.message || "Gagal membayar hutang"}` });
+    } finally { setLoading(false); }
   };
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
       {/* Header + Tabs */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 2,
-          flexWrap: "wrap",
-        }}
-      >
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Transaksi
-        </Typography>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+        <Typography variant="h5" sx={{ fontWeight: 700 }}>Transaksi</Typography>
         <Box sx={{ ml: "auto" }} />
-        <Tabs
-          value={tab}
-          onChange={(_, v) => setTab(v)}
-          textColor="primary"
-          indicatorColor="primary"
-        >
-          <Tab
-            value="penjualan"
-            icon={<CreditScoreIcon />}
-            iconPosition="start"
-            label="Penjualan Baru"
-          />
-          <Tab
-            value="hutang"
-            icon={<PaidIcon />}
-            iconPosition="start"
-            label="Bayar Hutang"
-          />
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} textColor="primary" indicatorColor="primary">
+          <Tab value="penjualan" icon={<CreditScoreIcon />} iconPosition="start" label="Penjualan Baru" />
+          <Tab value="hutang" icon={<PaidIcon />} iconPosition="start" label="Bayar Hutang" />
         </Tabs>
       </Box>
 
-      {/* TAB: PENJUALAN BARU */}
+      {/* TAB: PENJUALAN — langsung render form (tanpa Card judul luar agar tidak dobel) */}
       {tab === "penjualan" && (
-        <Card collapsible defaultExpanded title="Form Penjualan">
-          <PenjualanView stocks={stocks} onSaved={onSaved} onCancel={() => {}} />
-        </Card>
+        <PenjualanView stocks={stocks} onSaved={onSaved} onCancel={() => {}} />
       )}
 
       {/* TAB: HUTANG */}
@@ -158,10 +93,7 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
             action={
               <Tooltip title="Muat ulang">
                 <span>
-                  <IconButton
-                    onClick={() => setQ((s) => s)} // trigger effect dengan nilai sama
-                    disabled={loading}
-                  >
+                  <IconButton onClick={() => setQ((s) => s)} disabled={loading}>
                     <ReplayIcon />
                   </IconButton>
                 </span>
@@ -185,32 +117,19 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
                   }}
                 />
               </Box>
-              <Button
-                className="secondary"
-                onClick={() => setQ("")}
-                disabled={loading}
-                startIcon={<ReplayIcon />}
-              >
+              <Button className="secondary" onClick={() => setQ("")} disabled={loading} startIcon={<ReplayIcon />}>
                 Reset
               </Button>
             </Stack>
             <Box sx={{ mt: 1, fontSize: 12, color: COLORS.secondary }}>
-              Menampilkan transaksi dengan metode <b>HUTANG</b>. Pembayaran wajib{" "}
-              <b>lunas</b>.
+              Menampilkan transaksi dengan metode <b>HUTANG</b>. Pembayaran wajib <b>lunas</b>.
             </Box>
           </Card>
 
-          <Card
-            title="Daftar Hutang"
-            collapsible
-            defaultExpanded
-            sx={{ overflow: "hidden" }}
-          >
+          <Card title="Daftar Hutang" collapsible defaultExpanded sx={{ overflow: "hidden" }}>
             {loading ? (
               <Stack spacing={1}>
-                <Skeleton height={36} />
-                <Skeleton height={36} />
-                <Skeleton height={36} />
+                <Skeleton height={36} /><Skeleton height={36} /><Skeleton height={36} />
               </Stack>
             ) : (
               <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
@@ -235,38 +154,24 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
                     )}
                     {debts.map((d) => (
                       <TableRow key={d.id} hover>
-                        <TableCell sx={{ whiteSpace: "nowrap" }}>
-                          {(d.created_at || "").slice(0, 10)}
-                        </TableCell>
+                        <TableCell sx={{ whiteSpace: "nowrap" }}>{(d.created_at || "").slice(0, 10)}</TableCell>
                         <TableCell>
                           <Stack direction="row" spacing={1} alignItems="center">
-                            <Chip
-                              size="small"
-                              label="HUTANG"
-                              color="warning"
-                              variant="outlined"
-                            />
+                            <Chip size="small" label="HUTANG" color="warning" variant="outlined" />
                             <Typography>{d.customer || "PUBLIC"}</Typography>
                           </Stack>
                         </TableCell>
                         <TableCell align="right">{d.qty}</TableCell>
                         <TableCell align="right">{fmtIDR(d.price)}</TableCell>
-                        <TableCell align="right">
-                          <b>{fmtIDR(d.total)}</b>
-                        </TableCell>
+                        <TableCell align="right"><b>{fmtIDR(d.total)}</b></TableCell>
                         <TableCell align="center">
                           <Tooltip title="Bayar hutang">
                             <span>
                               <Button
                                 size="small"
-                                onClick={() =>
-                                  setPaying({
-                                    id: d.id,
-                                    customer: d.customer,
-                                    total: d.total, // dikunci untuk pelunasan penuh
-                                    created_at: d.created_at,
-                                  })
-                                }
+                                onClick={() => setPaying({
+                                  id: d.id, customer: d.customer, total: d.total, created_at: d.created_at,
+                                })}
                                 disabled={loading || (Number(d.total) || 0) <= 0}
                               >
                                 Bayar
@@ -285,12 +190,7 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
       )}
 
       {/* DIALOG BAYAR HUTANG */}
-      <Dialog
-        open={!!paying}
-        onClose={() => setPaying(null)}
-        fullWidth
-        maxWidth="sm"
-      >
+      <Dialog open={!!paying} onClose={() => setPaying(null)} fullWidth maxWidth="sm">
         <DialogTitle>Bayar Hutang</DialogTitle>
         <DialogContent dividers>
           {paying ? (
@@ -299,30 +199,17 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
                 <Typography color="text.secondary">Pelanggan</Typography>
                 <Typography fontWeight={700}>{paying.customer || "PUBLIC"}</Typography>
               </Stack>
-
               <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Typography color="text.secondary">Tanggal</Typography>
                 <Typography>{(paying.created_at || "").slice(0, 10)}</Typography>
               </Stack>
-
               <Divider />
-
               <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Typography>Total Tagihan</Typography>
                 <Typography variant="h6">{fmtIDR(payingTotal)}</Typography>
               </Stack>
-
-              <Box
-                sx={{
-                  p: 1.5,
-                  borderRadius: 1,
-                  bgcolor: "#f8fafc",
-                  fontSize: 12,
-                  color: "text.secondary",
-                }}
-              >
-                Nominal pembayaran <b>dikunci</b> sama dengan total tagihan.
-                Transaksi akan ditandai <b>LUNAS</b>.
+              <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: "#f8fafc", fontSize: 12, color: "text.secondary" }}>
+                Nominal <b>dikunci</b> sama dengan total. Transaksi akan ditandai <b>LUNAS</b>.
               </Box>
             </Stack>
           ) : (
@@ -332,12 +219,8 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
           )}
         </DialogContent>
         <DialogActions>
-          <Button className="secondary" onClick={() => setPaying(null)} disabled={loading}>
-            Batal
-          </Button>
-          <Button onClick={onPaid} disabled={loading}>
-            {loading ? "Menyimpan…" : "Simpan"}
-          </Button>
+          <Button className="secondary" onClick={() => setPaying(null)} disabled={loading}>Batal</Button>
+          <Button onClick={onPaid} disabled={loading}>{loading ? "Menyimpan…" : "Simpan"}</Button>
         </DialogActions>
       </Dialog>
     </Stack>
