@@ -31,6 +31,8 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 
+import { useAuth } from "../../context/AuthContext.jsx";
+
 const drawerWidth = 220;
 const BN_HEIGHT = 64; // tinggi bottom nav
 
@@ -39,11 +41,13 @@ export default function AppLayout({ children }) {
   const [bottomNav, setBottomNav] = useState("dashboard");
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
+  const role = user?.role || "user";
 
   const handleDrawerToggle = () => setMobileOpen((s) => !s);
 
-  // daftar menu
-  const menuItems = [
+  // daftar menu dasar
+  const baseMenuItems = [
     { key: "dashboard", label: "Dashboard", icon: <HomeIcon />, path: "/" },
     { key: "transaksi", label: "Transaksi", icon: <SwapHorizIcon />, path: "/transaksi" },
     { key: "stok", label: "Stok", icon: <InventoryIcon />, path: "/stok" },
@@ -51,8 +55,21 @@ export default function AppLayout({ children }) {
     { key: "pelanggan", label: "Pelanggan", icon: <PeopleIcon />, path: "/pelanggan" },
     { key: "broadcast", label: "Broadcast", icon: <CampaignIcon />, path: "/broadcast" },
     { key: "laporan", label: "Laporan", icon: <DescriptionIcon />, path: "/laporan" },
-    { key: "pengaturan", label: "Pengaturan", icon: <SettingsIcon />, path: "/pengaturan" },
   ];
+
+  // tambahkan pengaturan hanya jika admin
+  const menuItems = useMemo(() => {
+    const items = [...baseMenuItems];
+    if (role === "admin") {
+      items.push({
+        key: "pengaturan",
+        label: "Pengaturan",
+        icon: <SettingsIcon />,
+        path: "/pengaturan",
+      });
+    }
+    return items;
+  }, [role]);
 
   // key aktif untuk bottom-nav (pakai startsWith biar tahan /route/sub)
   const activeKey = useMemo(() => {
@@ -77,7 +94,11 @@ export default function AppLayout({ children }) {
       <List>
         {menuItems.map((item) => (
           <ListItem key={item.key} disablePadding>
-            <ListItemButton component={NavLink} to={item.path} onClick={() => setMobileOpen(false)}>
+            <ListItemButton
+              component={NavLink}
+              to={item.path}
+              onClick={() => setMobileOpen(false)}
+            >
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.label} />
             </ListItemButton>
@@ -92,7 +113,6 @@ export default function AppLayout({ children }) {
       sx={{
         display: "flex",
         minHeight: "100svh",
-        // beri ruang bawah untuk mobile agar konten tidak ketutup bottom-nav
         pb: { xs: `calc(${BN_HEIGHT}px + env(safe-area-inset-bottom))`, sm: 0 },
       }}
     >
@@ -154,12 +174,11 @@ export default function AppLayout({ children }) {
           width: { sm: `calc(100% - ${drawerWidth}px)` },
         }}
       >
-        <Toolbar /> {/* spacer untuk AppBar */}
-        {/* dukung dua cara: children langsung atau via <Outlet/> */}
+        <Toolbar />
         {children ?? <Outlet />}
       </Box>
 
-      {/* BOTTOM NAV — render via Portal agar fixed tidak terpengaruh parent */}
+      {/* Bottom Nav */}
       {createPortal(
         <Paper
           elevation={8}

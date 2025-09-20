@@ -14,6 +14,8 @@ import BroadcastView from "./components/views/BroadcastView.jsx";
 import LaporanView from "./components/views/LaporanView.jsx";
 import PengaturanView from "./components/views/PengaturanView.jsx";
 
+import AdminRoute from "./components/routes/AdminRoute.jsx"; // ✅ proteksi admin
+
 import { useToast } from "./context/ToastContext.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 import { DataService } from "./services/DataService.js";
@@ -67,7 +69,6 @@ export default function App() {
         "postgres_changes",
         { event: "*", schema: "public", table: "sales" },
         async () => {
-          // setiap penjualan memengaruhi stok → refresh
           await refreshStocks();
         }
       )
@@ -81,7 +82,7 @@ export default function App() {
     };
   }, []);
 
-  // setiap ganti route → refresh stok (agar dashboard selalu terbaru)
+  // setiap ganti route → refresh stok
   useEffect(() => {
     refreshStocks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -126,14 +127,29 @@ export default function App() {
               />
             }
           />
-          <Route path="/riwayat" element={<RiwayatView onCancel={() => navigate("/")} />} />
+          <Route
+            path="/riwayat"
+            element={<RiwayatView onCancel={() => navigate("/")} />}
+          />
 
           {/* menu tambahan */}
-          <Route path="/transaksi" element={<TransaksiView stocks={stocks} onSaved={setStocks} />} />
+          <Route
+            path="/transaksi"
+            element={<TransaksiView stocks={stocks} onSaved={setStocks} />}
+          />
           <Route path="/pelanggan" element={<PelangganView />} />
           <Route path="/broadcast" element={<BroadcastView />} />
           <Route path="/laporan" element={<LaporanView />} />
-          <Route path="/pengaturan" element={<PengaturanView />} />
+
+          {/* ✅ pengaturan hanya untuk admin */}
+          <Route
+            path="/pengaturan"
+            element={
+              <AdminRoute>
+                <PengaturanView />
+              </AdminRoute>
+            }
+          />
         </Routes>
       </main>
 
