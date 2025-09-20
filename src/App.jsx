@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useEffect, useState } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout.jsx";
@@ -20,7 +21,7 @@ import { supabase } from "./lib/supabase.js";
 import { COLORS } from "./utils/constants.js";
 
 export default function App() {
-  const { user, initializing, signOut } = useAuth();
+  const { user, initializing } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -29,14 +30,12 @@ export default function App() {
     toast?.show ? toast.show({ type: t, message: m }) : alert(m);
 
   const [stocks, setStocks] = useState({ ISI: 0, KOSONG: 0 });
-  const [isAdmin, setIsAdmin] = useState(false);
 
   // Ambil snapshot stok
   const refreshStocks = async () => {
     try {
       const map = await DataService.loadStocks();
       setStocks(map);
-      // console.log("Snapshot stok:", map);
     } catch (e) {
       console.error("❌ Refresh stok gagal:", e?.message || e);
     }
@@ -88,9 +87,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  // role admin (placeholder)
-  useEffect(() => setIsAdmin(false), [user]);
-
   const handleResetAll = async () => {
     if (!confirm("Yakin reset SEMUA data (stok, log, sales)?")) return;
     try {
@@ -106,8 +102,7 @@ export default function App() {
   if (!user) return <LoginView />;
 
   return (
-    <AppLayout>
-      {/* Header lama kamu punya tombol logout/reset; kalau perlu pindahkan ke AppLayout */}
+    <AppLayout onResetAll={handleResetAll}>
       <main style={{ flex: 1 }}>
         <Routes>
           <Route path="/" element={<DashboardView stocks={stocks} />} />
@@ -131,16 +126,10 @@ export default function App() {
               />
             }
           />
-          <Route
-            path="/riwayat"
-            element={<RiwayatView onCancel={() => navigate("/")} />}
-          />
+          <Route path="/riwayat" element={<RiwayatView onCancel={() => navigate("/")} />} />
 
           {/* menu tambahan */}
-          <Route
-            path="/transaksi"
-            element={<TransaksiView stocks={stocks} onSaved={setStocks} />}
-          />
+          <Route path="/transaksi" element={<TransaksiView stocks={stocks} onSaved={setStocks} />} />
           <Route path="/pelanggan" element={<PelangganView />} />
           <Route path="/broadcast" element={<BroadcastView />} />
           <Route path="/laporan" element={<LaporanView />} />
