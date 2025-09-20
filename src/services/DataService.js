@@ -752,4 +752,77 @@ export const DataService = {
 
     return { totalTransaksi, totalNilai, rataRata, hutangAktif };
   },
+// ====== SETTINGS (FE fallback via localStorage) ======
+const LS_KEY = "gas3kg_settings";
+function readLS() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch { return {}; }
+}
+function writeLS(obj) {
+  localStorage.setItem(LS_KEY, JSON.stringify(obj || {}));
+}
+
+DataService.getSettings = async function () {
+  return readLS();
+};
+
+DataService.saveSettings = async function (payload) {
+  const cur = readLS();
+  writeLS({ ...cur, ...payload });
+  return true;
+};
+
+// ====== USERS (placeholder FE only) ======
+DataService.getUsers = async function () {
+  const ls = readLS();
+  return ls._users || [];
+};
+
+DataService.addUser = async function ({ email, role = "user" }) {
+  const ls = readLS();
+  const list = ls._users || [];
+  list.push({ id: Date.now(), email, role });
+  writeLS({ ...ls, _users: list });
+  return true;
+};
+
+DataService.updateUserRole = async function ({ user_id, role }) {
+  const ls = readLS();
+  const list = (ls._users || []).map((u) => (u.id === user_id ? { ...u, role } : u));
+  writeLS({ ...ls, _users: list });
+  return true;
+};
+
+DataService.resetUserPassword = async function () {
+  return true; // placeholder
+};
+
+// ====== BACKUP ======
+DataService.exportAll = async function () {
+  const [stocks, sales, customers] = await Promise.all([
+    this.loadStocks().catch(() => ({})),
+    this.loadSales(2000).catch(() => []),
+    this.getCustomers({ limit: 2000 }).catch(() => []),
+  ]);
+  const blob = new Blob(
+    [JSON.stringify({ stocks, sales, customers }, null, 2)],
+    { type: "application/json" }
+  );
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `backup_gas3kg_${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  return true;
+};
+
+DataService.importAll = async function (file) {
+  await file?.text(); // placeholder
+  return true;
+};
+
+// ====== Hard Reset ======
+DataService.hardResetAll = async function () {
+  return this.resetAllData();
+};,
 };

@@ -1,68 +1,138 @@
-import React, { useState } from "react";
-import Card from "../ui/Card.jsx";
-import Input from "../ui/Input.jsx";
-import Button from "../ui/Button.jsx";
+import React, { useEffect, useState } from "react";
+import { DataService } from "../../services/DataService.js";
+import {
+  Box,
+  Stack,
+  Typography,
+  Card,
+  CardHeader,
+  CardContent,
+  TextField,
+  Button,
+  Divider,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+} from "@mui/material";
 
 export default function PengaturanView() {
-  const [tab, setTab] = useState("user");
+  const [settings, setSettings] = useState({});
+  const [users, setUsers] = useState([]);
+  const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      const s = await DataService.getSettings();
+      const u = await DataService.getUsers();
+      setSettings(s || {});
+      setUsers(u || []);
+    })();
+  }, []);
+
+  const save = async () => {
+    await DataService.saveSettings(settings);
+    alert("Pengaturan tersimpan!");
+  };
+
+  const addUser = async () => {
+    if (!email) return;
+    await DataService.addUser({ email, role: "user" });
+    const u = await DataService.getUsers();
+    setUsers(u);
+    setEmail("");
+  };
 
   return (
-    <div>
-      <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:16}}>
-        <h1 style={{margin:0}}>Pengaturan</h1>
-        <div style={{marginLeft:"auto", display:"flex", gap:8}}>
-          <Button className={tab==="user"?"primary":""} onClick={()=>setTab("user")}>Kelola User</Button>
-          <Button className={tab==="harga"?"primary":""} onClick={()=>setTab("harga")}>Harga Jual</Button>
-          <Button className={tab==="backup"?"primary":""} onClick={()=>setTab("backup")}>Backup & Restore</Button>
-        </div>
-      </div>
+    <Stack spacing={2}>
+      <Typography variant="h5" fontWeight={700}>
+        Pengaturan
+      </Typography>
 
-      {tab==="user" && (
-        <Card title="User (Kasir/Admin)">
-          <div className="grid">
-            <div>
-              <label>Email</label><Input placeholder="kasir@toko.com" />
-            </div>
-            <div>
-              <label>Role</label>
-              <select style={{padding:"10px 12px", border:"1px solid #cbd5e1", borderRadius:8, width:"100%"}}>
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-          </div>
-          <div style={{display:"flex", justifyContent:"flex-end", gap:8, marginTop:12}}>
-            <Button className="secondary">Reset Password</Button>
-            <Button>Simpan</Button>
-          </div>
-        </Card>
-      )}
+      <Card>
+        <CardHeader title="Umum" />
+        <CardContent>
+          <Stack spacing={2}>
+            <TextField
+              label="Nama Toko"
+              value={settings.storeName || ""}
+              onChange={(e) => setSettings({ ...settings, storeName: e.target.value })}
+            />
+            <TextField
+              label="Alamat"
+              value={settings.address || ""}
+              onChange={(e) => setSettings({ ...settings, address: e.target.value })}
+            />
+            <Button variant="contained" onClick={save}>
+              Simpan
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
 
-      {tab==="harga" && (
-        <Card title="Harga Jual">
-          <div className="grid">
-            <div>
-              <label>Harga Tabung 3kg</label><Input type="number" min={0} placeholder="e.g. 22000" />
-            </div>
-          </div>
-          <div style={{display:"flex", justifyContent:"flex-end", gap:8, marginTop:12}}>
-            <Button className="secondary">Batal</Button>
-            <Button>Simpan</Button>
-          </div>
-        </Card>
-      )}
+      <Card>
+        <CardHeader title="Manajemen User (dummy)" />
+        <CardContent>
+          <Stack spacing={2}>
+            <Stack direction="row" spacing={1}>
+              <TextField
+                label="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                fullWidth
+              />
+              <Button variant="contained" onClick={addUser}>
+                Tambah
+              </Button>
+            </Stack>
 
-      {tab==="backup" && (
-        <Card title="Backup & Restore">
-          <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
-            <Button>Backup Data</Button>
-            <Button className="secondary">Restore Data</Button>
-          </div>
-          <div style={{fontSize:12, marginTop:8, color:"#64748b"}}>
-            *Placeholder: sambungkan ke endpoint/SQL export-import.
-          </div>
-        </Card>
-      )}
-    </div>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Email</TableCell>
+                  <TableCell>Role</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {users.map((u) => (
+                  <TableRow key={u.id}>
+                    <TableCell>{u.email}</TableCell>
+                    <TableCell>{u.role}</TableCell>
+                  </TableRow>
+                ))}
+                {!users.length && (
+                  <TableRow>
+                    <TableCell colSpan={2} sx={{ color: "text.secondary" }}>
+                      Belum ada user
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Divider />
+
+      <Stack direction="row" spacing={2}>
+        <Button
+          variant="outlined"
+          color="error"
+          onClick={async () => {
+            if (window.confirm("Yakin reset semua data?")) {
+              await DataService.hardResetAll();
+              alert("Data sudah direset!");
+            }
+          }}
+        >
+          Reset Semua Data
+        </Button>
+        <Button variant="outlined" onClick={() => DataService.exportAll()}>
+          Export Data
+        </Button>
+      </Stack>
+    </Stack>
   );
 }
