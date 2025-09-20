@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from "react";
+// src/components/layout/AppLayout.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { NavLink, useLocation, useNavigate, Outlet } from "react-router-dom";
+import { createPortal } from "react-dom";
 import {
   AppBar,
   Box,
@@ -20,7 +23,6 @@ import {
 
 import MenuIcon from "@mui/icons-material/Menu";
 import HomeIcon from "@mui/icons-material/Home";
-import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import InventoryIcon from "@mui/icons-material/Inventory";
 import HistoryIcon from "@mui/icons-material/History";
 import PeopleIcon from "@mui/icons-material/People";
@@ -29,43 +31,43 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
-
 const drawerWidth = 220;
+const BN_HEIGHT = 64; // tinggi bottom nav
 
 export default function AppLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [bottomNav, setBottomNav] = useState(0);
+  const [bottomNav, setBottomNav] = useState("dashboard");
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
+  const handleDrawerToggle = () => setMobileOpen((s) => !s);
 
   // daftar menu
   const menuItems = [
-    { label: "Dashboard", icon: <HomeIcon />, path: "/" },
-    { label: "Transaksi", icon: <SwapHorizIcon />, path: "/transaksi" },
-    { label: "Stok", icon: <InventoryIcon />, path: "/stok" },
-    { label: "Riwayat", icon: <HistoryIcon />, path: "/riwayat" },
-    { label: "Pelanggan", icon: <PeopleIcon />, path: "/pelanggan" },
-    { label: "Broadcast", icon: <CampaignIcon />, path: "/broadcast" },
-    { label: "Laporan", icon: <DescriptionIcon />, path: "/laporan" },
-    { label: "Pengaturan", icon: <SettingsIcon />, path: "/pengaturan" },
+    { key: "dashboard", label: "Dashboard", icon: <HomeIcon />, path: "/" },
+    { key: "transaksi", label: "Transaksi", icon: <SwapHorizIcon />, path: "/transaksi" },
+    { key: "stok", label: "Stok", icon: <InventoryIcon />, path: "/stok" },
+    { key: "riwayat", label: "Riwayat", icon: <HistoryIcon />, path: "/riwayat" },
+    { key: "pelanggan", label: "Pelanggan", icon: <PeopleIcon />, path: "/pelanggan" },
+    { key: "broadcast", label: "Broadcast", icon: <CampaignIcon />, path: "/broadcast" },
+    { key: "laporan", label: "Laporan", icon: <DescriptionIcon />, path: "/laporan" },
+    { key: "pengaturan", label: "Pengaturan", icon: <SettingsIcon />, path: "/pengaturan" },
   ];
 
-  // sync bottom nav dengan route aktif
-  useEffect(() => {
-    const idx = menuItems.findIndex((m, i) => {
-      if (i > 3) return false; // hanya 4 menu utama di bottom nav
-      return location.pathname === m.path;
-    });
-    if (idx >= 0) setBottomNav(idx);
+  // key aktif untuk bottom-nav (pakai startsWith biar tahan /route/sub)
+  const activeKey = useMemo(() => {
+    if (location.pathname.startsWith("/transaksi")) return "transaksi";
+    if (location.pathname.startsWith("/stok")) return "stok";
+    if (location.pathname.startsWith("/riwayat")) return "riwayat";
+    return "dashboard";
   }, [location.pathname]);
 
+  useEffect(() => {
+    setBottomNav(activeKey);
+  }, [activeKey]);
+
   const drawer = (
-    <div>
+    <Box role="presentation">
       <Toolbar>
         <Typography variant="h6" noWrap>
           Gas 3KG Manager
@@ -74,20 +76,28 @@ export default function AppLayout({ children }) {
       <Divider />
       <List>
         {menuItems.map((item) => (
-          <ListItem key={item.label} disablePadding>
-            <ListItemButton component={NavLink} to={item.path}>
+          <ListItem key={item.key} disablePadding>
+            <ListItemButton component={NavLink} to={item.path} onClick={() => setMobileOpen(false)}>
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.label} />
             </ListItemButton>
           </ListItem>
         ))}
       </List>
-    </div>
+    </Box>
   );
 
   return (
-    <Box sx={{ display: "flex" }}>
+    <Box
+      sx={{
+        display: "flex",
+        minHeight: "100svh",
+        // beri ruang bawah untuk mobile agar konten tidak ketutup bottom-nav
+        pb: { xs: `calc(${BN_HEIGHT}px + env(safe-area-inset-bottom))`, sm: 0 },
+      }}
+    >
       <CssBaseline />
+
       {/* AppBar */}
       <AppBar position="fixed" sx={{ zIndex: 1201 }}>
         <Toolbar>
@@ -106,10 +116,7 @@ export default function AppLayout({ children }) {
       </AppBar>
 
       {/* Drawer */}
-      <Box
-        component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-      >
+      <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
         {/* mobile drawer */}
         <Drawer
           variant="temporary"
@@ -127,11 +134,11 @@ export default function AppLayout({ children }) {
         {/* desktop drawer */}
         <Drawer
           variant="permanent"
+          open
           sx={{
             display: { xs: "none", sm: "block" },
             "& .MuiDrawer-paper": { boxSizing: "border-box", width: drawerWidth },
           }}
-          open
         >
           {drawer}
         </Drawer>
@@ -142,42 +149,53 @@ export default function AppLayout({ children }) {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          px: { xs: 1.5, sm: 3 },
+          py: { xs: 1.5, sm: 3 },
           width: { sm: `calc(100% - ${drawerWidth}px)` },
         }}
       >
-        <Toolbar /> {/* spacer */}
-        {children}
+        <Toolbar /> {/* spacer untuk AppBar */}
+        {/* dukung dua cara: children langsung atau via <Outlet/> */}
+        {children ?? <Outlet />}
       </Box>
 
-      {/* bottom nav untuk mobile */}
-      <Paper
-        sx={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          display: { xs: "block", sm: "none" },
-        }}
-        elevation={3}
-      >
-        <BottomNavigation
-          value={bottomNav}
-          onChange={(e, newValue) => {
-            setBottomNav(newValue);
-            navigate(menuItems[newValue].path);
+      {/* BOTTOM NAV — render via Portal agar fixed tidak terpengaruh parent */}
+      {createPortal(
+        <Paper
+          elevation={8}
+          square
+          sx={{
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1200,
+            display: { xs: "block", sm: "none" },
+            pb: "env(safe-area-inset-bottom)",
           }}
-          showLabels
         >
-          {menuItems.slice(0, 4).map((item) => (
-            <BottomNavigationAction
-              key={item.label}
-              label={item.label}
-              icon={item.icon}
-            />
-          ))}
-        </BottomNavigation>
-      </Paper>
+          <BottomNavigation
+            value={bottomNav}
+            onChange={(_, newValue) => {
+              setBottomNav(newValue);
+              const target = menuItems.find((m) => m.key === newValue);
+              if (target) navigate(target.path);
+            }}
+            showLabels
+            sx={{ height: BN_HEIGHT }}
+          >
+            {menuItems.slice(0, 4).map((item) => (
+              <BottomNavigationAction
+                key={item.key}
+                value={item.key}
+                label={item.label}
+                icon={item.icon}
+              />
+            ))}
+          </BottomNavigation>
+        </Paper>,
+        document.body
+      )}
     </Box>
   );
 }
