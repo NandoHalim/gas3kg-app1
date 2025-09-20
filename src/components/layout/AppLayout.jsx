@@ -19,8 +19,6 @@ import {
   BottomNavigation,
   BottomNavigationAction,
   Paper,
-  Tooltip,
-  Stack,
   Button,
 } from "@mui/material";
 
@@ -33,24 +31,22 @@ import CampaignIcon from "@mui/icons-material/Campaign";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
-import LogoutIcon from "@mui/icons-material/Logout";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 
 import { useAuth } from "../../context/AuthContext.jsx";
 
 const drawerWidth = 220;
-const BN_HEIGHT = 64; // tinggi bottom nav
+const BN_HEIGHT = 64;
 
 export default function AppLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [bottomNav, setBottomNav] = useState("dashboard");
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, signOut } = useAuth();
+  const { role, signOut } = useAuth();
 
   const handleDrawerToggle = () => setMobileOpen((s) => !s);
 
-  // daftar menu
+  // daftar menu (filter pengaturan hanya admin)
   const menuItems = [
     { key: "dashboard", label: "Dashboard", icon: <HomeIcon />, path: "/" },
     { key: "transaksi", label: "Transaksi", icon: <SwapHorizIcon />, path: "/transaksi" },
@@ -59,18 +55,16 @@ export default function AppLayout({ children }) {
     { key: "pelanggan", label: "Pelanggan", icon: <PeopleIcon />, path: "/pelanggan" },
     { key: "broadcast", label: "Broadcast", icon: <CampaignIcon />, path: "/broadcast" },
     { key: "laporan", label: "Laporan", icon: <DescriptionIcon />, path: "/laporan" },
-    { key: "pengaturan", label: "Pengaturan", icon: <SettingsIcon />, path: "/pengaturan" },
+    ...(role === "admin"
+      ? [{ key: "pengaturan", label: "Pengaturan", icon: <SettingsIcon />, path: "/pengaturan" }]
+      : []),
   ];
 
-  // key aktif untuk bottom-nav (pakai startsWith biar tahan /route/sub)
+  // aktif key untuk bottom nav
   const activeKey = useMemo(() => {
     if (location.pathname.startsWith("/transaksi")) return "transaksi";
     if (location.pathname.startsWith("/stok")) return "stok";
     if (location.pathname.startsWith("/riwayat")) return "riwayat";
-    if (location.pathname.startsWith("/pelanggan")) return "pelanggan";
-    if (location.pathname.startsWith("/broadcast")) return "broadcast";
-    if (location.pathname.startsWith("/laporan")) return "laporan";
-    if (location.pathname.startsWith("/pengaturan")) return "pengaturan";
     return "dashboard";
   }, [location.pathname]);
 
@@ -78,22 +72,15 @@ export default function AppLayout({ children }) {
     setBottomNav(activeKey);
   }, [activeKey]);
 
-  const onLogout = async () => {
-    try {
-      await signOut();
-      navigate("/", { replace: true });
-    } catch (e) {
-      // optional: tampilkan toast jika ada
-      console.error("Logout gagal:", e?.message || e);
-    }
-  };
-
   const drawer = (
     <Box role="presentation">
-      <Toolbar>
+      <Toolbar sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="h6" noWrap>
           Gas 3KG Manager
         </Typography>
+        <Button color="inherit" size="small" onClick={signOut}>
+          Logout
+        </Button>
       </Toolbar>
       <Divider />
       <List>
@@ -118,7 +105,6 @@ export default function AppLayout({ children }) {
       sx={{
         display: "flex",
         minHeight: "100svh",
-        // beri ruang bawah untuk mobile agar konten tidak ketutup bottom-nav
         pb: { xs: `calc(${BN_HEIGHT}px + env(safe-area-inset-bottom))`, sm: 0 },
       }}
     >
@@ -126,59 +112,28 @@ export default function AppLayout({ children }) {
 
       {/* AppBar */}
       <AppBar position="fixed" sx={{ zIndex: 1201 }}>
-        <Toolbar sx={{ gap: 1 }}>
-          <IconButton
-            color="inherit"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 1, display: { sm: "none" } }}
-          >
-            <MenuIcon />
-          </IconButton>
-
-          <Typography variant="h6" noWrap sx={{ flex: 1 }}>
-            Gas 3KG Manager
-          </Typography>
-
-          {/* Kanan atas: info user + tombol Logout */}
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Stack
-              direction="row"
-              spacing={0.75}
-              alignItems="center"
-              sx={{ display: { xs: "none", sm: "flex" }, opacity: 0.9 }}
+        <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <IconButton
+              color="inherit"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ mr: 2, display: { sm: "none" } }}
             >
-              <AccountCircleIcon fontSize="small" />
-              <Typography variant="body2" noWrap maxWidth={220} title={user?.email || ""}>
-                {user?.email || ""}
-              </Typography>
-            </Stack>
-
-            {/* Desktop: tombol dengan label; Mobile: icon saja */}
-            <Box sx={{ display: { xs: "none", sm: "block" } }}>
-              <Button
-                color="inherit"
-                startIcon={<LogoutIcon />}
-                onClick={onLogout}
-                aria-label="Logout"
-              >
-                Logout
-              </Button>
-            </Box>
-            <Box sx={{ display: { xs: "block", sm: "none" } }}>
-              <Tooltip title="Logout">
-                <IconButton color="inherit" onClick={onLogout} aria-label="Logout">
-                  <LogoutIcon />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          </Stack>
+              <MenuIcon />
+            </IconButton>
+            <Typography variant="h6" noWrap>
+              Gas 3KG Manager
+            </Typography>
+          </Box>
+          <Button color="inherit" onClick={signOut}>
+            Logout
+          </Button>
         </Toolbar>
       </AppBar>
 
       {/* Drawer */}
       <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
-        {/* mobile drawer */}
         <Drawer
           variant="temporary"
           open={mobileOpen}
@@ -192,7 +147,6 @@ export default function AppLayout({ children }) {
           {drawer}
         </Drawer>
 
-        {/* desktop drawer */}
         <Drawer
           variant="permanent"
           open
@@ -215,12 +169,11 @@ export default function AppLayout({ children }) {
           width: { sm: `calc(100% - ${drawerWidth}px)` },
         }}
       >
-        <Toolbar /> {/* spacer untuk AppBar */}
-        {/* dukung dua cara: children langsung atau via <Outlet/> */}
+        <Toolbar />
         {children ?? <Outlet />}
       </Box>
 
-      {/* BOTTOM NAV — render via Portal agar fixed tidak terpengaruh parent */}
+      {/* Bottom Navigation (mobile) */}
       {createPortal(
         <Paper
           elevation={8}
