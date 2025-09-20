@@ -30,7 +30,9 @@ import CampaignIcon from "@mui/icons-material/Campaign";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import LogoutIcon from "@mui/icons-material/Logout";
 
+import { supabase } from "../../lib/supabase.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 const drawerWidth = 220;
@@ -41,13 +43,18 @@ export default function AppLayout({ children }) {
   const [bottomNav, setBottomNav] = useState("dashboard");
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
-  const role = user?.role || "user";
+  const { logout, user } = useAuth();
 
   const handleDrawerToggle = () => setMobileOpen((s) => !s);
 
-  // daftar menu dasar
-  const baseMenuItems = [
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    logout?.();
+    navigate("/");
+  };
+
+  // daftar menu
+  const menuItems = [
     { key: "dashboard", label: "Dashboard", icon: <HomeIcon />, path: "/" },
     { key: "transaksi", label: "Transaksi", icon: <SwapHorizIcon />, path: "/transaksi" },
     { key: "stok", label: "Stok", icon: <InventoryIcon />, path: "/stok" },
@@ -55,23 +62,13 @@ export default function AppLayout({ children }) {
     { key: "pelanggan", label: "Pelanggan", icon: <PeopleIcon />, path: "/pelanggan" },
     { key: "broadcast", label: "Broadcast", icon: <CampaignIcon />, path: "/broadcast" },
     { key: "laporan", label: "Laporan", icon: <DescriptionIcon />, path: "/laporan" },
+    // hanya admin yang bisa lihat pengaturan
+    ...(user?.role === "admin"
+      ? [{ key: "pengaturan", label: "Pengaturan", icon: <SettingsIcon />, path: "/pengaturan" }]
+      : []),
   ];
 
-  // tambahkan pengaturan hanya jika admin
-  const menuItems = useMemo(() => {
-    const items = [...baseMenuItems];
-    if (role === "admin") {
-      items.push({
-        key: "pengaturan",
-        label: "Pengaturan",
-        icon: <SettingsIcon />,
-        path: "/pengaturan",
-      });
-    }
-    return items;
-  }, [role]);
-
-  // key aktif untuk bottom-nav (pakai startsWith biar tahan /route/sub)
+  // key aktif untuk bottom-nav
   const activeKey = useMemo(() => {
     if (location.pathname.startsWith("/transaksi")) return "transaksi";
     if (location.pathname.startsWith("/stok")) return "stok";
@@ -94,11 +91,7 @@ export default function AppLayout({ children }) {
       <List>
         {menuItems.map((item) => (
           <ListItem key={item.key} disablePadding>
-            <ListItemButton
-              component={NavLink}
-              to={item.path}
-              onClick={() => setMobileOpen(false)}
-            >
+            <ListItemButton component={NavLink} to={item.path} onClick={() => setMobileOpen(false)}>
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.label} />
             </ListItemButton>
@@ -129,15 +122,17 @@ export default function AppLayout({ children }) {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap>
+          <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
             Gas 3KG Manager
           </Typography>
+          <IconButton color="inherit" onClick={handleLogout}>
+            <LogoutIcon />
+          </IconButton>
         </Toolbar>
       </AppBar>
 
       {/* Drawer */}
       <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
-        {/* mobile drawer */}
         <Drawer
           variant="temporary"
           open={mobileOpen}
@@ -151,7 +146,6 @@ export default function AppLayout({ children }) {
           {drawer}
         </Drawer>
 
-        {/* desktop drawer */}
         <Drawer
           variant="permanent"
           open
@@ -178,7 +172,7 @@ export default function AppLayout({ children }) {
         {children ?? <Outlet />}
       </Box>
 
-      {/* Bottom Nav */}
+      {/* Bottom Navigation */}
       {createPortal(
         <Paper
           elevation={8}
