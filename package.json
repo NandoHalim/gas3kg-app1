@@ -13,6 +13,7 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.2",
     "@mui/material": "^7.3.2",
+    "@mui/x-data-grid": "7.29.9",
     "@supabase/supabase-js": "^2.45.4",
     "framer-motion": "^12.23.12",
     "jspdf": "^2.5.1",
