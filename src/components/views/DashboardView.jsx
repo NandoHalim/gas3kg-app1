@@ -72,9 +72,9 @@ class DashboardErrorBoundary extends React.Component {
 /* ====== Small UI parts ====== */
 function StatTile({ title, value, subtitle, color = "primary", icon }) {
   return (
-    <Card>
-      <CardContent>
-        <Stack direction="row" spacing={2} alignItems="center">
+    <Card sx={{ height: "100%" }}>
+      <CardContent sx={{ py: 1.5 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
           <Box
             sx={{
               width: 42,
@@ -84,6 +84,7 @@ function StatTile({ title, value, subtitle, color = "primary", icon }) {
               placeItems: "center",
               bgcolor: `${color}.50`,
               color: `${color}.main`,
+              flexShrink: 0,
             }}
           >
             {icon}
@@ -123,49 +124,54 @@ function StockProgress({ isi, kosong }) {
         }}
         color="success"
       />
-      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
-        <Chip
-          size="small"
-          label={`Isi: ${pctIsi}%`}
-          color="success"
-          variant="outlined"
-        />
-        <Chip
-          size="small"
-          label={`Kosong: ${pctKosong}%`}
-          color="error"
-          variant="outlined"
-        />
+      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+        <Chip size="small" label={`Isi: ${pctIsi}%`} color="success" variant="outlined" />
+        <Chip size="small" label={`Kosong: ${pctKosong}%`} color="error" variant="outlined" />
       </Stack>
     </Stack>
   );
 }
 
-function MiniBarChart({ data }) {
-  const max = useMemo(() => Math.max(1, ...data.map((d) => d.qty)), [data]);
+/* Tabel penjualan 7 hari terakhir (lebih informatif) */
+function SevenDayTable({ data = [] }) {
   return (
-    <Box sx={{ display: "flex", alignItems: "end", gap: 1, height: 140 }}>
-      {data.map((d) => {
-        const h = Math.max(8, Math.round((d.qty / max) * 120));
-        return (
-          <Box
-            key={d.date}
-            title={`${d.date} • ${d.qty} tabung`}
-            sx={{
-              width: 18,
-              height: h,
-              borderRadius: 0.75,
-              bgcolor: "primary.main",
-              opacity: 0.9,
-            }}
-          />
-        );
-      })}
-    </Box>
+    <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Tanggal</TableCell>
+            <TableCell align="right">Qty</TableCell>
+            <TableCell align="right">Total</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {data.map((d, i) => {
+            const tanggal = d.date || (d.created_at || "").slice(0, 10) || "-";
+            const qty = Number(d.qty || 0);
+            // Jika API mengirim 'total' harian, tampilkan; kalau tidak, tampilkan '—'
+            const total = typeof d.total === "number" ? fmtIDR(d.total) : "—";
+            return (
+              <TableRow key={`${tanggal}-${i}`}>
+                <TableCell>{tanggal}</TableCell>
+                <TableCell align="right">{qty}</TableCell>
+                <TableCell align="right">{total}</TableCell>
+              </TableRow>
+            );
+          })}
+          {!data.length && (
+            <TableRow>
+              <TableCell colSpan={3} sx={{ color: "text.secondary" }}>
+                Belum ada data
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 
-/* ====== Main View ====== */
+/* ====== Main View (Content) ====== */
 function DashboardViewContent({ stocks = {} }) {
   const isi = Number(stocks.ISI || 0);
   const kosong = Number(stocks.KOSONG || 0);
@@ -188,7 +194,10 @@ function DashboardViewContent({ stocks = {} }) {
         (r) => String(r.status || "").toUpperCase() !== "DIBATALKAN"
       );
 
+      // Total terjual
       const qty = notVoid.reduce((a, b) => a + Number(b.qty || 0), 0);
+
+      // Omzet & Laba hanya transaksi dibayar
       const paid = notVoid.filter(
         (r) =>
           String(r.method || "").toUpperCase() === "TUNAI" ||
@@ -205,7 +214,7 @@ function DashboardViewContent({ stocks = {} }) {
         })) || { qty: 0, money: 0 };
 
       const totalPiutang = await DataService.getTotalReceivables();
-      const s7 = await DataService.getSevenDaySales();
+      const s7 = await DataService.getSevenDaySales(); // diasumsikan: [{ date, qty, (optional) total }]
       const r = await DataService.getRecentSales(5);
 
       setSum({ qty, omzet, laba, hpp });
@@ -258,8 +267,8 @@ function DashboardViewContent({ stocks = {} }) {
   }, []);
 
   return (
-    <Stack spacing={2}>
-      {/* Header */}
+    <Stack spacing={1.5}>
+      {/* Header (lebih rapat) */}
       <Stack
         direction="row"
         alignItems="baseline"
@@ -268,7 +277,7 @@ function DashboardViewContent({ stocks = {} }) {
         sx={{ gap: 1 }}
       >
         <Box>
-          <Typography variant="h5" fontWeight={800}>
+          <Typography variant="h5" fontWeight={800} sx={{ mb: 0.25 }}>
             Dashboard
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -289,9 +298,9 @@ function DashboardViewContent({ stocks = {} }) {
         </Alert>
       )}
 
-      {/* Ringkasan Stok & Penjualan */}
-      <Grid container spacing={2}>
-        <Grid item xs={12} sm={6} md={3}>
+      {/* Ringkasan Stok & Penjualan (kotak sama tinggi) */}
+      <Grid container spacing={1.5} alignItems="stretch">
+        <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Stok Isi"
             value={loading ? <Skeleton width={60} /> : isi}
@@ -300,7 +309,7 @@ function DashboardViewContent({ stocks = {} }) {
             icon={<Inventory2Icon />}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Stok Kosong"
             value={loading ? <Skeleton width={60} /> : kosong}
@@ -309,7 +318,7 @@ function DashboardViewContent({ stocks = {} }) {
             icon={<Inventory2Icon />}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Penjualan Hari Ini"
             value={loading ? <Skeleton width={60} /> : today.qty}
@@ -318,7 +327,7 @@ function DashboardViewContent({ stocks = {} }) {
             icon={<ShoppingCartIcon />}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Piutang"
             value={loading ? <Skeleton width={100} /> : fmtIDR(piutang)}
@@ -331,22 +340,18 @@ function DashboardViewContent({ stocks = {} }) {
 
       {/* Kondisi Stok */}
       <Card>
-        <CardHeader title="Kondisi Stok (Isi vs Kosong)" />
-        <CardContent>
-          {loading ? (
-            <Skeleton height={24} />
-          ) : (
-            <StockProgress isi={isi} kosong={kosong} />
-          )}
+        <CardHeader sx={{ py: 1 }} title="Kondisi Stok (Isi vs Kosong)" />
+        <CardContent sx={{ pt: 0.5 }}>
+          {loading ? <Skeleton height={24} /> : <StockProgress isi={isi} kosong={kosong} />}
         </CardContent>
       </Card>
 
       {/* Ringkasan Keuangan + Total Terjual */}
-      <Grid container spacing={2}>
+      <Grid container spacing={1.5}>
         <Grid item xs={12} md={6} lg={5}>
-          <Card>
-            <CardHeader title="Ringkasan Keuangan" />
-            <CardContent>
+          <Card sx={{ height: "100%" }}>
+            <CardHeader sx={{ py: 1 }} title="Ringkasan Keuangan" />
+            <CardContent sx={{ pt: 0.5 }}>
               {loading ? (
                 <Stack spacing={1}>
                   <Skeleton height={24} />
@@ -354,13 +359,16 @@ function DashboardViewContent({ stocks = {} }) {
                   <Skeleton height={24} />
                 </Stack>
               ) : (
-                <Stack spacing={1}>
+                <Stack spacing={0.75}>
                   <RowKV k="Omzet (dibayar)" v={fmtIDR(sum.omzet)} />
                   <RowKV k="HPP" v={`− ${fmtIDR(sum.hpp)}`} />
                   <RowKV
                     k="Laba"
                     v={fmtIDR(sum.laba)}
-                    vSx={{ color: sum.laba >= 0 ? "success.main" : "error.main", fontWeight: 700 }}
+                    vSx={{
+                      color: sum.laba >= 0 ? "success.main" : "error.main",
+                      fontWeight: 700,
+                    }}
                   />
                   <RowKV
                     k="Margin"
@@ -374,9 +382,9 @@ function DashboardViewContent({ stocks = {} }) {
         </Grid>
 
         <Grid item xs={12} md={6} lg={7}>
-          <Card>
-            <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center">
+          <Card sx={{ height: "100%" }}>
+            <CardContent sx={{ py: 1.5 }}>
+              <Stack direction="row" spacing={1.5} alignItems="center">
                 <Box
                   sx={{
                     width: 42,
@@ -407,31 +415,21 @@ function DashboardViewContent({ stocks = {} }) {
         </Grid>
       </Grid>
 
-      {/* Grafik & Transaksi Terbaru */}
-      <Grid container spacing={2}>
+      {/* Penjualan 7 Hari Terakhir (tabel) & Transaksi Terbaru */}
+      <Grid container spacing={1.5}>
         <Grid item xs={12} md={5}>
           <Card>
-            <CardHeader title="Penjualan 7 Hari Terakhir" />
-            <CardContent>
-              {loading ? (
-                <Stack spacing={1}>
-                  <Skeleton height={120} />
-                </Stack>
-              ) : series7.length ? (
-                <MiniBarChart data={series7} />
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  Belum ada data penjualan
-                </Typography>
-              )}
+            <CardHeader sx={{ py: 1 }} title="Penjualan 7 Hari Terakhir" />
+            <CardContent sx={{ pt: 0.5 }}>
+              {loading ? <Skeleton height={120} /> : <SevenDayTable data={series7} />}
             </CardContent>
           </Card>
         </Grid>
 
         <Grid item xs={12} md={7}>
           <Card>
-            <CardHeader title="Transaksi Terbaru" />
-            <CardContent>
+            <CardHeader sx={{ py: 1 }} title="Transaksi Terbaru" />
+            <CardContent sx={{ pt: 0.5 }}>
               {loading ? (
                 <Stack spacing={1}>
                   <Skeleton height={36} />
@@ -454,7 +452,9 @@ function DashboardViewContent({ stocks = {} }) {
                       {recent.map((x, idx) => (
                         <TableRow key={x._rowId || idx} hover>
                           <TableCell sx={{ whiteSpace: "nowrap" }}>
-                            {x.created_at ? new Date(x.created_at).toLocaleDateString("id-ID") : "-"}
+                            {x.created_at
+                              ? new Date(x.created_at).toLocaleDateString("id-ID")
+                              : "-"}
                           </TableCell>
                           <TableCell>{x.customer || "PUBLIC"}</TableCell>
                           <TableCell align="right">{x.qty ?? 0}</TableCell>
