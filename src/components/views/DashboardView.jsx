@@ -1,44 +1,135 @@
 // src/views/DashboardView.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import Card from "../ui/Card.jsx";
-import StatCard from "../ui/StatCard.jsx";
 import { COLORS, HPP } from "../../utils/constants.js";
 import { fmtIDR, todayStr } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
 import { supabase } from "../../lib/supabase.js";
 
+// MUI
+import {
+  Box,
+  Grid,
+  Stack,
+  Typography,
+  Card,
+  CardHeader,
+  CardContent,
+  Chip,
+  LinearProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Alert,
+  Skeleton,
+} from "@mui/material";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import Inventory2Icon from "@mui/icons-material/Inventory2";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+
 const LOW_STOCK_THRESHOLD = 5;
+
+/* ====== Small UI parts ====== */
+function StatTile({ title, value, subtitle, color = "primary", icon }) {
+  return (
+    <Card>
+      <CardContent>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <Box
+            sx={{
+              width: 42,
+              height: 42,
+              borderRadius: 2,
+              display: "grid",
+              placeItems: "center",
+              bgcolor: `${color}.50`,
+              color: `${color}.main`,
+            }}
+          >
+            {icon}
+          </Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="body2" color="text.secondary">
+              {title}
+            </Typography>
+            <Typography variant="h5" fontWeight={800} noWrap>
+              {value}
+            </Typography>
+            {subtitle && (
+              <Typography variant="caption" color="text.secondary">
+                {subtitle}
+              </Typography>
+            )}
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
 
 function StockProgress({ isi, kosong }) {
   const total = Math.max(isi + kosong, 1);
   const pctKosong = Math.round((kosong / total) * 100);
   const pctIsi = 100 - pctKosong;
   return (
-    <div style={{ paddingTop: 6 }}>
-      <div style={{ height: 10, width: "100%", background: "#e5e7eb", borderRadius: 999, overflow: "hidden" }}>
-        <div style={{ width: `${pctIsi}%`, height: "100%", background: "#16a34a" }} />
-      </div>
-      <div style={{ display: "flex", gap: 8, fontSize: 12, marginTop: 6, color: "#64748b" }}>
-        <span>Isi: <b style={{ color: "#14532d" }}>{pctIsi}%</b></span>
-        <span>•</span>
-        <span>Kosong: <b style={{ color: "#7f1d1d" }}>{pctKosong}%</b></span>
-      </div>
-    </div>
+    <Stack spacing={1}>
+      <LinearProgress
+        variant="determinate"
+        value={pctIsi}
+        sx={{
+          height: 10,
+          borderRadius: 5,
+          "& .MuiLinearProgress-bar": { borderRadius: 5 },
+        }}
+        color="success"
+      />
+      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+        <Chip
+          size="small"
+          label={`Isi: ${pctIsi}%`}
+          color="success"
+          variant="outlined"
+        />
+        <Chip
+          size="small"
+          label={`Kosong: ${pctKosong}%`}
+          color="error"
+          variant="outlined"
+        />
+      </Stack>
+    </Stack>
   );
 }
 
 function MiniBarChart({ data }) {
   const max = useMemo(() => Math.max(1, ...data.map((d) => d.qty)), [data]);
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 120 }}>
+    <Box sx={{ display: "flex", alignItems: "end", gap: 1, height: 140 }}>
       {data.map((d) => {
-        const h = Math.max(6, Math.round((d.qty / max) * 110));
-        return <div key={d.date} title={`${d.date} • ${d.qty} tabung`} style={{ width: 20, height: h, background: "#1d4ed8", borderRadius: 6 }} />;
+        const h = Math.max(8, Math.round((d.qty / max) * 120));
+        return (
+          <Box
+            key={d.date}
+            title={`${d.date} • ${d.qty} tabung`}
+            sx={{
+              width: 18,
+              height: h,
+              borderRadius: 0.75,
+              bgcolor: "primary.main",
+              opacity: 0.9,
+            }}
+          />
+        );
       })}
-    </div>
+    </Box>
   );
 }
 
+/* ====== Main View ====== */
 export default function DashboardView({ stocks = {} }) {
   const isi = Number(stocks.ISI || 0);
   const kosong = Number(stocks.KOSONG || 0);
@@ -50,13 +141,16 @@ export default function DashboardView({ stocks = {} }) {
   const [recent, setRecent] = useState([]);
   const [series7, setSeries7] = useState([]);
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const fetchDashboard = async () => {
     try {
+      setLoading(true);
+
       // Ambil sampai 500 baris (ringan)
       const rows = await DataService.loadSales(500);
 
-      // ⬇️ EXCLUDE transaksi VOID
+      // EXCLUDE transaksi VOID
       const notVoid = (rows || []).filter(
         (r) => String(r.status || "").toUpperCase() !== "DIBATALKAN"
       );
@@ -64,14 +158,14 @@ export default function DashboardView({ stocks = {} }) {
       // Total terjual = semua yang tidak void
       const qty = notVoid.reduce((a, b) => a + Number(b.qty || 0), 0);
 
-      // Omzet & Laba hanya yang sudah dibayar (tunai atau hutang yang sudah LUNAS), dan juga tidak void
+      // Omzet & Laba: hanya yang dibayar (tunai atau status LUNAS), juga tidak void
       const paid = notVoid.filter(
         (r) =>
           String(r.method).toUpperCase() === "TUNAI" ||
           String(r.status || "").toUpperCase() === "LUNAS"
       );
       const omzet = paid.reduce((a, b) => a + Number(b.total || 0), 0);
-      const hpp = paid.reduce((a, b) => a + (Number(b.qty || 0) * HPP), 0);
+      const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * HPP, 0);
       const laba = omzet - hpp;
 
       const todaySum =
@@ -92,6 +186,8 @@ export default function DashboardView({ stocks = {} }) {
       setErr("");
     } catch (e) {
       setErr(e.message || "Gagal memuat dashboard");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -101,108 +197,257 @@ export default function DashboardView({ stocks = {} }) {
 
     const ch = supabase
       .channel("dashboard-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, () => {
-        if (alive) fetchDashboard();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "stocks" }, () => {
-        if (alive) fetchDashboard();
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sales" },
+        () => alive && fetchDashboard()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "stocks" },
+        () => alive && fetchDashboard()
+      )
       .subscribe();
 
     return () => {
-      try { supabase.removeChannel(ch); } catch {}
+      try {
+        supabase.removeChannel(ch);
+      } catch {}
       alive = false;
     };
   }, []);
 
   return (
-    <div className="grid" style={{ gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-        <div>
-          <h2 style={{ margin: 0 }}>Dashboard</h2>
-          <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>Ringkasan stok & penjualan.</p>
-        </div>
-        <div style={{ padding: "6px 10px", borderRadius: 999, fontSize: 12, background: "#f1f5f9" }}>
-          Total Tabung: <b>{total}</b>
-        </div>
-      </div>
+    <Stack spacing={2}>
+      {/* Header */}
+      <Stack
+        direction="row"
+        alignItems="baseline"
+        justifyContent="space-between"
+        flexWrap="wrap"
+        sx={{ gap: 1 }}
+      >
+        <Box>
+          <Typography variant="h5" fontWeight={800}>
+            Dashboard
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Ringkasan stok & penjualan.
+          </Typography>
+        </Box>
+        <Chip
+          label={`Total Tabung: ${total}`}
+          variant="outlined"
+          color="default"
+          sx={{ fontWeight: 700 }}
+        />
+      </Stack>
 
       {err && (
-        <div style={{ padding: 12, borderRadius: 8, border: "1px solid #fecaca", background: "#fee2e2", color: "#b91c1c" }}>
-          ⚠️ {err}
-        </div>
+        <Alert severity="error" variant="outlined">
+          {err}
+        </Alert>
       )}
 
-      {/* Bagian 1: Ringkasan Stok & Penjualan */}
-      <section className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 }}>
-        <StatCard title="Stok Isi" value={isi} subtitle={isi <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Siap jual"} color={COLORS.success} icon="🟢" />
-        <StatCard title="Stok Kosong" value={kosong} subtitle={kosong <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Tabung kembali"} color={COLORS.danger} icon="⚪" />
-        <StatCard title="Penjualan Hari Ini" value={today.qty} subtitle={fmtIDR(today.money)} color={COLORS.info} icon="🛒" />
-        <StatCard title="Piutang" value={fmtIDR(piutang)} subtitle="Belum lunas" color={COLORS.warning} icon="📄" />
-      </section>
+      {/* Ringkasan Stok & Penjualan */}
+      <Grid container spacing={2}>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatTile
+            title="Stok Isi"
+            value={loading ? <Skeleton width={60} /> : isi}
+            subtitle={isi <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Siap jual"}
+            color="success"
+            icon={<Inventory2Icon />}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatTile
+            title="Stok Kosong"
+            value={loading ? <Skeleton width={60} /> : kosong}
+            subtitle={kosong <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Tabung kembali"}
+            color="error"
+            icon={<Inventory2Icon />}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatTile
+            title="Penjualan Hari Ini"
+            value={loading ? <Skeleton width={60} /> : today.qty}
+            subtitle={loading ? <Skeleton width={100} /> : fmtIDR(today.money)}
+            color="info"
+            icon={<ShoppingCartIcon />}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatTile
+            title="Piutang"
+            value={loading ? <Skeleton width={100} /> : fmtIDR(piutang)}
+            subtitle="Belum lunas"
+            color="warning"
+            icon={<ReceiptLongIcon />}
+          />
+        </Grid>
+      </Grid>
 
-      <Card title="Kondisi Stok (Isi vs Kosong)">
-        <StockProgress isi={isi} kosong={kosong} />
+      {/* Kondisi Stok */}
+      <Card>
+        <CardHeader title="Kondisi Stok (Isi vs Kosong)" />
+        <CardContent>
+          {loading ? (
+            <Skeleton height={24} />
+          ) : (
+            <StockProgress isi={isi} kosong={kosong} />
+          )}
+        </CardContent>
       </Card>
 
-      {/* Bagian 2: Ringkasan Keuangan */}
-      <section className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 12 }}>
-        <Card title="Ringkasan Keuangan">
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>Omzet (dibayar)</span>
-              <b>{fmtIDR(sum.omzet)}</b>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>HPP</span>
-              <b>− {fmtIDR(sum.omzet - sum.laba)}</b>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span>Laba</span>
-              <b style={{ color: COLORS.success }}>{fmtIDR(sum.laba)}</b>
-            </div>
-          </div>
-        </Card>
-        <StatCard title="Total Terjual (riwayat)" value={sum.qty} subtitle="Akumulasi data" color={COLORS.info} icon="🧮" />
-      </section>
+      {/* Ringkasan Keuangan + Total Terjual */}
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={6} lg={5}>
+          <Card>
+            <CardHeader title="Ringkasan Keuangan" />
+            <CardContent>
+              {loading ? (
+                <Stack spacing={1}>
+                  <Skeleton height={24} />
+                  <Skeleton height={24} />
+                  <Skeleton height={24} />
+                </Stack>
+              ) : (
+                <Stack spacing={1}>
+                  <RowKV k="Omzet (dibayar)" v={fmtIDR(sum.omzet)} />
+                  <RowKV k="HPP" v={`− ${fmtIDR(sum.omzet - sum.laba)}`} />
+                  <RowKV
+                    k="Laba"
+                    v={fmtIDR(sum.laba)}
+                    vSx={{ color: "success.main", fontWeight: 700 }}
+                  />
+                </Stack>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
 
-      {/* Bagian 3: Grafik & Transaksi Terbaru */}
-      <section className="grid" style={{ gridTemplateColumns: "2fr 3fr", gap: 12 }}>
-        <Card title="Penjualan 7 Hari Terakhir">
-          {series7.length ? <MiniBarChart data={series7} /> : <div style={{ padding: 8, color: "#64748b" }}>Belum ada data penjualan</div>}
-        </Card>
-        <Card title="Transaksi Terbaru">
-          <div style={{ overflow: "auto" }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Tanggal</th>
-                  <th>Pelanggan</th>
-                  <th>Qty</th>
-                  <th>Metode</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((x) => (
-                  <tr key={x.id}>
-                    <td>{(x.created_at || "").slice(0, 10)}</td>
-                    <td>{x.customer || "PUBLIC"}</td>
-                    <td>{x.qty}</td>
-                    <td>{x.method}</td>
-                    <td>{fmtIDR((Number(x.qty) || 0) * (Number(x.price) || 0))}</td>
-                  </tr>
-                ))}
-                {!recent.length && (
-                  <tr>
-                    <td colSpan={5} style={{ color: "#64748b" }}>Belum ada transaksi</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </section>
-    </div>
+        <Grid item xs={12} md={6} lg={7}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Box
+                  sx={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 2,
+                    display: "grid",
+                    placeItems: "center",
+                    bgcolor: "info.50",
+                    color: "info.main",
+                  }}
+                >
+                  <TrendingUpIcon />
+                </Box>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Total Terjual (riwayat)
+                  </Typography>
+                  <Typography variant="h5" fontWeight={800}>
+                    {loading ? <Skeleton width={80} /> : sum.qty}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Akumulasi data
+                  </Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Grafik & Transaksi Terbaru */}
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={5}>
+          <Card>
+            <CardHeader title="Penjualan 7 Hari Terakhir" />
+            <CardContent>
+              {loading ? (
+                <Stack spacing={1}>
+                  <Skeleton height={120} />
+                </Stack>
+              ) : series7.length ? (
+                <MiniBarChart data={series7} />
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Belum ada data penjualan
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={7}>
+          <Card>
+            <CardHeader title="Transaksi Terbaru" />
+            <CardContent>
+              {loading ? (
+                <Stack spacing={1}>
+                  <Skeleton height={36} />
+                  <Skeleton height={36} />
+                  <Skeleton height={36} />
+                </Stack>
+              ) : (
+                <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Tanggal</TableCell>
+                        <TableCell>Pelanggan</TableCell>
+                        <TableCell align="right">Qty</TableCell>
+                        <TableCell>Metode</TableCell>
+                        <TableCell align="right">Total</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {recent.map((x) => (
+                        <TableRow key={x.id} hover>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>
+                            {(x.created_at || "").slice(0, 10)}
+                          </TableCell>
+                          <TableCell>{x.customer || "PUBLIC"}</TableCell>
+                          <TableCell align="right">{x.qty}</TableCell>
+                          <TableCell>{x.method}</TableCell>
+                          <TableCell align="right">
+                            {fmtIDR((Number(x.qty) || 0) * (Number(x.price) || 0))}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {!recent.length && (
+                        <TableRow>
+                          <TableCell colSpan={5} sx={{ color: "text.secondary" }}>
+                            Belum ada transaksi
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Stack>
+  );
+}
+
+/* Helpers */
+function RowKV({ k, v, vSx }) {
+  return (
+    <Stack direction="row" justifyContent="space-between" alignItems="center">
+      <Typography variant="body2" color="text.secondary">
+        {k}
+      </Typography>
+      <Typography variant="body2" sx={vSx}>
+        {v}
+      </Typography>
+    </Stack>
   );
 }
