@@ -1,41 +1,10 @@
-// src/components/views/PengaturanView.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box,
-  Stack,
-  Typography,
-  Card,
-  CardHeader,
-  CardContent,
-  Grid,
-  TextField,
-  Button,
-  Divider,
-  Chip,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  Paper,
-  TableContainer,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-  IconButton,
-  Tooltip,
-  Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Skeleton,
-  Checkbox,
-  ListItemText,
+  Box, Stack, Typography, Card, CardHeader, CardContent, Grid, TextField, Button,
+  Chip, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer,
+  MenuItem, Select, FormControl, InputLabel, IconButton, Tooltip, Alert, Dialog,
+  DialogTitle, DialogContent, DialogActions, Skeleton, Checkbox, ListItemText
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
-
 import DeleteIcon from "@mui/icons-material/Delete";
 import SaveIcon from "@mui/icons-material/Save";
 import UploadIcon from "@mui/icons-material/UploadFile";
@@ -44,6 +13,7 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import SettingsSuggestIcon from "@mui/icons-material/SettingsSuggest";
 import ShieldIcon from "@mui/icons-material/Shield";
+import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -56,21 +26,17 @@ export default function PengaturanView() {
   const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
-  const role = user?.role || "user";
+  const role = (user?.role || "user").toLowerCase();
 
-  // 🚨 Paksa redirect jika bukan admin
+  // 🚧 Paksa redirect bila bukan admin
   useEffect(() => {
     if (role !== "admin") {
-      // opsional info singkat
       toast?.show?.({ type: "warning", message: "Akses khusus admin." });
       navigate("/", { replace: true });
     }
   }, [role, navigate, toast]);
 
-  if (role !== "admin") {
-    // render kosong sebentar agar tidak flicker sebelum redirect
-    return null;
-  }
+  if (role !== "admin") return null;
 
   return <SettingsAdmin />;
 }
@@ -90,7 +56,6 @@ function SettingsAdmin() {
 
   // users
   const [users, setUsers] = useState([]);
-  the
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState("user");
   const [busy, setBusy] = useState(false);
@@ -335,7 +300,7 @@ function SettingsAdmin() {
         </CardContent>
       </Card>
 
-      {/* 4 — Manajemen User (sederhana / FE placeholder) */}
+      {/* 4 — Manajemen User */}
       <Card>
         <CardHeader
           title="Pengguna & Hak Akses"
@@ -480,7 +445,7 @@ function SettingsAdmin() {
         <CardHeader title="Hard Reset (Hapus Semua Data)" />
         <CardContent>
           <Alert severity="warning" sx={{ mb: 2 }}>
-            Tindakan ini akan menghapus seluruh data di database (stok, log, penjualan, pelanggan). 
+            Tindakan ini akan menghapus seluruh data di database (stok, log, penjualan, pelanggan).
             Gunakan hanya bila Anda benar-benar yakin.
           </Alert>
           <Button
