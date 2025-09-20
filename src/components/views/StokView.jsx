@@ -1,8 +1,11 @@
-import React, { useState } from "react";
+// src/components/views/StokView.jsx
+import React, { useEffect, useState } from "react";
 import { DataService } from "../../services/DataService.js";
-import { todayStr } from "../../utils/helpers.js";
 import { useToast } from "../../context/ToastContext.jsx";
+import { COLORS, MIN_DATE } from "../../utils/constants.js";
+import { todayStr, maxAllowedDate } from "../../utils/helpers.js";
 
+// 🔵 MUI
 import {
   Box,
   Stack,
@@ -14,178 +17,409 @@ import {
   Button,
   Alert,
   Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Tooltip,
+  Chip,
 } from "@mui/material";
 
-export default function StokView({ stocks = {}, onSaved }) {
+export default function StokView({ stocks = {}, onSaved, onCancel }) {
   const toast = useToast();
+  const [snap, setSnap] = useState({
+    ISI: Number(stocks.ISI || 0),
+    KOSONG: Number(stocks.KOSONG || 0),
+  });
 
-  // Form state
-  const [qtyIsi, setQtyIsi] = useState(1);
-  const [dateIsi, setDateIsi] = useState(todayStr());
-  const [noteIsi, setNoteIsi] = useState("isi dari agen (tukar kosong)");
+  // sinkron dengan props
+  useEffect(() => {
+    setSnap({ ISI: Number(stocks.ISI || 0), KOSONG: Number(stocks.KOSONG || 0) });
+  }, [stocks]);
 
-  const [qtyKosong, setQtyKosong] = useState(1);
-  const [dateKosong, setDateKosong] = useState(todayStr());
-  const [noteKosong, setNoteKosong] = useState("beli tabung");
+  return (
+    <Stack spacing={2}>
+      {/* Header */}
+      <Stack direction="row" spacing={2} alignItems="center">
+        <Button variant="outlined" onClick={onCancel}>
+          ← Kembali
+        </Button>
+        <Typography variant="h5" fontWeight={700}>
+          Kelola Stok
+        </Typography>
 
+        {/* Snapshot stok langsung */}
+        <Stack direction="row" spacing={1} sx={{ ml: "auto" }}>
+          <Tooltip title="Stok ISI">
+            <Chip
+              label={`ISI: ${snap.ISI}`}
+              color="success"
+              variant="outlined"
+              sx={{ fontWeight: 700 }}
+            />
+          </Tooltip>
+          <Tooltip title="Stok KOSONG">
+            <Chip
+              label={`KOSONG: ${snap.KOSONG}`}
+              color="primary"
+              variant="outlined"
+              sx={{ fontWeight: 700 }}
+            />
+          </Tooltip>
+        </Stack>
+      </Stack>
+
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={4}>
+          <TambahKosong onSaved={(s) => { setSnap(s); onSaved?.(s); }} />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <RestokIsi onSaved={(s) => { setSnap(s); onSaved?.(s); }} />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <PenyesuaianStok onSaved={(s) => { setSnap(s); onSaved?.(s); }} />
+        </Grid>
+      </Grid>
+    </Stack>
+  );
+}
+
+/* ----------- Tambah Stok KOSONG ----------- */
+function TambahKosong({ onSaved }) {
+  const toast = useToast();
+  const [form, setForm] = useState({ qty: "", date: todayStr(), note: "" });
+  const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-  const [saving, setSaving] = useState(false);
 
-  const stokISI = Number(stocks?.ISI || 0);
-  const stokKOSONG = Number(stocks?.KOSONG || 0);
-
-  const saveIsi = async () => {
-    setErr("");
-    try {
-      setSaving(true);
-      const snap = await DataService.addIsi({
-        qty: Number(qtyIsi),
-        date: dateIsi,
-        note: noteIsi,
-      });
-      toast?.show?.({ type: "success", message: "Stok ISI berhasil ditambah" });
-      onSaved?.(snap);
-    } catch (e) {
-      setErr(e.message || "Gagal tambah stok ISI");
-      toast?.show?.({ type: "error", message: e.message || "Gagal tambah stok ISI" });
-    } finally {
-      setSaving(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    const qtyNum = Number(form.qty) || 0;
+    if (qtyNum <= 0) {
+      setErr("Jumlah harus > 0");
+      return;
     }
-  };
-
-  const saveKosong = async () => {
-    setErr("");
     try {
-      setSaving(true);
+      setErr("");
+      setLoading(true);
       const snap = await DataService.addKosong({
-        qty: Number(qtyKosong),
-        date: dateKosong,
-        note: noteKosong,
+        qty: qtyNum,
+        date: form.date,
+        note: form.note,
       });
-      toast?.show?.({ type: "success", message: "Stok KOSONG berhasil ditambah" });
+      toast?.show?.({ type: "success", message: `Stok KOSONG +${qtyNum}` });
+      setForm({ qty: "", date: todayStr(), note: "" });
       onSaved?.(snap);
-    } catch (e) {
-      setErr(e.message || "Gagal tambah stok KOSONG");
-      toast?.show?.({ type: "error", message: e.message || "Gagal tambah stok KOSONG" });
+    } catch (e2) {
+      const msg = e2.message || "Gagal tambah KOSONG";
+      setErr(msg);
+      toast?.show?.({ type: "error", message: msg });
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   };
 
   return (
-    <Stack spacing={2}>
-      <Typography variant="h5" fontWeight={700}>
-        Stok
-      </Typography>
+    <Card>
+      <CardHeader title="Tambah Stok Kosong" />
+      <CardContent>
+        {err && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
+            {err}
+          </Alert>
+        )}
+        <Box component="form" onSubmit={submit}>
+          <Stack spacing={2}>
+            <TextField
+              label="Jumlah"
+              type="number"
+              inputProps={{ min: 1 }}
+              value={form.qty}
+              onChange={(e) => setForm({ ...form, qty: e.target.value })}
+              disabled={loading}
+              placeholder="contoh: 10"
+            />
 
-      {err && (
-        <Alert severity="error" onClose={() => setErr("")}>
-          {err}
-        </Alert>
-      )}
+            <TextField
+              label="Tanggal"
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+              disabled={loading}
+              InputLabelProps={{ shrink: true }}
+            />
 
-      <Grid container spacing={2}>
-        {/* Tambah ISI */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardHeader title="Tambah Stok ISI (tukar dari KOSONG)" />
-            <CardContent>
-              <Stack spacing={2}>
-                <Stack direction="row" spacing={2}>
-                  <TextField
-                    label="Qty"
-                    type="number"
-                    value={qtyIsi}
-                    onChange={(e) => setQtyIsi(Math.max(0, parseInt(e.target.value || 0, 10)))}
-                    inputProps={{ min: 1 }}
-                    sx={{ width: 140 }}
-                  />
-                  <TextField
-                    label="Tanggal"
-                    type="date"
-                    value={dateIsi}
-                    onChange={(e) => setDateIsi(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                    sx={{ width: 220 }}
-                  />
-                </Stack>
+            <TextField
+              label="Catatan (opsional)"
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              disabled={loading}
+              placeholder="mis: titip pelanggan"
+              multiline
+              minRows={2}
+            />
 
-                <TextField
-                  label="Catatan"
-                  value={noteIsi}
-                  onChange={(e) => setNoteIsi(e.target.value)}
-                  placeholder="Keterangan (opsional)"
-                  fullWidth
-                />
+            <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Button
+                variant="outlined"
+                type="button"
+                onClick={() => setForm({ qty: "", date: todayStr(), note: "" })}
+                disabled={loading}
+              >
+                Reset
+              </Button>
+              <Button variant="contained" type="submit" disabled={loading}>
+                {loading ? "Menyimpan…" : "Simpan"}
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
 
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Button variant="contained" onClick={saveIsi} disabled={saving}>
-                    {saving ? "Menyimpan…" : "Simpan"}
-                  </Button>
-                  <Typography variant="caption" color="text.secondary">
-                    Stok KOSONG saat ini: <b>{stokKOSONG}</b> (harus cukup untuk ditukar).
-                  </Typography>
-                </Stack>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
+/* ----------- Restok ISI (Tukar KOSONG) ----------- */
+function RestokIsi({ onSaved }) {
+  const toast = useToast();
+  const [form, setForm] = useState({ qty: "", date: todayStr(), note: "" });
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
-        {/* Tambah KOSONG */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardHeader title="Tambah Stok KOSONG (beli tabung)" />
-            <CardContent>
-              <Stack spacing={2}>
-                <Stack direction="row" spacing={2}>
-                  <TextField
-                    label="Qty"
-                    type="number"
-                    value={qtyKosong}
-                    onChange={(e) =>
-                      setQtyKosong(Math.max(0, parseInt(e.target.value || 0, 10)))
-                    }
-                    inputProps={{ min: 1 }}
-                    sx={{ width: 140 }}
-                  />
-                  <TextField
-                    label="Tanggal"
-                    type="date"
-                    value={dateKosong}
-                    onChange={(e) => setDateKosong(e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                    sx={{ width: 220 }}
-                  />
-                </Stack>
+  const submit = async (e) => {
+    e.preventDefault();
+    const qtyNum = Number(form.qty) || 0;
+    if (qtyNum <= 0) {
+      setErr("Jumlah harus > 0");
+      return;
+    }
+    try {
+      setErr("");
+      setLoading(true);
+      const snap = await DataService.addIsi({
+        qty: qtyNum,
+        date: form.date,
+        note: form.note || "restok agen (tukar kosong)",
+      });
+      toast?.show?.({ type: "success", message: `Stok ISI +${qtyNum} (tukar kosong)` });
+      setForm({ qty: "", date: todayStr(), note: "" });
+      onSaved?.(snap);
+    } catch (e2) {
+      const msg = e2.message || "Gagal restok ISI";
+      setErr(msg);
+      toast?.show?.({ type: "error", message: msg });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-                <TextField
-                  label="Catatan"
-                  value={noteKosong}
-                  onChange={(e) => setNoteKosong(e.target.value)}
-                  placeholder="Keterangan (opsional)"
-                  fullWidth
-                />
+  return (
+    <Card>
+      <CardHeader title="Restok Isi (Tukar Kosong)" />
+      <CardContent>
+        {err && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
+            {err}
+          </Alert>
+        )}
+        <Box component="form" onSubmit={submit}>
+          <Stack spacing={2}>
+            <TextField
+              label="Jumlah"
+              type="number"
+              inputProps={{ min: 1 }}
+              value={form.qty}
+              onChange={(e) => setForm({ ...form, qty: e.target.value })}
+              disabled={loading}
+              placeholder="contoh: 10"
+            />
 
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Button variant="contained" onClick={saveKosong} disabled={saving}>
-                    {saving ? "Menyimpan…" : "Simpan"}
-                  </Button>
-                  <Typography variant="caption" color="text.secondary">
-                    Stok ISI saat ini: <b>{stokISI}</b>.
-                  </Typography>
-                </Stack>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+            <TextField
+              label="Tanggal"
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+              disabled={loading}
+              InputLabelProps={{ shrink: true }}
+            />
 
-      {/* Snapshot stok sekarang */}
-      <Box sx={{ mt: 1, color: "text.secondary" }}>
-        <Typography variant="body2">
-          Snapshot: ISI <b>{stokISI}</b> • KOSONG <b>{stokKOSONG}</b>
-        </Typography>
-      </Box>
-    </Stack>
+            <TextField
+              label="Catatan (opsional)"
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              disabled={loading}
+              placeholder="mis: tukar kosong di agen"
+              multiline
+              minRows={2}
+            />
+
+            <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Button
+                variant="outlined"
+                type="button"
+                onClick={() => setForm({ qty: "", date: todayStr(), note: "" })}
+                disabled={loading}
+              >
+                Reset
+              </Button>
+              <Button variant="contained" type="submit" disabled={loading}>
+                {loading ? "Menyimpan…" : "Simpan"}
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ----------- Penyesuaian Stok (Koreksi) ----------- */
+function PenyesuaianStok({ onSaved }) {
+  const toast = useToast();
+  const [form, setForm] = useState({
+    code: "KOSONG", // ISI | KOSONG
+    dir: "OUT",     // IN | OUT
+    qty: "",
+    date: todayStr(),
+    reason: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const qtyNum = Number(form.qty) || 0;
+    if (qtyNum <= 0) {
+      setErr("Jumlah harus > 0");
+      return;
+    }
+    if (!form.reason.trim()) {
+      setErr("Alasan wajib diisi");
+      return;
+    }
+    // aturan: tambah ISI wajib via Restok Isi
+    if (form.code === "ISI" && form.dir === "IN") {
+      setErr("Tidak boleh menambah stok ISI via penyesuaian. Gunakan 'Restok Isi'.");
+      return;
+    }
+
+    const delta = form.dir === "IN" ? qtyNum : -qtyNum;
+
+    try {
+      setErr("");
+      setLoading(true);
+      const snap = await DataService.adjustStock({
+        code: form.code,
+        delta,
+        date: form.date,
+        reason: form.reason,
+      });
+      toast?.show?.({
+        type: "success",
+        message: `Penyesuaian ${form.code} ${delta > 0 ? `+${qtyNum}` : `-${qtyNum}`} tersimpan.`,
+      });
+      setForm({ code: "KOSONG", dir: "OUT", qty: "", date: todayStr(), reason: "" });
+      onSaved?.(snap);
+    } catch (e2) {
+      const msg = e2.message || "Gagal penyesuaian stok";
+      setErr(msg);
+      toast?.show?.({ type: "error", message: msg });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader title="Penyesuaian Stok (Koreksi)" />
+      <CardContent>
+        {err && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
+            {err}
+          </Alert>
+        )}
+        <Box component="form" onSubmit={submit}>
+          <Stack spacing={2}>
+            <FormControl fullWidth>
+              <InputLabel id="jenis-label">Jenis Stok</InputLabel>
+              <Select
+                labelId="jenis-label"
+                value={form.code}
+                label="Jenis Stok"
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                disabled={loading}
+              >
+                <MenuItem value="ISI">ISI</MenuItem>
+                <MenuItem value="KOSONG">KOSONG</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth>
+              <InputLabel id="arah-label">Arah Penyesuaian</InputLabel>
+              <Select
+                labelId="arah-label"
+                value={form.dir}
+                label="Arah Penyesuaian"
+                onChange={(e) => setForm({ ...form, dir: e.target.value })}
+                disabled={loading}
+              >
+                <MenuItem value="IN">Masuk (+)</MenuItem>
+                <MenuItem value="OUT">Keluar (−)</MenuItem>
+              </Select>
+            </FormControl>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+              *Tambah ISI tidak diperbolehkan di sini — gunakan Restok Isi.
+            </Typography>
+
+            <TextField
+              label="Jumlah"
+              type="number"
+              inputProps={{ min: 1 }}
+              value={form.qty}
+              onChange={(e) => setForm({ ...form, qty: e.target.value })}
+              disabled={loading}
+              placeholder="contoh: 2"
+            />
+
+            <TextField
+              label="Tanggal"
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+              disabled={loading}
+              InputLabelProps={{ shrink: true }}
+            />
+
+            <TextField
+              label="Alasan (wajib)"
+              value={form.reason}
+              onChange={(e) => setForm({ ...form, reason: e.target.value })}
+              disabled={loading}
+              placeholder='mis: "Koreksi stok - kelebihan input" / "Stok hilang/rusak"'
+              multiline
+              minRows={2}
+            />
+
+            <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Button
+                variant="outlined"
+                type="button"
+                onClick={() =>
+                  setForm({ code: "KOSONG", dir: "OUT", qty: "", date: todayStr(), reason: "" })
+                }
+                disabled={loading}
+              >
+                Reset
+              </Button>
+              <Button variant="contained" type="submit" disabled={loading}>
+                {loading ? "Menyimpan…" : "Simpan"}
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+      </CardContent>
+    </Card>
   );
 }
