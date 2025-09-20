@@ -751,7 +751,9 @@ export const DataService = {
       .reduce((a, r) => a + (Number(r.qty) || 0) * (Number(r.price) || 0), 0);
 
     return { totalTransaksi, totalNilai, rataRata, hutangAktif };
-  },
+  }
+}; // << ✅ tutup blok DataService di sini
+
 // ====== SETTINGS (FE fallback via localStorage) ======
 const LS_KEY = "gas3kg_settings";
 function readLS() {
@@ -825,4 +827,3 @@ DataService.importAll = async function (file) {
 DataService.hardResetAll = async function () {
   return this.resetAllData();
 };
-
