@@ -1,5 +1,4 @@
-// src/context/AuthContext.jsx
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 const Ctx = createContext({ user: null, initializing: true });
@@ -9,30 +8,35 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [initializing, setInit] = useState(true);
 
-  // Helper untuk mengambil role dari berbagai kemungkinan lokasi
-  const role = useMemo(() => {
-    const r =
-      user?.user_metadata?.role ??
-      user?.app_metadata?.role ??
-      user?.role ??
-      ""; // fallback
-    return typeof r === "string" ? r : "";
-  }, [user]);
+  async function fetchProfile(sessionUser) {
+    if (!sessionUser) {
+      setUser(null);
+      return;
+    }
+    // Ambil role dari tabel public.users
+    const { data, error } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", sessionUser.id)
+      .single();
 
-  const isAdmin = useMemo(() => {
-    return String(role).trim().toLowerCase() === "admin";
-  }, [role]);
+    if (!error && data) {
+      setUser({ ...sessionUser, role: data.role });
+    } else {
+      setUser({ ...sessionUser, role: "user" }); // default
+    }
+  }
 
   useEffect(() => {
     let active = true;
     (async () => {
       const { data } = await supabase.auth.getUser();
-      if (active) setUser(data?.user ?? null);
+      if (active) await fetchProfile(data?.user ?? null);
       setInit(false);
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      fetchProfile(session?.user ?? null);
     });
 
     return () => {
@@ -41,23 +45,21 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // Implementasi tunggal
   const _signInEmailPassword = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) throw error;
-    setUser(data?.user ?? null);
+    await fetchProfile(data?.user ?? null);
   };
 
   return (
     <Ctx.Provider
       value={{
         user,
-        role,      // <-- tambahkan role
-        isAdmin,   // <-- convenience flag
         initializing,
-        // Nama utama yang dipakai LoginView versi terbaru
         signInEmailPassword: _signInEmailPassword,
-        // Alias untuk kompatibilitas bila ada komponen lama
         signInEmailPass: _signInEmailPassword,
         async signOut() {
           await supabase.auth.signOut();
