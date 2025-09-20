@@ -1,5 +1,6 @@
 // src/components/views/LaporanView.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { DataService } from "../../services/DataService.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { HPP, MIN_DATE } from "../../utils/constants.js";
@@ -28,36 +29,22 @@ import {
   Alert,
 } from "@mui/material";
 
-/* ===== helpers: export =====
-   Catatan: untuk kesederhanaan tanpa library tambahan,
-   kita ekspor dalam format CSV namun disimpan dengan nama *.xlsx.
-   Excel akan membuka file ini dengan baik. */
-function saveXLSXLike(filename, rows, headers) {
-  const csv = [
-    headers.join(","),
-    ...rows.map((r) =>
-      headers
-        .map((h) => {
-          const v = r[h] ?? "";
-          const s = String(v).replace(/"/g, '""');
-          return `"${s}"`;
-        })
-        .join(",")
-    ),
-  ].join("\n");
+/* ===== helpers ===== */
+function saveXLSX(filename, rows, headers) {
+  const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+  const wbout = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+  const blob = new Blob([wbout], { type: "application/octet-stream" });
 
-  const blob = new Blob([csv], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8;",
-  });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  // pastikan ekstensi .xlsx sesuai permintaan
   a.download = filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
 
-const paidPredicate = (r) =>
+const isPaid = (r) =>
   String(r.method).toUpperCase() === "TUNAI" ||
   String(r.status || "").toUpperCase() === "LUNAS";
 
@@ -72,39 +59,35 @@ export default function LaporanView() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  const isRangeValid = useMemo(() => from <= to, [from, to]);
-
-  // Load data: gunakan hanya fungsi yang ada → DataService.loadSales()
+  // Ambil data dari server pada perubahan periode
   useEffect(() => {
     let alive = true;
-
     (async () => {
-      if (!isRangeValid) {
-        setErr("Rentang tanggal tidak valid (Dari > Sampai).");
-        setRows([]);
-        return;
-      }
       try {
         setErr("");
         setLoading(true);
-        const all = await DataService.loadSales(2000);
-        const safeAll = Array.isArray(all) ? all : [];
-        const filtered = safeAll.filter((r) => {
-          const d = String(r.created_at || "").slice(0, 10);
-          return d >= from && d <= to;
+        const data = await DataService.getSalesHistory({
+          from,
+          to,
+          method: "ALL",
+          status: "ALL",
+          limit: 2000,
         });
-        if (alive) setRows(filtered);
+        if (alive) setRows(Array.isArray(data) ? data : []);
       } catch (e) {
-        if (alive) setErr(e?.message || "Gagal memuat data laporan");
+        // fallback terakhir (harusnya jarang terjadi)
+        const msg = e.message || "Gagal memuat data laporan";
+        setErr(msg);
+        toast?.show?.({ type: "error", message: msg });
       } finally {
         if (alive) setLoading(false);
       }
     })();
-
     return () => {
       alive = false;
     };
-  }, [from, to, isRangeValid]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [from, to]);
 
   const columns = [
     { key: "created_at", label: "Tanggal" },
@@ -128,7 +111,7 @@ export default function LaporanView() {
 
   /* ====== laba rugi (dibayar) ====== */
   const lr = useMemo(() => {
-    const paid = rows.filter(paidPredicate);
+    const paid = rows.filter(isPaid);
     const omzet = paid.reduce((a, b) => a + Number(b.total || 0), 0);
     const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * HPP, 0);
     const laba = omzet - hpp;
@@ -136,31 +119,20 @@ export default function LaporanView() {
     return { omzet, hpp, laba, margin };
   }, [rows]);
 
+  /* ====== export ====== */
   const exportPenjualan = () => {
     const data = rows.map((r) => ({
       Tanggal: String(r.created_at || "").slice(0, 10),
       Pelanggan: r.customer || "PUBLIC",
-      Qty: r.qty,
-      Harga: r.price,
-      Total: r.total,
+      Qty: Number(r.qty || 0),
+      Harga: Number(r.price || 0),
+      Total: Number(r.total || 0),
       Metode: r.method,
       Status: r.status || "",
       Catatan: r.note || "",
     }));
-    const headers = Object.keys(
-      data[0] || {
-        Tanggal: "",
-        Pelanggan: "",
-        Qty: "",
-        Harga: "",
-        Total: "",
-        Metode: "",
-        Status: "",
-        Catatan: "",
-      }
-    );
-    saveXLSXLike(`penjualan_${from}_sampai_${to}.xlsx`, data, headers);
-    toast?.show?.({ type: "success", message: "Export penjualan selesai." });
+    const headers = ["Tanggal", "Pelanggan", "Qty", "Harga", "Total", "Metode", "Status", "Catatan"];
+    saveXLSX(`penjualan_${from}_sampai_${to}.xlsx`, data, headers);
   };
 
   const exportLabaRugi = () => {
@@ -170,25 +142,16 @@ export default function LaporanView() {
       { Keterangan: "Laba", Nilai: lr.laba },
       { Keterangan: "Margin (%)", Nilai: `${lr.margin}%` },
     ];
-    const headers = ["Keterangan", "Nilai"];
-    saveXLSXLike(`laba_rugi_${from}_sampai_${to}.xlsx`, data, headers);
-    toast?.show?.({ type: "success", message: "Export laba rugi selesai." });
+    saveXLSX(`laba_rugi_${from}_sampai_${to}.xlsx`, data, ["Keterangan", "Nilai"]);
   };
 
   return (
     <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
       {/* Header + Tab */}
       <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
-        <Typography variant="h5" fontWeight={800}>
-          Laporan
-        </Typography>
+        <Typography variant="h5" fontWeight={800}>Laporan</Typography>
         <Box sx={{ ml: "auto" }} />
-        <Tabs
-          value={tab}
-          onChange={(_, v) => setTab(v)}
-          textColor="primary"
-          indicatorColor="primary"
-        >
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} textColor="primary" indicatorColor="primary">
           <Tab label="Penjualan" value="penjualan" />
           <Tab label="Laba Rugi" value="labarugi" />
         </Tabs>
@@ -222,30 +185,19 @@ export default function LaporanView() {
             <Grid item xs />
             {tab === "penjualan" ? (
               <Grid item>
-                <Button variant="outlined" onClick={exportPenjualan}>
-                  Export XLSX
-                </Button>
+                <Button variant="outlined" onClick={exportPenjualan}>Export XLSX</Button>
               </Grid>
             ) : (
               <Grid item>
-                <Button variant="outlined" onClick={exportLabaRugi}>
-                  Export XLSX
-                </Button>
+                <Button variant="outlined" onClick={exportLabaRugi}>Export XLSX</Button>
               </Grid>
             )}
           </Grid>
-          {!isRangeValid && (
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              Rentang tanggal tidak valid. Perbaiki terlebih dahulu.
-            </Alert>
-          )}
         </CardContent>
       </Card>
 
       {err && (
-        <Alert severity="error" variant="outlined">
-          {err}
-        </Alert>
+        <Alert severity="error" variant="outlined">{err}</Alert>
       )}
 
       {/* TAB: PENJUALAN */}
@@ -273,9 +225,7 @@ export default function LaporanView() {
                     <TableBody>
                       {rows.map((r) => (
                         <TableRow key={r.id} hover>
-                          <TableCell>
-                            {String(r.created_at || "").slice(0, 10)}
-                          </TableCell>
+                          <TableCell>{String(r.created_at || "").slice(0, 10)}</TableCell>
                           <TableCell>{r.customer || "PUBLIC"}</TableCell>
                           <TableCell align="right">{r.qty}</TableCell>
                           <TableCell align="right">{fmtIDR(r.price)}</TableCell>
@@ -303,9 +253,7 @@ export default function LaporanView() {
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <Typography color="text.secondary">Total Omzet</Typography>
-                      <Typography fontWeight={800}>
-                        {fmtIDR(summarySales.omzet)}
-                      </Typography>
+                      <Typography fontWeight={800}>{fmtIDR(summarySales.omzet)}</Typography>
                     </Grid>
                   </Grid>
                 </Box>
@@ -349,12 +297,8 @@ export default function LaporanView() {
 function RowKV({ k, v, vSx }) {
   return (
     <Stack direction="row" justifyContent="space-between" alignItems="center">
-      <Typography variant="body2" color="text.secondary">
-        {k}
-      </Typography>
-      <Typography variant="body2" sx={{ fontWeight: 700, ...vSx }}>
-        {v}
-      </Typography>
+      <Typography variant="body2" color="text.secondary">{k}</Typography>
+      <Typography variant="body2" sx={{ fontWeight: 700, ...vSx }}>{v}</Typography>
     </Stack>
   );
 }
