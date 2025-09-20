@@ -1,3 +1,4 @@
+// src/components/views/PenjualanView.jsx
 import React, { useState, useMemo } from "react";
 import { DataService } from "../../services/DataService.js";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -43,7 +44,7 @@ export default function PenjualanView({
   stocks = {},
   onSaved,
   onCancel,
-  customerList = [],
+  customerList = [], // ← daftar pelanggan dari TransaksiView
 }) {
   const toast = useToast();
 
@@ -157,14 +158,23 @@ export default function PenjualanView({
 
           <Box component="form" onSubmit={submit}>
             <Grid container spacing={2}>
-              {/* Nama Pelanggan dengan Autocomplete */}
+              {/* Nama Pelanggan — Autocomplete (muncul setelah ketik) */}
               <Grid item xs={12}>
                 <Autocomplete
                   freeSolo
                   options={customerList}
+                  openOnFocus={false} // <- jangan buka saat fokus
+                  getOptionLabel={(opt) => (typeof opt === "string" ? opt : "")}
+                  filterOptions={(options, state) => {
+                    const q = (state.inputValue || "").trim().toLowerCase();
+                    if (!q) return []; // <- kosong: sembunyikan dropdown
+                    return options.filter((o) =>
+                      String(o).toLowerCase().includes(q)
+                    );
+                  }}
                   value={form.customer}
                   onInputChange={(_, newVal) =>
-                    setForm({ ...form, customer: newVal })
+                    setForm((prev) => ({ ...prev, customer: newVal }))
                   }
                   renderInput={(params) => (
                     <TextField
@@ -173,6 +183,14 @@ export default function PenjualanView({
                       sx={FIELD_SX}
                       label="Nama Pelanggan"
                       placeholder="Contoh: Ayu"
+                      // penting: nilai tetap sinkron ketika user ketik manual
+                      value={form.customer}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          customer: e.target.value,
+                        }))
+                      }
                     />
                   )}
                 />
@@ -183,7 +201,7 @@ export default function PenjualanView({
                       color="error"
                       sx={{ display: "block", mt: 0.5 }}
                     >
-                      Nama hanya huruf & spasi
+                      Nama hanya huruf &amp; spasi
                     </Typography>
                   )}
               </Grid>
