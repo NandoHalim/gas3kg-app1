@@ -1,10 +1,9 @@
 // src/components/views/DashboardView.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { HPP as HPP_FALLBACK } from "../../utils/constants.js";
+import React, { useEffect, useState } from "react";
+import { COLORS, HPP } from "../../utils/constants.js";
 import { fmtIDR, todayStr } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
 import { supabase } from "../../lib/supabase.js";
-import { useSettings } from "../../context/SettingsContext.jsx"; // ✅ pakai settings live
 
 // MUI
 import {
@@ -159,7 +158,11 @@ function MiniBarChartLabeled({ data = [] }) {
           );
         })}
         {!data.length && (
-          <Typography variant="body2" color="text.secondary" sx={{ gridColumn: "1 / -1", textAlign: "center" }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ gridColumn: "1 / -1", textAlign: "center" }}
+          >
             Belum ada data penjualan
           </Typography>
         )}
@@ -170,10 +173,6 @@ function MiniBarChartLabeled({ data = [] }) {
 
 /* ====== Main View ====== */
 export default function DashboardView({ stocks = {} }) {
-  const { settings } = useSettings(); // ✅ ambil settings live
-  const currentHPP = Number(settings?.hpp ?? HPP_FALLBACK); // ✅ pakai HPP dari settings
-  const businessName = settings?.business_name || "Dashboard"; // ✅ nama usaha
-
   const isi = Number(stocks.ISI || 0);
   const kosong = Number(stocks.KOSONG || 0);
   const total = isi + kosong;
@@ -203,7 +202,7 @@ export default function DashboardView({ stocks = {} }) {
           String(r.status || "").toUpperCase() === "LUNAS"
       );
       const omzet = paid.reduce((a, b) => a + Number(b.total || 0), 0);
-      const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * currentHPP, 0); // ✅ pakai settings.hpp
+      const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * HPP, 0);
       const laba = omzet - hpp;
 
       const todaySum =
@@ -229,31 +228,31 @@ export default function DashboardView({ stocks = {} }) {
     }
   };
 
-  // initial & realtime DB
   useEffect(() => {
     let alive = true;
     fetchDashboard();
 
     const ch = supabase
       .channel("dashboard-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, () => alive && fetchDashboard())
-      .on("postgres_changes", { event: "*", schema: "public", table: "stocks" }, () => alive && fetchDashboard())
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sales" },
+        () => alive && fetchDashboard()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "stocks" },
+        () => alive && fetchDashboard()
+      )
       .subscribe();
 
     return () => {
-      try { supabase.removeChannel(ch); } catch {}
+      try {
+        supabase.removeChannel(ch);
+      } catch {}
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // ✅ Recompute bila HPP berubah dari Settings (efek langsung)
-  useEffect(() => {
-    if (!loading) {
-      fetchDashboard();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentHPP]);
 
   return (
     <Stack spacing={1.5}>
@@ -267,13 +266,18 @@ export default function DashboardView({ stocks = {} }) {
       >
         <Box>
           <Typography variant="h5" fontWeight={800}>
-            {businessName}
+            Dashboard
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Ringkasan stok & penjualan.
           </Typography>
         </Box>
-        <Chip label={`Total Tabung: ${total}`} variant="outlined" color="default" sx={{ fontWeight: 700 }} />
+        <Chip
+          label={`Total Tabung: ${total}`}
+          variant="outlined"
+          color="default"
+          sx={{ fontWeight: 700 }}
+        />
       </Stack>
 
       {err && (
@@ -325,7 +329,9 @@ export default function DashboardView({ stocks = {} }) {
       {/* Kondisi Stok */}
       <Card>
         <CardHeader title="Kondisi Stok (Isi vs Kosong)" />
-        <CardContent>{loading ? <Skeleton height={24} /> : <StockProgress isi={isi} kosong={kosong} />}</CardContent>
+        <CardContent>
+          {loading ? <Skeleton height={24} /> : <StockProgress isi={isi} kosong={kosong} />}
+        </CardContent>
       </Card>
 
       {/* Ringkasan Keuangan + Total Terjual */}
@@ -344,7 +350,11 @@ export default function DashboardView({ stocks = {} }) {
                 <Stack spacing={1}>
                   <RowKV k="Omzet (dibayar)" v={fmtIDR(sum.omzet)} />
                   <RowKV k="HPP" v={`− ${fmtIDR(sum.omzet - sum.laba)}`} />
-                  <RowKV k="Laba" v={fmtIDR(sum.laba)} vSx={{ color: "success.main", fontWeight: 700 }} />
+                  <RowKV
+                    k="Laba"
+                    v={fmtIDR(sum.laba)}
+                    vSx={{ color: "success.main", fontWeight: 700 }}
+                  />
                 </Stack>
               )}
             </CardContent>
@@ -388,7 +398,9 @@ export default function DashboardView({ stocks = {} }) {
       {/* Penjualan 7 Hari Terakhir */}
       <Card>
         <CardHeader title="Penjualan 7 Hari Terakhir" />
-        <CardContent>{loading ? <Skeleton height={120} /> : <MiniBarChartLabeled data={series7} />}</CardContent>
+        <CardContent>
+          {loading ? <Skeleton height={120} /> : <MiniBarChartLabeled data={series7} />}
+        </CardContent>
       </Card>
 
       {/* Transaksi Terbaru */}
@@ -425,7 +437,7 @@ export default function DashboardView({ stocks = {} }) {
                       <TableCell align="right">
                         {fmtIDR((Number(x.qty) || 0) * (Number(x.price) || 0))}
                       </TableCell>
-                    </Row>
+                    </TableRow>
                   ))}
                   {!recent.length && (
                     <TableRow>
