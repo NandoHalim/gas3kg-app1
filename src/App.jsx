@@ -10,7 +10,8 @@ import StokView from "./components/views/StokView.jsx";
 import TransaksiView from "./components/views/TransaksiView.jsx";
 import PelangganView from "./components/views/PelangganView.jsx";
 import BroadcastView from "./components/views/BroadcastView.jsx";
-// ⬇️ Heavy pages → lazy
+
+// ⬇️ Halaman yang relatif berat → lazy
 const RiwayatView = lazy(() => import("./components/views/RiwayatView.jsx"));
 const LaporanView = lazy(() => import("./components/views/LaporanView.jsx"));
 const PengaturanView = lazy(() => import("./components/views/PengaturanView.jsx"));
@@ -42,7 +43,7 @@ export default function App() {
     }
   };
 
-  // initial load + realtime listener (stocks & sales)
+  // Initial load + realtime listener (stocks & sales)
   useEffect(() => {
     let alive = true;
 
@@ -80,6 +81,28 @@ export default function App() {
         supabase.removeChannel(ch);
       } catch {}
     };
+  }, []);
+
+  // Prefetch modul berat saat idle / setelah mount
+  useEffect(() => {
+    const idle =
+      typeof window !== "undefined" && "requestIdleCallback" in window
+        ? window.requestIdleCallback
+        : (cb) => setTimeout(cb, 1200);
+
+    const cancel =
+      typeof window !== "undefined" && "cancelIdleCallback" in window
+        ? window.cancelIdleCallback
+        : (id) => clearTimeout(id);
+
+    const id = idle(() => {
+      // warm-up chunks untuk navigasi pertama yang lebih cepat
+      import("./components/views/RiwayatView.jsx");
+      import("./components/views/LaporanView.jsx");
+      import("./components/views/PengaturanView.jsx");
+    });
+
+    return () => cancel(id);
   }, []);
 
   // setiap ganti route → refresh stok (agar dashboard selalu terbaru)
