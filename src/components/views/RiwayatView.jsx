@@ -907,7 +907,16 @@ export default function RiwayatView() {
           >
             Batal
           </Button>
-          <Button variant="contained" onClick={submitVoid}>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={!voidReason}
+            onClick={() => {
+              if (window.confirm("Apakah Anda yakin ingin membatalkan transaksi ini?")) {
+                submitVoid();
+              }
+            }}
+          >
             Void Sekarang
           </Button>
         </DialogActions>
