@@ -1,3 +1,4 @@
+// src/components/layout/AppLayout.jsx
 import React, { useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate, Outlet } from "react-router-dom";
 import { createPortal } from "react-dom";
@@ -19,21 +20,28 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import LogoutIcon from "@mui/icons-material/Logout";
 
 import { useAuth } from "../../context/AuthContext.jsx";
+import { useSettings } from "../../context/SettingsContext.jsx";
 
 const drawerWidth = 220;
 const BN_HEIGHT = 64;
 
 export default function AppLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [bottomNav, setBottomNav] = useState("dashboard");
+  const [bottomNav] = useState("dashboard");
   const navigate = useNavigate();
   const location = useLocation();
+
   const { user, signOut } = useAuth();
+  const { settings } = useSettings();
+
+  const businessName =
+    (settings?.business_name && String(settings.business_name).trim()) ||
+    "Gas 3KG Manager";
 
   const isAdmin = (user?.role || "").toLowerCase() === "admin";
   const handleDrawerToggle = () => setMobileOpen((s) => !s);
 
-  // menu dibentuk **setiap render** berdasar role (bukan konstanta)
+  // menu dibentuk berdasarkan role (render tiap perubahan role)
   const menuItems = useMemo(() => {
     const base = [
       { key: "dashboard", label: "Dashboard", icon: <HomeIcon />, path: "/" },
@@ -45,10 +53,14 @@ export default function AppLayout({ children }) {
       { key: "laporan", label: "Laporan", icon: <DescriptionIcon />, path: "/laporan" },
     ];
     if (isAdmin) {
-      base.push({ key: "pengaturan", label: "Pengaturan", icon: <SettingsIcon />, path: "/pengaturan" });
+      base.push({
+        key: "pengaturan",
+        label: "Pengaturan",
+        icon: <SettingsIcon />,
+        path: "/pengaturan",
+      });
     }
     return base;
-    // depend pada user?.role
   }, [isAdmin]);
 
   const activeKey = useMemo(() => {
@@ -67,13 +79,19 @@ export default function AppLayout({ children }) {
   const drawer = (
     <Box role="presentation">
       <Toolbar>
-        <Typography variant="h6" noWrap>Gas 3KG Manager</Typography>
+        <Typography variant="h6" noWrap sx={{ pr: 1 }}>
+          {businessName}
+        </Typography>
       </Toolbar>
       <Divider />
       <List>
         {menuItems.map((item) => (
           <ListItem key={item.key} disablePadding>
-            <ListItemButton component={NavLink} to={item.path} onClick={() => setMobileOpen(false)}>
+            <ListItemButton
+              component={NavLink}
+              to={item.path}
+              onClick={() => setMobileOpen(false)}
+            >
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.label} />
             </ListItemButton>
@@ -84,25 +102,40 @@ export default function AppLayout({ children }) {
   );
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100svh",
-      pb: { xs: `calc(${BN_HEIGHT}px + env(safe-area-inset-bottom))`, sm: 0 } }}>
+    <Box
+      sx={{
+        display: "flex",
+        minHeight: "100svh",
+        pb: { xs: `calc(${BN_HEIGHT}px + env(safe-area-inset-bottom))`, sm: 0 },
+      }}
+    >
       <CssBaseline />
 
       {/* AppBar */}
       <AppBar position="fixed" sx={{ zIndex: 1201 }}>
         <Toolbar>
-          <IconButton color="inherit" edge="start" onClick={handleDrawerToggle} sx={{ mr: 2, display: { sm: "none" } }}>
+          <IconButton
+            color="inherit"
+            edge="start"
+            onClick={handleDrawerToggle}
+            sx={{ mr: 2, display: { sm: "none" } }}
+          >
             <MenuIcon />
           </IconButton>
+
+          {/* Judul dinamis dari Pengaturan Dasar */}
           <Typography variant="h6" noWrap sx={{ flex: 1 }}>
-            Gas 3KG Manager
+            {businessName}
           </Typography>
 
           {/* Tombol LOGOUT kanan atas */}
           <Button
             color="inherit"
             startIcon={<LogoutIcon />}
-            onClick={async () => { await signOut(); navigate("/"); }}
+            onClick={async () => {
+              await signOut();
+              navigate("/");
+            }}
             sx={{ textTransform: "none", fontWeight: 600 }}
           >
             Logout
@@ -112,6 +145,7 @@ export default function AppLayout({ children }) {
 
       {/* Drawer */}
       <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
+        {/* Mobile drawer */}
         <Drawer
           variant="temporary"
           open={mobileOpen}
@@ -125,6 +159,7 @@ export default function AppLayout({ children }) {
           {drawer}
         </Drawer>
 
+        {/* Desktop drawer */}
         <Drawer
           variant="permanent"
           open
@@ -138,27 +173,50 @@ export default function AppLayout({ children }) {
       </Box>
 
       {/* Konten */}
-      <Box component="main" sx={{ flexGrow: 1, px: { xs: 1.5, sm: 3 }, py: { xs: 1.5, sm: 3 },
-        width: { sm: `calc(100% - ${drawerWidth}px)` } }}>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          px: { xs: 1.5, sm: 3 },
+          py: { xs: 1.5, sm: 3 },
+          width: { sm: `calc(100% - ${drawerWidth}px)` },
+        }}
+      >
         <Toolbar />
         {children ?? <Outlet />}
       </Box>
 
       {/* Bottom nav (mobile) */}
       {createPortal(
-        <Paper elevation={8} square sx={{
-          position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 1200,
-          display: { xs: "block", sm: "none" }, pb: "env(safe-area-inset-bottom)" }}>
+        <Paper
+          elevation={8}
+          square
+          sx={{
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1200,
+            display: { xs: "block", sm: "none" },
+            pb: "env(safe-area-inset-bottom)",
+          }}
+        >
           <BottomNavigation
             value={activeKey}
             onChange={(_, newValue) => {
               const target = menuItems.find((m) => m.key === newValue);
               if (target) navigate(target.path);
             }}
-            showLabels sx={{ height: BN_HEIGHT }}
+            showLabels
+            sx={{ height: BN_HEIGHT }}
           >
             {menuItems.slice(0, 4).map((item) => (
-              <BottomNavigationAction key={item.key} value={item.key} label={item.label} icon={item.icon} />
+              <BottomNavigationAction
+                key={item.key}
+                value={item.key}
+                label={item.label}
+                icon={item.icon}
+              />
             ))}
           </BottomNavigation>
         </Paper>,
