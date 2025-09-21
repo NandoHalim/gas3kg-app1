@@ -1,94 +1,80 @@
+// src/context/AuthContext.jsx
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 const Ctx = createContext({ user: null, initializing: true });
 export const useAuth = () => useContext(Ctx);
 
-// 👉 Allow-list fallback (bisa diisi dari env nanti)
-const ADMIN_EMAILS = ["admin@mail.com"];
-
-// Ambil role dari DB dengan 2 cara, lalu fallback ke allow-list email
-async function fetchUserRoleSafe(u) {
-  if (!u) return "user";
-
-  // 1) cari berdasarkan user_id
-  try {
-    const { data, error } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", u.id)
-      .maybeSingle();
-    if (!error && data?.role) return String(data.role);
-  } catch (_) {}
-
-  // 2) fallback cari berdasarkan email
-  try {
-    const { data, error } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("email", u.email)
-      .maybeSingle();
-    if (!error && data?.role) return String(data.role);
-  } catch (_) {}
-
-  // 3) ultimate fallback: allow-list by email
-  if (ADMIN_EMAILS.map((e) => e.toLowerCase()).includes((u.email || "").toLowerCase())) {
-    return "admin";
-  }
-
-  return "user";
-}
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [initializing, setInit] = useState(true);
 
+  // ambil role admin dari tabel app_admins
+  const fetchRole = async (uid) => {
+    try {
+      const { data, error } = await supabase
+        .from("app_admins")
+        .select("user_id")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (error) {
+        console.error("❌ fetchRole error:", error.message);
+        return "user";
+      }
+      return data ? "admin" : "user";
+    } catch (err) {
+      console.error("❌ fetchRole exception:", err);
+      return "user";
+    }
+  };
+
   useEffect(() => {
-    let alive = true;
+    let active = true;
 
     (async () => {
-      try {
-        const { data } = await supabase.auth.getUser();
-        const baseUser = data?.user ?? null;
-        if (!alive) return;
+      const { data } = await supabase.auth.getUser();
+      let u = data?.user ?? null;
 
-        if (baseUser) {
-          const role = await fetchUserRoleSafe(baseUser);
-          setUser({ ...baseUser, role });
-        } else {
-          setUser(null);
-        }
-      } finally {
-        if (alive) setInit(false);
+      if (u) {
+        const role = await fetchRole(u.id);
+        u = { ...u, role };
       }
+
+      if (active) setUser(u);
+      setInit(false);
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_evt, session) => {
-      const baseUser = session?.user ?? null;
-      if (baseUser) {
-        const role = await fetchUserRoleSafe(baseUser);
-        setUser({ ...baseUser, role });
-      } else {
-        setUser(null);
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        let u = session?.user ?? null;
+        if (u) {
+          const role = await fetchRole(u.id);
+          u = { ...u, role };
+        }
+        setUser(u);
       }
-    });
+    );
 
     return () => {
-      alive = false;
+      active = false;
       sub?.subscription?.unsubscribe?.();
     };
   }, []);
 
   const _signInEmailPassword = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) throw error;
-    const baseUser = data?.user ?? null;
-    if (baseUser) {
-      const role = await fetchUserRoleSafe(baseUser);
-      setUser({ ...baseUser, role });
-    } else {
-      setUser(null);
+
+    let u = data?.user ?? null;
+    if (u) {
+      const role = await fetchRole(u.id);
+      u = { ...u, role };
     }
+    setUser(u);
   };
 
   return (
@@ -97,8 +83,6 @@ export function AuthProvider({ children }) {
         user,
         initializing,
         signInEmailPassword: _signInEmailPassword,
-        // alias kompatibilitas
-        signInEmailPass: _signInEmailPassword,
         async signOut() {
           await supabase.auth.signOut();
           setUser(null);
