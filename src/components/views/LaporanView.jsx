@@ -1,5 +1,4 @@
-// src/components/views/LaporanView.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import { DataService } from "../../services/DataService.js";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -27,7 +26,6 @@ import {
   TableContainer,
   Skeleton,
   Alert,
-  Chip,
 } from "@mui/material";
 
 /* ===== helpers ===== */
@@ -59,11 +57,8 @@ export default function LaporanView() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-
-  // settings sinkron dari Pengaturan Dasar
   const [settings, setSettings] = useState({});
-  const businessName = (settings.business_name || "Gas 3KG Manager").trim();
-  const bizSlug = businessName.replace(/[^\w\-]+/g, "_"); // utk filename aman
+  const cacheRef = useRef({}); // cache hasil fetch
 
   // Ambil pengaturan dasar sekali di awal
   useEffect(() => {
@@ -81,6 +76,11 @@ export default function LaporanView() {
   useEffect(() => {
     let alive = true;
     (async () => {
+      const cacheKey = `${from}_${to}`;
+      if (cacheRef.current[cacheKey]) {
+        setRows(cacheRef.current[cacheKey]);
+        return;
+      }
       try {
         setErr("");
         setLoading(true);
@@ -89,9 +89,12 @@ export default function LaporanView() {
           to,
           method: "ALL",
           status: "ALL",
-          limit: 2000,
+          limit: 500, // default kecil → cepat
         });
-        if (alive) setRows(Array.isArray(data) ? data : []);
+        if (alive) {
+          setRows(Array.isArray(data) ? data : []);
+          cacheRef.current[cacheKey] = Array.isArray(data) ? data : [];
+        }
       } catch (e) {
         const msg = e.message || "Gagal memuat data laporan";
         setErr(msg);
@@ -103,8 +106,7 @@ export default function LaporanView() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from, to]);
+  }, [from, to, toast]);
 
   const columns = [
     { key: "created_at", label: "Tanggal" },
@@ -126,7 +128,7 @@ export default function LaporanView() {
     return { qty, omzet };
   }, [rows]);
 
-  /* ====== laba rugi (dibayar) — HPP dari settings ====== */
+  /* ====== laba rugi (dibayar) ====== */
   const lr = useMemo(() => {
     const paid = rows.filter(isPaid);
     const omzet = paid.reduce((a, b) => a + Number(b.total || 0), 0);
@@ -138,28 +140,42 @@ export default function LaporanView() {
   }, [rows, settings]);
 
   /* ====== export ====== */
-  const exportPenjualan = () => {
-    const data = rows.map((r) => ({
-      Tanggal: String(r.created_at || "").slice(0, 10),
-      Pelanggan: r.customer || "PUBLIC",
-      Qty: Number(r.qty || 0),
-      Harga: Number(r.price || 0),
-      Total: Number(r.total || 0),
-      Metode: r.method,
-      Status: r.status || "",
-      Catatan: r.note || "",
-    }));
-    const headers = [
-      "Tanggal",
-      "Pelanggan",
-      "Qty",
-      "Harga",
-      "Total",
-      "Metode",
-      "Status",
-      "Catatan",
-    ];
-    saveXLSX(`${bizSlug}_penjualan_${from}_sampai_${to}.xlsx`, data, headers);
+  const exportPenjualan = async () => {
+    try {
+      const dataFull = await DataService.getSalesHistory({
+        from,
+        to,
+        method: "ALL",
+        status: "ALL",
+        limit: 2000, // ambil full untuk export
+      });
+      const data = (dataFull || []).map((r) => ({
+        Tanggal: String(r.created_at || "").slice(0, 10),
+        Pelanggan: r.customer || "PUBLIC",
+        Qty: Number(r.qty || 0),
+        Harga: Number(r.price || 0),
+        Total: Number(r.total || 0),
+        Metode: r.method,
+        Status: r.status || "",
+        Catatan: r.note || "",
+      }));
+      const headers = [
+        "Tanggal",
+        "Pelanggan",
+        "Qty",
+        "Harga",
+        "Total",
+        "Metode",
+        "Status",
+        "Catatan",
+      ];
+      saveXLSX(`penjualan_${from}_sampai_${to}.xlsx`, data, headers);
+    } catch (e) {
+      toast?.show?.({
+        type: "error",
+        message: e.message || "Gagal export penjualan",
+      });
+    }
   };
 
   const exportLabaRugi = () => {
@@ -170,7 +186,7 @@ export default function LaporanView() {
       { Keterangan: "Margin (%)", Nilai: `${lr.margin}%` },
     ];
     saveXLSX(
-      `${bizSlug}_laba_rugi_${from}_sampai_${to}.xlsx`,
+      `laba_rugi_${from}_sampai_${to}.xlsx`,
       data,
       ["Keterangan", "Nilai"]
     );
@@ -180,17 +196,9 @@ export default function LaporanView() {
     <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
       {/* Header + Tab */}
       <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h5" fontWeight={800}>
-            Laporan
-          </Typography>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.25 }}>
-            <Chip size="small" label={businessName} sx={{ fontWeight: 600 }} />
-            <Typography variant="caption" color="text.secondary">
-              Periode {from} s/d {to}
-            </Typography>
-          </Stack>
-        </Box>
+        <Typography variant="h5" fontWeight={800}>
+          Laporan
+        </Typography>
         <Box sx={{ ml: "auto" }} />
         <Tabs
           value={tab}
