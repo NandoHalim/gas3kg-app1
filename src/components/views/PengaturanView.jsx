@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Box, Stack, Typography, Card, CardHeader, CardContent, Grid, TextField, Button,
   Chip, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer,
@@ -14,63 +13,51 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import SettingsSuggestIcon from "@mui/icons-material/SettingsSuggest";
 import ShieldIcon from "@mui/icons-material/Shield";
+import LockResetIcon from "@mui/icons-material/LockReset";
 
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
-import { useSettings } from "../../context/SettingsContext.jsx";
+import { useSettings } from "../../context/SettingContext.jsx";
 import { DataService } from "../../services/DataService.js";
 import { DEFAULT_PRICE, PRICE_OPTIONS, PAYMENT_METHODS } from "../../utils/constants.js";
 import { fmtIDR } from "../../utils/helpers.js";
 
-/* ===== Wrapper: resolve role dengan aman + redirect non-admin ===== */
+/* ===== Wrapper: resolve role & redirect non-admin ===== */
 export default function PengaturanView() {
   const { user, initializing } = useAuth();
-  const navigate = useNavigate();
-  const [role, setRole] = useState(null); // null: belum resolved
+  const [role, setRole] = useState(null);
 
-  // Resolusi role: context → window → query DB
   useEffect(() => {
     let on = true;
     (async () => {
       if (initializing) return;
-      if (!user) { setRole("user"); return; }
-
-      const fromCtx = (user.role || "").toLowerCase();
-      const fromWin = (window.__userRole || "").toLowerCase();
-      if (fromCtx) { if (on) setRole(fromCtx); return; }
-      if (fromWin) { if (on) setRole(fromWin); return; }
-
-      // fallback: cek role via DataService bila ada
-      try {
-        const r = await DataService.getUserRoleById?.(user.id);
-        if (on) setRole((r || "user").toLowerCase());
-      } catch {
-        if (on) setRole("user");
-      }
+      if (!user) { on && setRole("user"); return; }
+      const r = await DataService.getUserRoleById(user.id).catch(()=>"user");
+      on && setRole((r || "user").toLowerCase());
     })();
     return () => { on = false; };
   }, [user, initializing]);
 
-  // Redirect user non-admin
-  useEffect(() => {
-    if (!initializing && role && role !== "admin") {
-      navigate("/", { replace: true });
-    }
-  }, [initializing, role, navigate]);
-
-  // Skeleton saat resolve role
   if (initializing || role == null) {
     return (
-      <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
+      <Stack spacing={2}>
         <Typography variant="h5" fontWeight={800}>Pengaturan</Typography>
-        <Skeleton height={40} />
-        <Skeleton height={180} />
-        <Skeleton height={240} />
+        <Skeleton height={40} /><Skeleton height={160} /><Skeleton height={240} />
       </Stack>
     );
   }
 
-  if (role !== "admin") return null; // sudah diarahkan di useEffect
+  if (role !== "admin") {
+    // diarahkan dari router/guard — render info singkat
+    return (
+      <Box>
+        <Typography variant="h5" fontWeight={800} gutterBottom>Pengaturan</Typography>
+        <Alert severity="warning" variant="outlined">
+          Menu ini hanya tersedia untuk <b>admin</b>.
+        </Alert>
+      </Box>
+    );
+  }
 
   return <SettingsAdmin />;
 }
@@ -78,9 +65,9 @@ export default function PengaturanView() {
 /* ===== Halaman pengaturan utk admin ===== */
 function SettingsAdmin() {
   const toast = useToast();
-  const { refreshSettings } = useSettings(); // ⬅️ supaya setelah "Simpan" efek langsung
+  const { settings, loading: settingsLoading, saveSettings, changePassword } = useSettings();
 
-  // state settings
+  // state settings (local form)
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
@@ -89,14 +76,24 @@ function SettingsAdmin() {
   const [hpp, setHpp] = useState(0);
   const [paymentMethods, setPaymentMethods] = useState(PAYMENT_METHODS);
 
-  // users (placeholder FE)
+  // users
   const [users, setUsers] = useState([]);
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState("user");
   const [busy, setBusy] = useState(false);
 
-  const [confirmReset, setConfirmReset] = useState(false);
+  // ganti password (admin sendiri)
+  const [oldPass, setOldPass] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [newPass2, setNewPass2] = useState("");
 
+  // dialog konfirmasi
+  const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
+  const [confirmPwdOpen, setConfirmPwdOpen] = useState(false);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const [confirmUserResetOpen, setConfirmUserResetOpen] = useState({ open: false, id: null });
+
+  // initial load dari DataService + sinkron ke SettingContext
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -104,11 +101,13 @@ function SettingsAdmin() {
         setLoading(true);
         const s = await DataService.getSettings();
         if (!alive) return;
-        setBusinessName(s.business_name || "");
-        setDefaultPrice(Number(s.default_price || DEFAULT_PRICE));
-        setHpp(Number(s.hpp || 0));
+        const merged = { ...settings, ...(s || {}) };
+
+        setBusinessName(merged.business_name || "");
+        setDefaultPrice(Number(merged.default_price || DEFAULT_PRICE));
+        setHpp(Number(merged.hpp || 0));
         setPaymentMethods(
-          Array.isArray(s.payment_methods) ? s.payment_methods : PAYMENT_METHODS
+          Array.isArray(merged.payment_methods) ? merged.payment_methods : PAYMENT_METHODS
         );
 
         const u = await DataService.getUsers();
@@ -123,7 +122,7 @@ function SettingsAdmin() {
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [settingsLoading]); // reload bila SettingContext selesai
 
   const summary = useMemo(() => ({
     hargaLabel: fmtIDR(defaultPrice),
@@ -131,21 +130,68 @@ function SettingsAdmin() {
     metodeLabel: (paymentMethods || []).join(", "),
   }), [defaultPrice, hpp, paymentMethods]);
 
-  const saveSettings = async () => {
+  /* ====== actions with confirmation ====== */
+  const doSaveSettings = async () => {
     try {
       setBusy(true);
-      await DataService.saveSettings({
-        business_name: businessName.trim(),
+      const safeName = String(businessName || "").trim() || settings.business_name || "Usaha Saya";
+      await saveSettings({
+        business_name: safeName,
         default_price: Number(defaultPrice) || DEFAULT_PRICE,
         hpp: Number(hpp) || 0,
         payment_methods: paymentMethods,
       });
-      // ⬇️ penting: dorong perubahan ke context agar halaman lain ikut update
-      await refreshSettings();
-      toast?.show?.({ type: "success", message: "Pengaturan disimpan & diterapkan." });
+      toast?.show?.({ type: "success", message: "Pengaturan disimpan." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal menyimpan pengaturan" });
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+      setConfirmSaveOpen(false);
+    }
+  };
+
+  const doChangePassword = async () => {
+    if (!newPass || newPass !== newPass2) {
+      toast?.show?.({ type: "error", message: "Password baru tidak cocok" });
+      return;
+    }
+    try {
+      setBusy(true);
+      await changePassword(oldPass, newPass);
+      toast?.show?.({ type: "success", message: "Password berhasil diubah." });
+      setOldPass(""); setNewPass(""); setNewPass2("");
+    } catch (e) {
+      toast?.show?.({ type: "error", message: e.message || "Gagal mengubah password" });
+    } finally {
+      setBusy(false);
+      setConfirmPwdOpen(false);
+    }
+  };
+
+  const doHardReset = async () => {
+    try {
+      setBusy(true);
+      await DataService.hardResetAll();
+      toast?.show?.({ type: "success", message: "Hard reset berhasil." });
+    } catch (e) {
+      toast?.show?.({ type: "error", message: e.message || "Gagal hard reset" });
+    } finally {
+      setBusy(false);
+      setConfirmResetOpen(false);
+    }
+  };
+
+  const doResetUserPassword = async (id) => {
+    try {
+      setBusy(true);
+      await DataService.resetUserPassword({ user_id: id });
+      toast?.show?.({ type: "success", message: "Permintaan reset password dikirim." });
+    } catch (e) {
+      toast?.show?.({ type: "error", message: e.message || "Gagal reset password user" });
+    } finally {
+      setBusy(false);
+      setConfirmUserResetOpen({ open: false, id: null });
+    }
   };
 
   const addUser = async () => {
@@ -164,30 +210,23 @@ function SettingsAdmin() {
       toast?.show?.({ type: "success", message: "User ditambahkan." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal menambah user" });
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
   const changeUserRole = async (id, role) => {
     try {
       setBusy(true);
       await DataService.updateUserRole({ user_id: id, role });
+      const u = await DataService.getUsers();
+      setUsers(u || []);
+      toast?.show?.({ type: "success", message: "Role diperbarui." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal update role" });
     } finally {
-      const u = await DataService.getUsers().catch(() => []);
-      setUsers(u || []);
       setBusy(false);
     }
-  };
-
-  const resetPassword = async (id) => {
-    try {
-      setBusy(true);
-      await DataService.resetUserPassword({ user_id: id });
-      toast?.show?.({ type: "success", message: "Permintaan reset password dikirim." });
-    } catch (e) {
-      toast?.show?.({ type: "error", message: e.message || "Gagal reset password" });
-    } finally { setBusy(false); }
   };
 
   const onExport = async () => {
@@ -197,7 +236,9 @@ function SettingsAdmin() {
       toast?.show?.({ type: "success", message: "Backup diexport." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal export" });
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onImport = async (file) => {
@@ -208,18 +249,9 @@ function SettingsAdmin() {
       toast?.show?.({ type: "success", message: "Import selesai." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal import" });
-    } finally { setBusy(false); }
-  };
-
-  const onHardReset = async () => {
-    try {
-      setBusy(true);
-      await DataService.hardResetAll();
-      toast?.show?.({ type: "success", message: "Hard reset berhasil." });
-      setConfirmReset(false);
-    } catch (e) {
-      toast?.show?.({ type: "error", message: e.message || "Gagal hard reset" });
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -240,30 +272,55 @@ function SettingsAdmin() {
           ) : (
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
-                <TextField label="Nama Usaha" fullWidth value={businessName}
-                           onChange={(e)=>setBusinessName(e.target.value)} />
+                <TextField
+                  label="Nama Usaha"
+                  fullWidth
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="Toko Gas 3KG"
+                  helperText="Tidak akan disimpan kosong — akan memakai nama terakhir yang valid."
+                />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
                   <InputLabel id="default-price-label">Harga Default</InputLabel>
-                  <Select labelId="default-price-label" label="Harga Default"
-                          value={defaultPrice} onChange={(e)=>setDefaultPrice(Number(e.target.value))}>
-                    {PRICE_OPTIONS.map((p)=>(<MenuItem key={p} value={p}>{fmtIDR(p)}</MenuItem>))}
+                  <Select
+                    labelId="default-price-label"
+                    label="Harga Default"
+                    value={defaultPrice}
+                    onChange={(e) => setDefaultPrice(Number(e.target.value))}
+                  >
+                    {PRICE_OPTIONS.map((p) => (
+                      <MenuItem key={p} value={p}>{fmtIDR(p)}</MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
+
               <Grid item xs={12} sm={6}>
-                <TextField type="number" label="HPP per Tabung" fullWidth value={hpp}
-                           onChange={(e)=>setHpp(Math.max(0, Number(e.target.value||0)))}
-                           helperText="Untuk perhitungan Laba Rugi" inputProps={{min:0}} />
+                <TextField
+                  type="number"
+                  label="HPP per Tabung"
+                  fullWidth
+                  value={hpp}
+                  onChange={(e) => setHpp(Math.max(0, Number(e.target.value || 0)))}
+                  helperText="Untuk perhitungan Laba Rugi"
+                  inputProps={{ min: 0 }}
+                />
               </Grid>
+
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
                   <InputLabel id="payment-methods-label">Metode Pembayaran Aktif</InputLabel>
-                  <Select multiple labelId="payment-methods-label" label="Metode Pembayaran Aktif"
-                          value={paymentMethods} onChange={(e)=>setPaymentMethods(e.target.value)}
-                          renderValue={(v)=>v.join(", ")}>
-                    {PAYMENT_METHODS.map((m)=>(
+                  <Select
+                    multiple
+                    labelId="payment-methods-label"
+                    label="Metode Pembayaran Aktif"
+                    value={paymentMethods}
+                    onChange={(e) => setPaymentMethods(e.target.value)}
+                    renderValue={(selected) => selected.join(", ")}
+                  >
+                    {PAYMENT_METHODS.map((m) => (
                       <MenuItem key={m} value={m}>
                         <Checkbox checked={paymentMethods.indexOf(m) > -1} />
                         <ListItemText primary={m} />
@@ -272,6 +329,7 @@ function SettingsAdmin() {
                   </Select>
                 </FormControl>
               </Grid>
+
               <Grid item xs={12}>
                 <Stack direction="row" spacing={1} flexWrap="wrap">
                   <Chip label={`Harga default: ${summary.hargaLabel}`} />
@@ -279,9 +337,15 @@ function SettingsAdmin() {
                   <Chip label={`Metode: ${summary.metodeLabel}`} />
                 </Stack>
               </Grid>
+
               <Grid item xs={12}>
-                <Stack direction="row" justifyContent="flex-end">
-                  <Button startIcon={<SaveIcon/>} variant="contained" onClick={saveSettings} disabled={busy}>
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  <Button
+                    startIcon={<SaveIcon />}
+                    variant="contained"
+                    onClick={() => setConfirmSaveOpen(true)}
+                    disabled={busy}
+                  >
                     Simpan Pengaturan
                   </Button>
                 </Stack>
@@ -291,32 +355,84 @@ function SettingsAdmin() {
         </CardContent>
       </Card>
 
-      {/* 4. Manajemen User (placeholder) */}
+      {/* 2. Ganti Password (admin sendiri) */}
       <Card>
-        <CardHeader title="Pengguna & Hak Akses"
-                    action={<Chip icon={<AdminPanelSettingsIcon/>} label="Kelola user" size="small" />} />
+        <CardHeader title="Ganti Password" />
+        <CardContent>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                type="password" label="Password Lama" fullWidth
+                value={oldPass} onChange={(e)=>setOldPass(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                type="password" label="Password Baru" fullWidth
+                value={newPass} onChange={(e)=>setNewPass(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                type="password" label="Ulangi Password Baru" fullWidth
+                value={newPass2} onChange={(e)=>setNewPass2(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Stack direction="row" justifyContent="flex-end">
+                <Button
+                  startIcon={<LockResetIcon />} variant="outlined"
+                  onClick={() => setConfirmPwdOpen(true)} disabled={busy}
+                >
+                  Ganti Password
+                </Button>
+              </Stack>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
+      {/* 3. Pengguna & Hak Akses (placeholder FE) */}
+      <Card>
+        <CardHeader
+          title="Pengguna & Hak Akses"
+          action={<Chip icon={<AdminPanelSettingsIcon />} label="Admin mengelola user" size="small" />}
+        />
         <CardContent>
           {loading ? (
-            <Stack spacing={1}><Skeleton height={36}/><Skeleton height={36}/><Skeleton height={36}/></Stack>
+            <Stack spacing={1}>
+              <Skeleton height={36} /><Skeleton height={36} /><Skeleton height={36} />
+            </Stack>
           ) : (
             <>
               <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid item xs={12} md={6}>
-                  <TextField fullWidth label="Email pengguna baru" placeholder="nama@domain.com"
-                             value={newEmail} onChange={(e)=>setNewEmail(e.target.value)} />
+                  <TextField
+                    fullWidth
+                    label="Email pengguna baru"
+                    placeholder="nama@domain.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                  />
                 </Grid>
                 <Grid item xs={12} md={3}>
                   <FormControl fullWidth>
                     <InputLabel id="new-role">Role</InputLabel>
-                    <Select labelId="new-role" label="Role" value={newRole}
-                            onChange={(e)=>setNewRole(e.target.value)}>
+                    <Select
+                      labelId="new-role"
+                      label="Role"
+                      value={newRole}
+                      onChange={(e) => setNewRole(e.target.value)}
+                    >
                       <MenuItem value="user">user</MenuItem>
                       <MenuItem value="admin">admin</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} md="auto">
-                  <Button variant="contained" onClick={addUser} disabled={busy}>Tambah User</Button>
+                  <Button variant="contained" onClick={addUser} disabled={busy}>
+                    Tambah User
+                  </Button>
                 </Grid>
               </Grid>
 
@@ -331,24 +447,42 @@ function SettingsAdmin() {
                   </TableHead>
                   <TableBody>
                     {!users.length && (
-                      <TableRow><TableCell colSpan={3} sx={{ color: "text.secondary" }}>Belum ada user</TableCell></TableRow>
+                      <TableRow>
+                        <TableCell colSpan={3} sx={{ color: "text.secondary" }}>
+                          Belum ada user
+                        </TableCell>
+                      </TableRow>
                     )}
-                    {users.map((u)=>(
+                    {users.map((u) => (
                       <TableRow key={u.id} hover>
                         <TableCell>{u.email}</TableCell>
                         <TableCell sx={{ minWidth: 160 }}>
-                          <Select size="small" fullWidth value={u.role}
-                                  onChange={(e)=>changeUserRole(u.id, e.target.value)} disabled={busy}>
+                          <Select
+                            size="small" fullWidth value={u.role}
+                            onChange={(e) => changeUserRole(u.id, e.target.value)}
+                            disabled={busy}
+                          >
                             <MenuItem value="user">user</MenuItem>
                             <MenuItem value="admin">admin</MenuItem>
                           </Select>
                         </TableCell>
                         <TableCell align="right">
-                          <Tooltip title="Reset password (placeholder)">
-                            <span><IconButton onClick={()=>resetPassword(u.id)} disabled={busy}><ShieldIcon/></IconButton></span>
+                          <Tooltip title="Reset password user (konfirmasi)">
+                            <span>
+                              <IconButton
+                                onClick={() => setConfirmUserResetOpen({ open: true, id: u.id })}
+                                disabled={busy}
+                              >
+                                <ShieldIcon />
+                              </IconButton>
+                            </span>
                           </Tooltip>
-                          <Tooltip title="Hapus (nonaktifkan) — placeholder">
-                            <span><IconButton disabled><DeleteIcon/></IconButton></span>
+                          <Tooltip title="Hapus (placeholder)">
+                            <span>
+                              <IconButton disabled>
+                                <DeleteIcon />
+                              </IconButton>
+                            </span>
                           </Tooltip>
                         </TableCell>
                       </TableRow>
@@ -361,21 +495,35 @@ function SettingsAdmin() {
         </CardContent>
       </Card>
 
-      {/* 6. Backup & Restore */}
+      {/* 4. Backup & Restore */}
       <Card>
         <CardHeader title="Backup & Restore Data" />
         <CardContent>
           <Grid container spacing={2} alignItems="center">
             <Grid item>
-              <Button startIcon={<DownloadIcon />} variant="outlined" onClick={onExport} disabled={busy}>
+              <Button
+                startIcon={<DownloadIcon />}
+                variant="outlined"
+                onClick={onExport}
+                disabled={busy}
+              >
                 Export (Excel/JSON)
               </Button>
             </Grid>
             <Grid item>
-              <Button component="label" startIcon={<UploadIcon />} variant="outlined" disabled={busy}>
+              <Button
+                component="label"
+                startIcon={<UploadIcon />}
+                variant="outlined"
+                disabled={busy}
+              >
                 Import
-                <input hidden type="file" accept=".json,application/json"
-                       onChange={(e)=>onImport(e.target.files?.[0])} />
+                <input
+                  hidden
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={(e) => onImport(e.target.files?.[0])}
+                />
               </Button>
             </Grid>
           </Grid>
@@ -385,30 +533,92 @@ function SettingsAdmin() {
         </CardContent>
       </Card>
 
-      {/* 7. Hard Reset */}
+      {/* 5. Hard Reset */}
       <Card>
         <CardHeader title="Hard Reset (Hapus Semua Data)" />
         <CardContent>
           <Alert severity="warning" sx={{ mb: 2 }}>
             Tindakan ini akan menghapus seluruh data (stok, log, penjualan, pelanggan).
+            Pastikan Anda sudah melakukan backup.
           </Alert>
-          <Button color="error" variant="contained" startIcon={<RestartAltIcon />}
-                  onClick={()=>setConfirmReset(true)} disabled={busy}>
+          <Button
+            color="error"
+            variant="contained"
+            startIcon={<RestartAltIcon />}
+            onClick={() => setConfirmResetOpen(true)}
+            disabled={busy}
+          >
             Hard Reset
           </Button>
         </CardContent>
       </Card>
 
-      {/* Dialog konfirmasi reset */}
-      <Dialog open={confirmReset} onClose={()=>setConfirmReset(false)}>
-        <DialogTitle>Konfirmasi Hard Reset</DialogTitle>
+      {/* ====== Dialog Konfirmasi ====== */}
+      <Dialog open={confirmSaveOpen} onClose={() => setConfirmSaveOpen(false)}>
+        <DialogTitle>Konfirmasi</DialogTitle>
         <DialogContent dividers>
-          <Typography>Anda yakin ingin menghapus <b>semua</b> data? Tindakan ini tidak bisa dikembalikan.</Typography>
+          <Typography>
+            Apakah Anda yakin ingin <b>menyimpan</b> perubahan Pengaturan Dasar?
+          </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={()=>setConfirmReset(false)}>Batal</Button>
-          <Button color="error" variant="contained" onClick={onHardReset} disabled={busy}>
-            Ya, hapus semuanya
+          <Button onClick={() => setConfirmSaveOpen(false)}>Batal</Button>
+          <Button variant="contained" onClick={doSaveSettings} disabled={busy}>
+            Ya, Simpan
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={confirmPwdOpen} onClose={() => setConfirmPwdOpen(false)}>
+        <DialogTitle>Konfirmasi</DialogTitle>
+        <DialogContent dividers>
+          <Typography>
+            Apakah Anda yakin ingin <b>mengganti password</b> akun ini?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmPwdOpen(false)}>Batal</Button>
+          <Button variant="contained" onClick={doChangePassword} disabled={busy}>
+            Ya, Ganti Password
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={confirmResetOpen} onClose={() => setConfirmResetOpen(false)}>
+        <DialogTitle>Konfirmasi Hard Reset</DialogTitle>
+        <DialogContent dividers>
+          <Typography>
+            Tindakan ini akan <b>menghapus semua data</b> dan tidak dapat dibatalkan.
+            Apakah Anda yakin?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmResetOpen(false)}>Batal</Button>
+          <Button color="error" variant="contained" onClick={doHardReset} disabled={busy}>
+            Ya, Hapus Semua
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={confirmUserResetOpen.open}
+        onClose={() => setConfirmUserResetOpen({ open: false, id: null })}
+      >
+        <DialogTitle>Konfirmasi Reset Password User</DialogTitle>
+        <DialogContent dividers>
+          <Typography>
+            Kirim permintaan reset password ke user ini?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmUserResetOpen({ open: false, id: null })}>Batal</Button>
+          <Button
+            startIcon={<ShieldIcon />}
+            variant="contained"
+            onClick={() => doResetUserPassword(confirmUserResetOpen.id)}
+            disabled={busy}
+          >
+            Ya, Kirim
           </Button>
         </DialogActions>
       </Dialog>

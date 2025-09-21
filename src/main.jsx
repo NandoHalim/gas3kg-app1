@@ -1,12 +1,12 @@
-// src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
 import "./index.css";
+
 import { ToastProvider } from "./context/ToastContext.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
-import { SettingsProvider } from "./context/SettingsContext.jsx"; // ✅ tambahkan
+import { SettingProvider } from "./context/SettingContext.jsx";
 
 // Logger global (membantu debugging di prod)
 if (typeof window !== "undefined") {
@@ -21,13 +21,13 @@ if (typeof window !== "undefined") {
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <AuthProvider>
-      <ToastProvider>
-        <SettingsProvider> {/* ✅ bungkus App */}
+      <SettingProvider>
+        <ToastProvider>
           <BrowserRouter>
             <App />
           </BrowserRouter>
-        </SettingsProvider>
-      </ToastProvider>
+        </ToastProvider>
+      </SettingProvider>
     </AuthProvider>
   </React.StrictMode>
 );
