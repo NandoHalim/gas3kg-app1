@@ -17,7 +17,7 @@ import LockResetIcon from "@mui/icons-material/LockReset";
 
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
-import { useSettings } from "../../context/SettingContext.jsx";
+import { useSettings } from "../../context/SettingsContext.jsx";
 import { DataService } from "../../services/DataService.js";
 import { DEFAULT_PRICE, PRICE_OPTIONS, PAYMENT_METHODS } from "../../utils/constants.js";
 import { fmtIDR } from "../../utils/helpers.js";
