@@ -1,9 +1,10 @@
 // src/components/views/DashboardView.jsx
 import React, { useEffect, useState } from "react";
-import { COLORS, HPP } from "../../utils/constants.js";
+import { COLORS } from "../../utils/constants.js";
 import { fmtIDR, todayStr } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
 import { supabase } from "../../lib/supabase.js";
+import { useSettings } from "../../context/SettingsContext.jsx";
 
 // MUI
 import {
@@ -177,6 +178,9 @@ export default function DashboardView({ stocks = {} }) {
   const kosong = Number(stocks.KOSONG || 0);
   const total = isi + kosong;
 
+  const { settings } = useSettings();
+  const hppSetting = Number(settings?.hpp || 0); // ambil HPP dari pengaturan
+
   const [sum, setSum] = useState({ qty: 0, omzet: 0, laba: 0 });
   const [today, setToday] = useState({ qty: 0, money: 0 });
   const [piutang, setPiutang] = useState(0);
@@ -202,7 +206,7 @@ export default function DashboardView({ stocks = {} }) {
           String(r.status || "").toUpperCase() === "LUNAS"
       );
       const omzet = paid.reduce((a, b) => a + Number(b.total || 0), 0);
-      const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * HPP, 0);
+      const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * hppSetting, 0);
       const laba = omzet - hpp;
 
       const todaySum =
@@ -252,7 +256,7 @@ export default function DashboardView({ stocks = {} }) {
       } catch {}
       alive = false;
     };
-  }, []);
+  }, [hppSetting]); // kalau admin ubah HPP → dashboard auto-refresh
 
   return (
     <Stack spacing={1.5}>
