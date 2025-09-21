@@ -27,6 +27,7 @@ import {
   TableContainer,
   Skeleton,
   Alert,
+  Chip,
 } from "@mui/material";
 
 /* ===== helpers ===== */
@@ -58,7 +59,11 @@ export default function LaporanView() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-  const [settings, setSettings] = useState({}); // <== sync settings
+
+  // settings sinkron dari Pengaturan Dasar
+  const [settings, setSettings] = useState({});
+  const businessName = (settings.business_name || "Gas 3KG Manager").trim();
+  const bizSlug = businessName.replace(/[^\w\-]+/g, "_"); // utk filename aman
 
   // Ambil pengaturan dasar sekali di awal
   useEffect(() => {
@@ -121,11 +126,11 @@ export default function LaporanView() {
     return { qty, omzet };
   }, [rows]);
 
-  /* ====== laba rugi (dibayar) ====== */
+  /* ====== laba rugi (dibayar) — HPP dari settings ====== */
   const lr = useMemo(() => {
     const paid = rows.filter(isPaid);
     const omzet = paid.reduce((a, b) => a + Number(b.total || 0), 0);
-    const hppVal = Number(settings.hpp || 0) || 0; // pakai HPP dari settings
+    const hppVal = Number(settings.hpp || 0) || 0;
     const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * hppVal, 0);
     const laba = omzet - hpp;
     const margin = omzet > 0 ? Math.round((laba / omzet) * 100) : 0;
@@ -154,7 +159,7 @@ export default function LaporanView() {
       "Status",
       "Catatan",
     ];
-    saveXLSX(`penjualan_${from}_sampai_${to}.xlsx`, data, headers);
+    saveXLSX(`${bizSlug}_penjualan_${from}_sampai_${to}.xlsx`, data, headers);
   };
 
   const exportLabaRugi = () => {
@@ -165,7 +170,7 @@ export default function LaporanView() {
       { Keterangan: "Margin (%)", Nilai: `${lr.margin}%` },
     ];
     saveXLSX(
-      `laba_rugi_${from}_sampai_${to}.xlsx`,
+      `${bizSlug}_laba_rugi_${from}_sampai_${to}.xlsx`,
       data,
       ["Keterangan", "Nilai"]
     );
@@ -175,9 +180,17 @@ export default function LaporanView() {
     <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
       {/* Header + Tab */}
       <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
-        <Typography variant="h5" fontWeight={800}>
-          Laporan
-        </Typography>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h5" fontWeight={800}>
+            Laporan
+          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.25 }}>
+            <Chip size="small" label={businessName} sx={{ fontWeight: 600 }} />
+            <Typography variant="caption" color="text.secondary">
+              Periode {from} s/d {to}
+            </Typography>
+          </Stack>
+        </Box>
         <Box sx={{ ml: "auto" }} />
         <Tabs
           value={tab}
