@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { DataService } from "../../services/DataService.js";
 import { useToast } from "../../context/ToastContext.jsx";
-import { HPP, MIN_DATE } from "../../utils/constants.js";
+import { MIN_DATE } from "../../utils/constants.js";
 import { fmtIDR, todayStr, maxAllowedDate } from "../../utils/helpers.js";
 
 import {
@@ -58,6 +58,19 @@ export default function LaporanView() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [settings, setSettings] = useState({}); // <== sync settings
+
+  // Ambil pengaturan dasar sekali di awal
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await DataService.getSettings();
+        setSettings(s || {});
+      } catch {
+        setSettings({});
+      }
+    })();
+  }, []);
 
   // Ambil data dari server pada perubahan periode
   useEffect(() => {
@@ -75,7 +88,6 @@ export default function LaporanView() {
         });
         if (alive) setRows(Array.isArray(data) ? data : []);
       } catch (e) {
-        // fallback terakhir (harusnya jarang terjadi)
         const msg = e.message || "Gagal memuat data laporan";
         setErr(msg);
         toast?.show?.({ type: "error", message: msg });
@@ -113,11 +125,12 @@ export default function LaporanView() {
   const lr = useMemo(() => {
     const paid = rows.filter(isPaid);
     const omzet = paid.reduce((a, b) => a + Number(b.total || 0), 0);
-    const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * HPP, 0);
+    const hppVal = Number(settings.hpp || 0) || 0; // pakai HPP dari settings
+    const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * hppVal, 0);
     const laba = omzet - hpp;
     const margin = omzet > 0 ? Math.round((laba / omzet) * 100) : 0;
     return { omzet, hpp, laba, margin };
-  }, [rows]);
+  }, [rows, settings]);
 
   /* ====== export ====== */
   const exportPenjualan = () => {
@@ -131,7 +144,16 @@ export default function LaporanView() {
       Status: r.status || "",
       Catatan: r.note || "",
     }));
-    const headers = ["Tanggal", "Pelanggan", "Qty", "Harga", "Total", "Metode", "Status", "Catatan"];
+    const headers = [
+      "Tanggal",
+      "Pelanggan",
+      "Qty",
+      "Harga",
+      "Total",
+      "Metode",
+      "Status",
+      "Catatan",
+    ];
     saveXLSX(`penjualan_${from}_sampai_${to}.xlsx`, data, headers);
   };
 
@@ -142,16 +164,27 @@ export default function LaporanView() {
       { Keterangan: "Laba", Nilai: lr.laba },
       { Keterangan: "Margin (%)", Nilai: `${lr.margin}%` },
     ];
-    saveXLSX(`laba_rugi_${from}_sampai_${to}.xlsx`, data, ["Keterangan", "Nilai"]);
+    saveXLSX(
+      `laba_rugi_${from}_sampai_${to}.xlsx`,
+      data,
+      ["Keterangan", "Nilai"]
+    );
   };
 
   return (
     <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
       {/* Header + Tab */}
       <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
-        <Typography variant="h5" fontWeight={800}>Laporan</Typography>
+        <Typography variant="h5" fontWeight={800}>
+          Laporan
+        </Typography>
         <Box sx={{ ml: "auto" }} />
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} textColor="primary" indicatorColor="primary">
+        <Tabs
+          value={tab}
+          onChange={(_, v) => setTab(v)}
+          textColor="primary"
+          indicatorColor="primary"
+        >
           <Tab label="Penjualan" value="penjualan" />
           <Tab label="Laba Rugi" value="labarugi" />
         </Tabs>
@@ -185,20 +218,22 @@ export default function LaporanView() {
             <Grid item xs />
             {tab === "penjualan" ? (
               <Grid item>
-                <Button variant="outlined" onClick={exportPenjualan}>Export XLSX</Button>
+                <Button variant="outlined" onClick={exportPenjualan}>
+                  Export XLSX
+                </Button>
               </Grid>
             ) : (
               <Grid item>
-                <Button variant="outlined" onClick={exportLabaRugi}>Export XLSX</Button>
+                <Button variant="outlined" onClick={exportLabaRugi}>
+                  Export XLSX
+                </Button>
               </Grid>
             )}
           </Grid>
         </CardContent>
       </Card>
 
-      {err && (
-        <Alert severity="error" variant="outlined">{err}</Alert>
-      )}
+      {err && <Alert severity="error" variant="outlined">{err}</Alert>}
 
       {/* TAB: PENJUALAN */}
       {tab === "penjualan" && (
@@ -225,7 +260,9 @@ export default function LaporanView() {
                     <TableBody>
                       {rows.map((r) => (
                         <TableRow key={r.id} hover>
-                          <TableCell>{String(r.created_at || "").slice(0, 10)}</TableCell>
+                          <TableCell>
+                            {String(r.created_at || "").slice(0, 10)}
+                          </TableCell>
                           <TableCell>{r.customer || "PUBLIC"}</TableCell>
                           <TableCell align="right">{r.qty}</TableCell>
                           <TableCell align="right">{fmtIDR(r.price)}</TableCell>
@@ -249,11 +286,17 @@ export default function LaporanView() {
                   <Grid container>
                     <Grid item xs={12} sm={6}>
                       <Typography color="text.secondary">Total Qty</Typography>
-                      <Typography fontWeight={800}>{summarySales.qty}</Typography>
+                      <Typography fontWeight={800}>
+                        {summarySales.qty}
+                      </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                      <Typography color="text.secondary">Total Omzet</Typography>
-                      <Typography fontWeight={800}>{fmtIDR(summarySales.omzet)}</Typography>
+                      <Typography color="text.secondary">
+                        Total Omzet
+                      </Typography>
+                      <Typography fontWeight={800}>
+                        {fmtIDR(summarySales.omzet)}
+                      </Typography>
                     </Grid>
                   </Grid>
                 </Box>
@@ -277,13 +320,24 @@ export default function LaporanView() {
             ) : (
               <Stack spacing={1.25}>
                 <RowKV k="Omzet (Tunai + LUNAS)" v={fmtIDR(lr.omzet)} />
-                <RowKV k="HPP" v={`- ${fmtIDR(lr.hpp)}`} vSx={{ color: "error.main" }} />
+                <RowKV
+                  k="HPP"
+                  v={`- ${fmtIDR(lr.hpp)}`}
+                  vSx={{ color: "error.main" }}
+                />
                 <RowKV
                   k="Laba"
                   v={fmtIDR(lr.laba)}
-                  vSx={{ color: lr.laba >= 0 ? "success.main" : "error.main", fontWeight: 700 }}
+                  vSx={{
+                    color: lr.laba >= 0 ? "success.main" : "error.main",
+                    fontWeight: 700,
+                  }}
                 />
-                <RowKV k="Margin" v={`${lr.margin}%`} vSx={{ color: "info.main" }} />
+                <RowKV
+                  k="Margin"
+                  v={`${lr.margin}%`}
+                  vSx={{ color: "info.main" }}
+                />
               </Stack>
             )}
           </CardContent>
@@ -297,8 +351,12 @@ export default function LaporanView() {
 function RowKV({ k, v, vSx }) {
   return (
     <Stack direction="row" justifyContent="space-between" alignItems="center">
-      <Typography variant="body2" color="text.secondary">{k}</Typography>
-      <Typography variant="body2" sx={{ fontWeight: 700, ...vSx }}>{v}</Typography>
+      <Typography variant="body2" color="text.secondary">
+        {k}
+      </Typography>
+      <Typography variant="body2" sx={{ fontWeight: 700, ...vSx }}>
+        {v}
+      </Typography>
     </Stack>
   );
 }
