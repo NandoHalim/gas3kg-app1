@@ -7,6 +7,7 @@ import { DataService } from "../../services/DataService.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { fmtIDR } from "../../utils/helpers.js";
 import { COLORS } from "../../utils/constants.js";
+import { useSettings } from "../../context/SettingsContext.jsx";
 
 import {
   Box,
@@ -41,6 +42,7 @@ import CreditScoreIcon from "@mui/icons-material/CreditScore";
 
 export default function TransaksiView({ stocks = {}, onSaved }) {
   const toast = useToast();
+  const { settings } = useSettings(); // 🔑 ambil settings terbaru
   const [tab, setTab] = useState("penjualan"); // 'penjualan' | 'hutang'
 
   // Pencarian hutang
@@ -130,9 +132,7 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
   return (
     <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
       {/* Header + Tabs */}
-      <Box
-        sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}
-      >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Transaksi
         </Typography>
@@ -164,7 +164,9 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
           stocks={stocks}
           onSaved={onSaved}
           onCancel={() => {}}
-          customerList={customerList} // <-- kirim daftar suggestion
+          customerList={customerList}
+          defaultPrice={settings?.default_price} // 🔑 pakai harga default dari settings
+          hpp={settings?.hpp} // 🔑 kirim HPP agar perhitungan langsung ikut
         />
       )}
 
@@ -210,8 +212,8 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
               </Button>
             </Stack>
             <Box sx={{ mt: 1, fontSize: 12, color: COLORS.secondary }}>
-              Menampilkan transaksi dengan metode <b>HUTANG</b>. Pembayaran
-              wajib <b>lunas</b>.
+              Menampilkan transaksi dengan metode <b>HUTANG</b>. Pembayaran wajib{" "}
+              <b>lunas</b>.
             </Box>
           </Card>
 
@@ -313,8 +315,17 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
                 <Typography>Total Tagihan</Typography>
                 <Typography variant="h6">{fmtIDR(payingTotal)}</Typography>
               </Stack>
-              <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: "#f8fafc", fontSize: 12, color: "text.secondary" }}>
-                Nominal <b>dikunci</b> sama dengan total. Transaksi akan ditandai <b>LUNAS</b>.
+              <Box
+                sx={{
+                  p: 1.5,
+                  borderRadius: 1,
+                  bgcolor: "#f8fafc",
+                  fontSize: 12,
+                  color: "text.secondary",
+                }}
+              >
+                Nominal <b>dikunci</b> sama dengan total. Transaksi akan ditandai{" "}
+                <b>LUNAS</b>.
               </Box>
             </Stack>
           ) : (

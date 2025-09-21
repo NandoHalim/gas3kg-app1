@@ -1,5 +1,5 @@
 // src/components/views/PenjualanView.jsx
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { DataService } from "../../services/DataService.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import {
@@ -44,7 +44,10 @@ export default function PenjualanView({
   stocks = {},
   onSaved,
   onCancel,
-  customerList = [], // ← daftar pelanggan dari TransaksiView
+  customerList = [],
+  defaultPrice = DEFAULT_PRICE, // ⬅️ ambil dari SettingsContext via TransaksiView
+  hpp = 0,
+  activeMethods = PAYMENT_METHODS, // ⬅️ daftar metode aktif dari Settings
 }) {
   const toast = useToast();
 
@@ -52,11 +55,20 @@ export default function PenjualanView({
     customer: "",
     date: todayStr(),
     qty: "",
-    price: DEFAULT_PRICE,
-    method: "TUNAI",
+    price: defaultPrice,
+    method: activeMethods?.[0] || "TUNAI",
   });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Update form saat settings berubah (harga/metode)
+  useEffect(() => {
+    setForm((prev) => ({
+      ...prev,
+      price: defaultPrice,
+      method: activeMethods?.[0] || "TUNAI",
+    }));
+  }, [defaultPrice, activeMethods]);
 
   const stokISI = Number(stocks.ISI || 0);
   const qtyNum = Number(form.qty) || 0;
@@ -93,14 +105,15 @@ export default function PenjualanView({
         method: form.method,
         date: form.date,
         note: "",
+        hpp, // ⬅️ ikut disimpan supaya laba rugi konsisten
       });
       onSaved?.(snap);
       setForm({
         customer: "",
         date: todayStr(),
         qty: "",
-        price: DEFAULT_PRICE,
-        method: "TUNAI",
+        price: defaultPrice,
+        method: activeMethods?.[0] || "TUNAI",
       });
       toast?.show?.({
         type: "success",
@@ -147,27 +160,23 @@ export default function PenjualanView({
         />
         <CardContent>
           {err && (
-            <Alert
-              severity="error"
-              sx={{ mb: 2 }}
-              onClose={() => setErr("")}
-            >
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
               {err}
             </Alert>
           )}
 
           <Box component="form" onSubmit={submit}>
             <Grid container spacing={2}>
-              {/* Nama Pelanggan — Autocomplete (muncul setelah ketik) */}
+              {/* Nama Pelanggan */}
               <Grid item xs={12}>
                 <Autocomplete
                   freeSolo
                   options={customerList}
-                  openOnFocus={false} // <- jangan buka saat fokus
+                  openOnFocus={false}
                   getOptionLabel={(opt) => (typeof opt === "string" ? opt : "")}
                   filterOptions={(options, state) => {
                     const q = (state.inputValue || "").trim().toLowerCase();
-                    if (!q) return []; // <- kosong: sembunyikan dropdown
+                    if (!q) return [];
                     return options.filter((o) =>
                       String(o).toLowerCase().includes(q)
                     );
@@ -183,7 +192,6 @@ export default function PenjualanView({
                       sx={FIELD_SX}
                       label="Nama Pelanggan"
                       placeholder="Contoh: Ayu"
-                      // penting: nilai tetap sinkron ketika user ketik manual
                       value={form.customer}
                       onChange={(e) =>
                         setForm((prev) => ({
@@ -294,11 +302,7 @@ export default function PenjualanView({
                   >
                     {PRICE_OPTIONS.map((p) => (
                       <MenuItem key={p} value={p}>
-                        {new Intl.NumberFormat("id-ID", {
-                          style: "currency",
-                          currency: "IDR",
-                          maximumFractionDigits: 0,
-                        }).format(p)}
+                        {fmtIDR(p)}
                       </MenuItem>
                     ))}
                   </Select>
@@ -308,9 +312,7 @@ export default function PenjualanView({
               {/* Metode Pembayaran */}
               <Grid item xs={12} sm={6}>
                 <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
-                  <InputLabel id="method-label">
-                    Metode Pembayaran
-                  </InputLabel>
+                  <InputLabel id="method-label">Metode Pembayaran</InputLabel>
                   <Select
                     labelId="method-label"
                     label="Metode Pembayaran"
@@ -319,7 +321,7 @@ export default function PenjualanView({
                       setForm({ ...form, method: e.target.value })
                     }
                   >
-                    {PAYMENT_METHODS.map((m) => (
+                    {(activeMethods || PAYMENT_METHODS).map((m) => (
                       <MenuItem key={m} value={m}>
                         {m}
                       </MenuItem>
@@ -358,11 +360,7 @@ export default function PenjualanView({
 
               {/* Tombol */}
               <Grid item xs={12}>
-                <Stack
-                  direction="row"
-                  spacing={1.5}
-                  justifyContent="flex-end"
-                >
+                <Stack direction="row" spacing={1.5} justifyContent="flex-end">
                   <Button
                     variant="outlined"
                     type="button"
