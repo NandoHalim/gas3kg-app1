@@ -1,6 +1,5 @@
-// src/App.jsx
 import React, { useEffect, useState } from "react";
-import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout.jsx";
 
 import DashboardView from "./components/views/DashboardView.jsx";
@@ -13,13 +12,24 @@ import PelangganView from "./components/views/PelangganView.jsx";
 import BroadcastView from "./components/views/BroadcastView.jsx";
 import LaporanView from "./components/views/LaporanView.jsx";
 import PengaturanView from "./components/views/PengaturanView.jsx";
-import AdminRoute from "./components/routes/AdminRoute.jsx";
 
 import { useToast } from "./context/ToastContext.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 import { DataService } from "./services/DataService.js";
 import { supabase } from "./lib/supabase.js";
 import { COLORS } from "./utils/constants.js";
+
+/* ===== Guard: Admin Only ===== */
+function RequireAdmin({ children }) {
+  const { user, initializing } = useAuth();
+  const role =
+    (user?.role || (typeof window !== "undefined" ? window.__userRole : "") || "user").toLowerCase();
+
+  if (initializing) return <div className="p-4">Loading…</div>;
+  if (!user) return <LoginView />;           // jangan redirect — langsung tampilkan form login
+  if (role !== "admin") return <Navigate to="/" replace />; // user biasa → balik ke dashboard
+  return children;
+}
 
 export default function App() {
   const { user, initializing } = useAuth();
@@ -68,7 +78,6 @@ export default function App() {
         "postgres_changes",
         { event: "*", schema: "public", table: "sales" },
         async () => {
-          // setiap penjualan memengaruhi stok → refresh
           await refreshStocks();
         }
       )
@@ -82,7 +91,7 @@ export default function App() {
     };
   }, []);
 
-  // setiap ganti route → refresh stok (agar dashboard selalu terbaru)
+  // setiap ganti route → refresh stok
   useEffect(() => {
     refreshStocks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,12 +143,14 @@ export default function App() {
           <Route path="/pelanggan" element={<PelangganView />} />
           <Route path="/broadcast" element={<BroadcastView />} />
           <Route path="/laporan" element={<LaporanView />} />
+
+          {/* ADMIN‐ONLY */}
           <Route
             path="/pengaturan"
             element={
-              <AdminRoute>
+              <RequireAdmin>
                 <PengaturanView />
-              </AdminRoute>
+              </RequireAdmin>
             }
           />
         </Routes>
