@@ -1,10 +1,24 @@
+// src/components/views/LoginView.jsx
 import React, { useEffect, useState } from "react";
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Checkbox,
+  FormControlLabel,
+  TextField,
+  Typography,
+  InputAdornment,
+  IconButton,
+} from "@mui/material";
+import { Visibility, VisibilityOff } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
-import { useNavigate } from "react-router-dom";
 
 export default function LoginView() {
-  const { signInEmailPassword } = useAuth(); // ✅ pakai nama pasti
+  const { signInEmailPassword } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -25,7 +39,6 @@ export default function LoginView() {
     } catch {}
   }, []);
 
-  // toast aman (fallback ke alert)
   const safeToast = (type, message, title) => {
     if (toast?.show && typeof toast.show === "function") {
       toast.show({ type, title, message });
@@ -37,20 +50,17 @@ export default function LoginView() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
+
+    const em = email.trim();
+    const pw = password.trim();
+    if (!em || !pw) return;
+
     setLoading(true);
-
     try {
-      if (typeof signInEmailPassword !== "function") {
-        throw new Error("Fungsi login belum tersedia (AuthContext).");
-      }
+      await signInEmailPassword(em, pw);
 
-      await signInEmailPassword(email, password);
-
-      if (remember) {
-        try { localStorage.setItem("rememberEmail", email); } catch {}
-      } else {
-        try { localStorage.removeItem("rememberEmail"); } catch {}
-      }
+      if (remember) localStorage.setItem("rememberEmail", em);
+      else localStorage.removeItem("rememberEmail");
 
       safeToast("success", "Selamat datang kembali 👋", "Login Sukses");
       navigate("/", { replace: true });
@@ -63,128 +73,76 @@ export default function LoginView() {
   };
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
-        padding: 16,
-        backgroundImage: "url('/login-bg.jpg')", // pastikan file ada di /public/login-bg.jpg
+        p: 2,
+        backgroundImage: "url('/login-bg.jpg')",
         backgroundSize: "cover",
         backgroundPosition: "center",
-        backgroundColor: "#eff6ff", // fallback bila gambar gagal load
+        bgcolor: "#eff6ff",
       }}
     >
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          width: "100%",
-          maxWidth: 380,
-          background: "rgba(255,255,255,0.92)",
-          border: "1px solid #e5e7eb",
-          borderRadius: 12,
-          padding: 24,
-          display: "grid",
-          gap: 14,
-          boxShadow: "0 8px 20px rgba(0,0,0,.15)",
-          backdropFilter: "blur(6px)",
-          animation: "fadein .25s ease-out",
-        }}
-      >
-        <h2 style={{ margin: 0, textAlign: "center" }}>🔐 Login</h2>
+      <Card sx={{ maxWidth: 380, width: "100%", borderRadius: 3, boxShadow: 6 }}>
+        <CardContent
+          component="form"
+          onSubmit={handleSubmit}
+          sx={{ display: "grid", gap: 2 }}
+        >
+          <Typography variant="h5" align="center" fontWeight={700}>
+            🔐 Login
+          </Typography>
 
-        <div style={{ display: "grid", gap: 6 }}>
-          <label htmlFor="email" style={{ fontWeight: 600 }}>Email</label>
-          <input
-            id="email"
+          <TextField
+            label="Email"
             type="email"
-            placeholder="admin@mail.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            autoComplete="username"
-            style={{
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: "1px solid #cbd5e1",
-              outline: "none",
+            autoFocus
+            fullWidth
+          />
+
+          <TextField
+            label="Password"
+            type={showPass ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            fullWidth
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton onClick={() => setShowPass((s) => !s)} edge="end">
+                    {showPass ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
             }}
           />
-        </div>
 
-        <div style={{ display: "grid", gap: 6 }}>
-          <label htmlFor="password" style={{ fontWeight: 600 }}>Password</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              id="password"
-              type={showPass ? "text" : "password"}
-              placeholder="••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              style={{
-                flex: 1,
-                padding: "10px 12px",
-                borderRadius: 8,
-                border: "1px solid #cbd5e1",
-                outline: "none",
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPass((s) => !s)}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 8,
-                border: "1px solid #cbd5e1",
-                background: "#f8fafc",
-                cursor: "pointer",
-                minWidth: 72,
-              }}
-            >
-              {showPass ? "🙈 Hide" : "👁 Show"}
-            </button>
-          </div>
-        </div>
-
-        <label
-          htmlFor="remember"
-          style={{ display: "flex", alignItems: "center", gap: 8, userSelect: "none" }}
-        >
-          <input
-            id="remember"
-            type="checkbox"
-            checked={remember}
-            onChange={(e) => setRemember(e.target.checked)}
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+              />
+            }
+            label="Ingat saya"
           />
-          Ingat saya
-        </label>
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            marginTop: 6,
-            padding: "10px 12px",
-            borderRadius: 8,
-            border: "1px solid #2563eb",
-            background: loading ? "#93c5fd" : "#3b82f6",
-            color: "#fff",
-            fontWeight: 700,
-            cursor: loading ? "not-allowed" : "pointer",
-          }}
-        >
-          {loading ? "Loading..." : "Login"}
-        </button>
-      </form>
-
-      <style>{`
-        @keyframes fadein {
-          from { opacity: 0; transform: translateY(4px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
-    </div>
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            disabled={loading || !email.trim() || !password.trim()}
+          >
+            {loading ? "Loading..." : "Login"}
+          </Button>
+        </CardContent>
+      </Card>
+    </Box>
   );
 }
