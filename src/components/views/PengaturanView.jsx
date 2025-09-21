@@ -1,4 +1,3 @@
-// src/components/views/PengaturanView.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -22,45 +21,13 @@ import { DataService } from "../../services/DataService.js";
 import { DEFAULT_PRICE, PRICE_OPTIONS, PAYMENT_METHODS } from "../../utils/constants.js";
 import { fmtIDR } from "../../utils/helpers.js";
 
-/* ===== Wrapper: resolve role dengan aman ===== */
+/* ===== Wrapper: pakai role dari AuthContext langsung ===== */
 export default function PengaturanView() {
   const { user, initializing } = useAuth();
   const navigate = useNavigate();
-  const [role, setRole] = useState(null); // null = belum tahu, 'admin' | 'user'
 
-  // Resolusi role: context → window → query DB
-  useEffect(() => {
-    let on = true;
-    (async () => {
-      if (initializing) return;
-      if (!user) { setRole("user"); return; }
-
-      const fromCtx = (user.role || "").toLowerCase();
-      const fromWin = (window.__userRole || "").toLowerCase();
-
-      if (fromCtx) { if (on) setRole(fromCtx); return; }
-      if (fromWin) { if (on) setRole(fromWin); return; }
-
-      // fallback: cek ke DB
-      try {
-        const r = await DataService.getUserRoleById?.(user.id);
-        if (on) setRole((r || "user").toLowerCase());
-      } catch {
-        if (on) setRole("user");
-      }
-    })();
-    return () => { on = false; };
-  }, [user, initializing]);
-
-  // Redirect jika role sudah diketahui dan bukan admin
-  useEffect(() => {
-    if (!initializing && role && role !== "admin") {
-      navigate("/", { replace: true });
-    }
-  }, [initializing, role, navigate]);
-
-  // Loading/Skeleton saat role belum resolved
-  if (initializing || role == null) {
+  // Selagi AuthContext masih init -> skeleton biar tidak blank
+  if (initializing) {
     return (
       <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
         <Typography variant="h5" fontWeight={800}>Pengaturan</Typography>
@@ -71,9 +38,23 @@ export default function PengaturanView() {
     );
   }
 
+  const role = (user?.role || "user").toLowerCase();
+  console.log("[PengaturanView] resolved role:", role, "email:", user?.email);
+
+  // Kalau bukan admin → arahkan balik ke dashboard (dan tampilkan pesan singkat)
+  useEffect(() => {
+    if (role !== "admin") navigate("/", { replace: true });
+  }, [role, navigate]);
+
   if (role !== "admin") {
-    // sudah diarahkan oleh useEffect; render kosong agar tidak flicker
-    return null;
+    return (
+      <Box>
+        <Typography variant="h5" fontWeight={800} gutterBottom>Pengaturan</Typography>
+        <Alert severity="warning" variant="outlined">
+          Menu ini hanya untuk <b>admin</b>. Mengalihkan ke Dashboard…
+        </Alert>
+      </Box>
+    );
   }
 
   return <SettingsAdmin />;
