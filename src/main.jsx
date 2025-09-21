@@ -6,7 +6,7 @@ import "./index.css";
 
 import { ToastProvider } from "./context/ToastContext.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
-import { SettingProvider } from "./context/SettingContext.jsx";
+import { SettingProvider } from "./context/SettingsContext.jsx";
 
 // Logger global (membantu debugging di prod)
 if (typeof window !== "undefined") {
