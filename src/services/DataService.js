@@ -1,6 +1,11 @@
 // src/services/DataService.js
 import { supabase } from "../lib/supabase";
-import { MIN_YEAR, MAX_YEAR } from "../utils/constants";
+import {
+  MIN_YEAR,
+  MAX_YEAR,
+  DEFAULT_PRICE,
+  PAYMENT_METHODS,
+} from "../utils/constants";
 
 const errMsg = (e, fb) => e?.message || fb;
 
@@ -75,7 +80,6 @@ export const DataService = {
 
   // ====== PENJUALAN ======
   async loadSales(limit = 500) {
-    // pakai view lengkap yang menampilkan semua status (termasuk DIBATALKAN)
     let { data, error } = await supabase
       .from("view_sales_with_invoice")
       .select(
@@ -101,7 +105,6 @@ export const DataService = {
   },
 
   async getRecentSales(limit = 10) {
-    // tampilkan yang tidak dibatalkan
     let { data, error } = await supabase
       .from("view_sales_with_invoice")
       .select("id,invoice:invoice_display,customer,qty,price,method,created_at,status")
@@ -109,7 +112,6 @@ export const DataService = {
       .order("id", { ascending: false })
       .limit(limit);
 
-    // fallback ke tabel sales (tanpa 'invoice_display')
     if (error && (error.message || "").toLowerCase().includes("does not exist")) {
       const res2 = await supabase
         .from("sales")
@@ -462,14 +464,7 @@ export const DataService = {
   },
 
   // ====== RIWAYAT STOK ======
-  /**
-   * Menghasilkan keterangan manusiawi:
-   * - VOID: tampilkan nomor invoice + alasan
-   * - Penyesuaian/Koreksi: tampilkan arah + alasan
-   * - Lainnya: fallback keterangan default
-   */
   async getStockHistory({ from, to, jenis = "ALL", limit = 300 } = {}) {
-    // coba view dengan balance dulu; fallback ke tabel stock_logs
     const base = async (source) => {
       let q = supabase
         .from(source)
@@ -492,7 +487,6 @@ export const DataService = {
 
     const rows = res.data || [];
 
-    // Ambil semua sale_id dari note untuk kasus VOID
     const saleIds = Array.from(
       new Set(
         rows
@@ -504,7 +498,6 @@ export const DataService = {
       )
     );
 
-    // Peta sale_id -> invoice_display
     let invoiceMap = {};
     if (saleIds.length > 0) {
       const { data: invRows, error: invErr } = await supabase
@@ -515,12 +508,10 @@ export const DataService = {
       if (!invErr && Array.isArray(invRows)) {
         invRows.forEach((r) => (invoiceMap[r.id] = r.invoice_display));
       } else {
-        // fallback minimal
         saleIds.forEach((id) => (invoiceMap[id] = `INV#${id}`));
       }
     }
 
-    // Bentuk keterangan ramah
     const pretty = rows.map((r) => {
       const change = Number(r.qty_change || 0);
       const masuk = change > 0 ? change : 0;
@@ -552,7 +543,6 @@ export const DataService = {
             .replace(/^[-–—]\s*/, "");
         ket = `${labelJenis} — ${arah}${reason ? ` — ${reason}` : ""}`;
       } else {
-        // default lama
         if (r.code === "ISI") ket = change > 0 ? "Stok ISI bertambah" : "Stok ISI berkurang";
         else if (r.code === "KOSONG")
           ket = change > 0 ? "Stok KOSONG bertambah" : "Stok KOSONG berkurang";
@@ -633,7 +623,6 @@ export const DataService = {
 
   // ====== PELANGGAN ======
   async getCustomers({ q = "", filter = "ALL", limit = 300 } = {}) {
-    // coba view ringkasan dulu
     let qry = supabase
       .from("view_customers_overview")
       .select("id,name,phone,address,note,active,total_tx,total_value,has_debt")
@@ -648,7 +637,6 @@ export const DataService = {
 
     let { data, error } = await qry;
 
-    // fallback ke tabel dasar
     if (error && (error.message || "").toLowerCase().includes("does not exist")) {
       let q2 = supabase
         .from("customers")
@@ -658,7 +646,6 @@ export const DataService = {
       if (q) q2 = q2.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
       const r2 = await q2;
       if (r2.error) throw new Error(errMsg(r2.error, "Gagal ambil pelanggan"));
-      // tanpa metrik, isi default
       data = (r2.data || []).map((c) => ({
         ...c,
         total_tx: 0,
@@ -721,19 +708,15 @@ export const DataService = {
   },
 
   async getCustomerStats({ customer_id, name }) {
-    // coba RPC/view (jika ada)
     let rpc = await supabase.rpc("get_customer_stats", { p_customer_id: customer_id, p_name: name });
     if (!rpc.error && rpc.data) return rpc.data;
 
-    // fallback: hitung dari tabel sales
     let q = supabase
       .from("sales")
       .select("qty,price,method,status,customer,created_at")
       .neq("status", "DIBATALKAN");
 
     if (customer_id) {
-      // kalau skema menyimpan relasi id → perlu kolom customer_id
-      // fallback gunakan name
       q = q.ilike("customer", `%${name || ""}%`);
     } else if (name) {
       q = q.ilike("customer", `%${name}%`);
@@ -752,9 +735,9 @@ export const DataService = {
 
     return { totalTransaksi, totalNilai, rataRata, hutangAktif };
   }
-}; // << ✅ tutup blok DataService di sini
+}; // << tutup DataService
 
-// ====== SETTINGS (FE fallback via localStorage) ======
+// ====== SETTINGS (FE via localStorage + broadcast agar “efek langsung”) ======
 const LS_KEY = "gas3kg_settings";
 function readLS() {
   try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch { return {}; }
@@ -767,13 +750,48 @@ DataService.getSettings = async function () {
   return readLS();
 };
 
+/**
+ * Kembalikan pengaturan aktif dengan fallback aman (DEFAULT_PRICE, PAYMENT_METHODS).
+ * Dipakai komponen agar tidak perlu mikir fallback lagi.
+ */
+DataService.getActiveSettings = async function () {
+  const s = readLS();
+  return {
+    business_name: s.business_name || "",
+    default_price: Number(s.default_price) > 0 ? Number(s.default_price) : DEFAULT_PRICE,
+    hpp: Number(s.hpp) > 0 ? Number(s.hpp) : 0,
+    payment_methods: Array.isArray(s.payment_methods) && s.payment_methods.length
+      ? s.payment_methods
+      : PAYMENT_METHODS,
+  };
+};
+
+/**
+ * Simpan dan siarkan event `settings:updated` supaya view lain langsung ikut.
+ * Juga taruh cache ringan di window.__appSettings (opsional).
+ */
 DataService.saveSettings = async function (payload) {
   const cur = readLS();
-  writeLS({ ...cur, ...payload });
+  const merged = { ...cur, ...payload };
+  writeLS(merged);
+
+  try { window.__appSettings = merged; } catch {}
+  try {
+    window.dispatchEvent(new CustomEvent("settings:updated", { detail: merged }));
+  } catch {}
   return true;
 };
 
-// ====== USERS (placeholder FE only) ======
+/**
+ * Subscribe perubahan settings (opsional). Return fn untuk unsubscribe.
+ */
+DataService.onSettingsChange = function (handler) {
+  const fn = (e) => handler?.(e?.detail || readLS());
+  window.addEventListener("settings:updated", fn);
+  return () => window.removeEventListener("settings:updated", fn);
+};
+
+// ====== USERS (placeholder FE only)
 DataService.getUsers = async function () {
   const ls = readLS();
   return ls._users || [];
@@ -798,7 +816,7 @@ DataService.resetUserPassword = async function () {
   return true; // placeholder
 };
 
-// ====== BACKUP ======
+// ====== BACKUP
 DataService.exportAll = async function () {
   const [stocks, sales, customers] = await Promise.all([
     this.loadStocks().catch(() => ({})),
@@ -823,12 +841,12 @@ DataService.importAll = async function (file) {
   return true;
 };
 
-// ====== Hard Reset ======
+// ====== Hard Reset
 DataService.hardResetAll = async function () {
   return this.resetAllData();
 };
 
-// ==== Role helper: cek apakah user adalah admin (berdasarkan daftar users di localStorage)
+// ==== Role helper
 DataService.isAdmin = async function () {
   try {
     const { data } = await supabase.auth.getUser();
@@ -844,7 +862,7 @@ DataService.isAdmin = async function () {
   }
 };
 
-// ====== AUTH/ROLE UTIL ======
+// ====== AUTH/ROLE UTIL (via public.app_admins)
 DataService.getUserRoleById = async function (userId) {
   try {
     if (!userId) return "user";
