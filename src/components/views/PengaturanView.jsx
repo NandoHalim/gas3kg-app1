@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link as RouterLink } from "react-router-dom";
 import {
   Box, Stack, Typography, Card, CardHeader, CardContent, Grid, TextField, Button,
   Chip, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer,
   MenuItem, Select, FormControl, InputLabel, IconButton, Tooltip, Alert, Dialog,
-  DialogTitle, DialogContent, DialogActions, Skeleton, Checkbox, ListItemText
+  DialogTitle, DialogContent, DialogActions, Skeleton, Checkbox, ListItemText, Link
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SaveIcon from "@mui/icons-material/Save";
@@ -21,43 +21,44 @@ import { DataService } from "../../services/DataService.js";
 import { DEFAULT_PRICE, PRICE_OPTIONS, PAYMENT_METHODS } from "../../utils/constants.js";
 import { fmtIDR } from "../../utils/helpers.js";
 
-/* ===== Wrapper: pakai role dari AuthContext langsung ===== */
+/* ===== Wrapper: tampilkan role yang sedang aktif, dan guard admin ===== */
 export default function PengaturanView() {
   const { user, initializing } = useAuth();
-  const navigate = useNavigate();
-
-  // Selagi AuthContext masih init -> skeleton biar tidak blank
-  if (initializing) {
-    return (
-      <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
-        <Typography variant="h5" fontWeight={800}>Pengaturan</Typography>
-        <Skeleton height={40} />
-        <Skeleton height={180} />
-        <Skeleton height={240} />
-      </Stack>
-    );
-  }
-
   const role = (user?.role || "user").toLowerCase();
-  console.log("[PengaturanView] resolved role:", role, "email:", user?.email);
 
-  // Kalau bukan admin → arahkan balik ke dashboard (dan tampilkan pesan singkat)
-  useEffect(() => {
-    if (role !== "admin") navigate("/", { replace: true });
-  }, [role, navigate]);
+  console.log("[PengaturanView] user:", user?.email, "role:", role, "initializing:", initializing);
 
-  if (role !== "admin") {
-    return (
-      <Box>
-        <Typography variant="h5" fontWeight={800} gutterBottom>Pengaturan</Typography>
+  return (
+    <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <Typography variant="h5" fontWeight={800}>Pengaturan</Typography>
+        <Chip
+          size="small"
+          icon={<SettingsSuggestIcon />}
+          label={role === "admin" ? "Admin" : "Bukan Admin"}
+          color={role === "admin" ? "success" : "default"}
+          sx={{ ml: 1 }}
+        />
+      </Stack>
+
+      {initializing && (
+        <Stack spacing={1}>
+          <Skeleton height={40} />
+          <Skeleton height={180} />
+          <Skeleton height={240} />
+        </Stack>
+      )}
+
+      {!initializing && role !== "admin" && (
         <Alert severity="warning" variant="outlined">
-          Menu ini hanya untuk <b>admin</b>. Mengalihkan ke Dashboard…
+          Menu ini hanya tersedia untuk <b>admin</b>.{" "}
+          <Link component={RouterLink} to="/" underline="hover">Kembali ke Dashboard</Link>
         </Alert>
-      </Box>
-    );
-  }
+      )}
 
-  return <SettingsAdmin />;
+      {!initializing && role === "admin" && <SettingsAdmin />}
+    </Stack>
+  );
 }
 
 /* ===== Halaman pengaturan utk admin ===== */
@@ -86,8 +87,15 @@ function SettingsAdmin() {
     (async () => {
       try {
         setLoading(true);
-        const s = await DataService.getSettings();
+
+        // Settings
+        const s = await DataService.getSettings().catch((e) => {
+          console.error("[Pengaturan] getSettings error:", e);
+          setErr(e?.message || "Gagal memuat pengaturan");
+          return {};
+        });
         if (!alive) return;
+
         setBusinessName(s.business_name || "");
         setDefaultPrice(Number(s.default_price || DEFAULT_PRICE));
         setHpp(Number(s.hpp || 0));
@@ -95,15 +103,15 @@ function SettingsAdmin() {
           Array.isArray(s.payment_methods) ? s.payment_methods : PAYMENT_METHODS
         );
 
-        const u = await DataService.getUsers();
+        // Users (placeholder FE / localStorage)
+        const u = await DataService.getUsers().catch((e) => {
+          console.error("[Pengaturan] getUsers error:", e);
+          return [];
+        });
         if (!alive) return;
         setUsers(Array.isArray(u) ? u : []);
-        setErr("");
-      } catch (e) {
-        if (!alive) return;
-        setErr(e.message || "Gagal memuat pengaturan");
       } finally {
-        if (alive) setLoading(false);
+        if (alive) setLoading(false); // pastikan loading berhenti apapun yang terjadi
       }
     })();
     return () => { alive = false; };
@@ -204,12 +212,7 @@ function SettingsAdmin() {
   };
 
   return (
-    <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
-      <Stack direction="row" alignItems="center" spacing={1}>
-        <Typography variant="h5" fontWeight={800}>Pengaturan</Typography>
-        <Chip icon={<SettingsSuggestIcon />} label="Admin Only" size="small" sx={{ ml: 1 }} />
-      </Stack>
-
+    <>
       {err && <Alert severity="error" variant="outlined">{err}</Alert>}
 
       {/* 1. Pengaturan Dasar */}
@@ -217,7 +220,9 @@ function SettingsAdmin() {
         <CardHeader title="Pengaturan Dasar" />
         <CardContent>
           {loading ? (
-            <Stack spacing={1}><Skeleton height={36}/><Skeleton height={36}/><Skeleton height={36}/></Stack>
+            <Stack spacing={1}>
+              <Skeleton height={36}/><Skeleton height={36}/><Skeleton height={36}/>
+            </Stack>
           ) : (
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
@@ -272,7 +277,7 @@ function SettingsAdmin() {
         </CardContent>
       </Card>
 
-      {/* 4. Manajemen User (placeholder) */}
+      {/* 2. Manajemen User (placeholder) */}
       <Card>
         <CardHeader title="Pengguna & Hak Akses"
                     action={<Chip icon={<AdminPanelSettingsIcon/>} label="Kelola user" size="small" />} />
@@ -342,7 +347,7 @@ function SettingsAdmin() {
         </CardContent>
       </Card>
 
-      {/* 6. Backup & Restore */}
+      {/* 3. Backup & Restore */}
       <Card>
         <CardHeader title="Backup & Restore Data" />
         <CardContent>
@@ -366,7 +371,7 @@ function SettingsAdmin() {
         </CardContent>
       </Card>
 
-      {/* 7. Hard Reset */}
+      {/* 4. Hard Reset */}
       <Card>
         <CardHeader title="Hard Reset (Hapus Semua Data)" />
         <CardContent>
@@ -393,6 +398,6 @@ function SettingsAdmin() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Stack>
+    </>
   );
 }
