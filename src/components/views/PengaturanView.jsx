@@ -1,3 +1,4 @@
+// src/components/views/PengaturanView.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Box, Stack, Typography, Card, CardHeader, CardContent, Grid, TextField, Button,
@@ -32,7 +33,7 @@ export default function PengaturanView() {
     (async () => {
       if (initializing) return;
       if (!user) { on && setRole("user"); return; }
-      const r = await DataService.getUserRoleById(user.id).catch(()=>"user");
+      const r = await DataService.getUserRoleById(user.id).catch(() => "user");
       on && setRole((r || "user").toLowerCase());
     })();
     return () => { on = false; };
@@ -48,7 +49,6 @@ export default function PengaturanView() {
   }
 
   if (role !== "admin") {
-    // diarahkan dari router/guard — render info singkat
     return (
       <Box>
         <Typography variant="h5" fontWeight={800} gutterBottom>Pengaturan</Typography>
@@ -122,7 +122,7 @@ function SettingsAdmin() {
       }
     })();
     return () => { alive = false; };
-  }, [settingsLoading]); // reload bila SettingContext selesai
+  }, [settingsLoading]);
 
   const summary = useMemo(() => ({
     hargaLabel: fmtIDR(defaultPrice),
