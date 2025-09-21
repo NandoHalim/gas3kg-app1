@@ -843,3 +843,24 @@ DataService.isAdmin = async function () {
     return false;
   }
 };
+
+// ====== AUTH/ROLE UTIL ======
+DataService.getUserRoleById = async function (userId) {
+  try {
+    if (!userId) return "user";
+    const { data, error } = await supabase
+      .from("app_admins")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("[DataService.getUserRoleById] error:", error.message);
+      return "user";
+    }
+    return data?.user_id ? "admin" : "user";
+  } catch (e) {
+    console.warn("[DataService.getUserRoleById] exception:", e?.message || e);
+    return "user";
+  }
+};
