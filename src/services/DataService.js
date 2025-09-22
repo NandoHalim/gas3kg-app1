@@ -51,7 +51,6 @@ export const DataService = {
     return rowsToStockObject(data);
   },
 
-  // Tambah stok ISI (HARUS menukar dari KOSONG yang cukup)
   async addIsi({ qty, date, note }) {
     if (!(qty > 0)) throw new Error("Jumlah harus > 0");
     const yyyy = Number(String(date).slice(0, 4));
@@ -59,15 +58,12 @@ export const DataService = {
       throw new Error(`Tanggal harus antara ${MIN_YEAR}-${MAX_YEAR}`);
     }
 
-    // pagar tambahan (DB tetap validasi)
     try {
       const snap = await this.loadStocks();
       if (Number(qty) > Number(snap.KOSONG || 0)) {
         throw new Error("Stok KOSONG tidak cukup untuk ditukar menjadi ISI");
       }
-    } catch {
-      /* DB tetap validasi */
-    }
+    } catch {}
 
     const { data, error } = await supabase.rpc("stock_add_isi", {
       p_qty: qty,
@@ -88,7 +84,6 @@ export const DataService = {
       .order("id", { ascending: false })
       .limit(limit);
 
-    // fallback ke tabel sales (tanpa 'invoice_display')
     if (error && (error.message || "").toLowerCase().includes("does not exist")) {
       const res2 = await supabase
         .from("sales")
@@ -197,7 +192,7 @@ export const DataService = {
     return rowsToStockObject(resp.data);
   },
 
-  // ====== RINGKASAN ======
+ // ====== RINGKASAN ======
   async getSalesSummary({ from, to }) {
     const { data, error } = await supabase
       .from("sales")
@@ -810,27 +805,47 @@ export const DataService = {
       is_admin: adminSet.has(m.user_id),
     }));
   },
+
 }; // << tutup DataService
 
-// ====== SETTINGS (FE via localStorage + broadcast agar “efek langsung”) ======
+/* =========================
+   SETTINGS (via Supabase + LS)
+   ========================= */
 const LS_KEY = "gas3kg_settings";
 function readLS() {
   try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch { return {}; }
 }
 function writeLS(obj) {
-  localStorage.setItem(LS_KEY, JSON.stringify(obj || {}));
+  try { localStorage.setItem(LS_KEY, JSON.stringify(obj || {})); } catch {}
 }
 
 DataService.getSettings = async function () {
-  return readLS();
+  try {
+    const { data, error } = await supabase
+      .from("app_settings")
+      .select("business_name, default_price, hpp, payment_methods, updated_at")
+      .eq("id", 1)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    const normalized = {
+      business_name: data?.business_name || "",
+      default_price: Number(data?.default_price) || 0,
+      hpp: Number(data?.hpp) || 0,
+      payment_methods: Array.isArray(data?.payment_methods) ? data.payment_methods : [],
+      updated_at: data?.updated_at || null,
+    };
+    writeLS(normalized);
+    try { window.__appSettings = normalized; } catch {}
+    return normalized;
+  } catch {
+    return readLS();
+  }
 };
 
-/**
- * Kembalikan pengaturan aktif dengan fallback aman (DEFAULT_PRICE, PAYMENT_METHODS).
- * Dipakai komponen agar tidak perlu mikir fallback lagi.
- */
 DataService.getActiveSettings = async function () {
-  const s = readLS();
+  const s = await this.getSettings().catch(() => readLS());
   return {
     business_name: s.business_name || "",
     default_price: Number(s.default_price) > 0 ? Number(s.default_price) : DEFAULT_PRICE,
@@ -838,175 +853,37 @@ DataService.getActiveSettings = async function () {
     payment_methods: Array.isArray(s.payment_methods) && s.payment_methods.length
       ? s.payment_methods
       : PAYMENT_METHODS,
+    updated_at: s.updated_at || null,
   };
 };
 
-/**
- * Simpan dan siarkan event `settings:updated` supaya view lain langsung ikut.
- * Juga taruh cache ringan di window.__appSettings (opsional).
- */
 DataService.saveSettings = async function (payload) {
-  const cur = readLS();
+  const cur = await this.getSettings().catch(() => readLS());
   const merged = { ...cur, ...payload };
-  writeLS(merged);
 
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert(
+      {
+        id: 1,
+        business_name: merged.business_name || null,
+        default_price: Number(merged.default_price) || null,
+        hpp: Number(merged.hpp) || null,
+        payment_methods: merged.payment_methods || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    );
+  if (error) throw new Error(error.message || "Gagal menyimpan pengaturan");
+
+  writeLS(merged);
   try { window.__appSettings = merged; } catch {}
-  try {
-    window.dispatchEvent(new CustomEvent("settings:updated", { detail: merged }));
-  } catch {}
+  try { window.dispatchEvent(new CustomEvent("settings:updated", { detail: merged })); } catch {}
   return true;
 };
 
-/**
- * Subscribe perubahan settings (opsional). Return fn untuk unsubscribe.
- */
 DataService.onSettingsChange = function (handler) {
   const fn = (e) => handler?.(e?.detail || readLS());
   window.addEventListener("settings:updated", fn);
   return () => window.removeEventListener("settings:updated", fn);
-};
-
-// ====== USERS (placeholder FE only)
-DataService.getUsers = async function () {
-  const ls = readLS();
-  return ls._users || [];
-};
-
-DataService.addUser = async function ({ email, role = "user" }) {
-  const ls = readLS();
-  const list = ls._users || [];
-  list.push({ id: Date.now(), email, role });
-  writeLS({ ...ls, _users: list });
-  return true;
-};
-
-DataService.updateUserRole = async function ({ user_id, role }) {
-  const ls = readLS();
-  const list = (ls._users || []).map((u) => (u.id === user_id ? { ...u, role } : u));
-  writeLS({ ...ls, _users: list });
-  return true;
-};
-
-DataService.resetUserPassword = async function () {
-  return true; // placeholder
-};
-
-// ====== BACKUP
-DataService.exportAll = async function () {
-  const [stocks, sales, customers] = await Promise.all([
-    this.loadStocks().catch(() => ({})),
-    this.loadSales(2000).catch(() => []),
-    this.getCustomers({ limit: 2000 }).catch(() => []),
-  ]);
-  const blob = new Blob(
-    [JSON.stringify({ stocks, sales, customers }, null, 2)],
-    { type: "application/json" }
-  );
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `backup_gas3kg_${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  return true;
-};
-
-DataService.importAll = async function (file) {
-  await file?.text(); // placeholder
-  return true;
-};
-
-// ====== Hard Reset
-DataService.hardResetAll = async function () {
-  return this.resetAllData();
-};
-
-// ==== Role helper (legacy FE cache; dipertahankan untuk kompatibilitas)
-DataService.isAdmin = async function () {
-  try {
-    const { data } = await supabase.auth.getUser();
-    const email = (data?.user?.email || "").toLowerCase();
-    if (!email) return false;
-
-    const users = await this.getUsers();
-    return !!users.find(
-      (u) => String(u.email || "").toLowerCase() === email && String(u.role) === "admin"
-    );
-  } catch {
-    return false;
-  }
-};
-
-/* =========================
-   DASHBOARD SNAPSHOT (FAST)
-   ========================= */
-
-// cache helper (localStorage)
-const DASH_CACHE_KEY = "dash_snap_v1";
-function readDashCache() {
-  try {
-    const raw = localStorage.getItem(DASH_CACHE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-function writeDashCache(obj) {
-  try { localStorage.setItem(DASH_CACHE_KEY, JSON.stringify(obj)); } catch {}
-}
-
-/**
- * Ambil snapshot dashboard secepat mungkin.
- * - Return dari cache jika masih fresh → UI tampil instan
- * - Lalu revalidate paralel dan siarkan event 'dashboard:snapshot'
- *
- * @param {object} opt
- * @param {boolean} opt.revalidate - jalankan fetch ulang di belakang layar
- * @param {number} opt.maxAgeMs - usia cache maksimal (default 3 menit)
- */
-DataService.getDashboardSnapshot = async function getDashboardSnapshot({
-  revalidate = true,
-  maxAgeMs = 3 * 60 * 1000,
-} = {}) {
-  const now = Date.now();
-  const cached = readDashCache();
-  const fresh = cached && (now - (cached._ts || 0) < maxAgeMs) ? cached : null;
-
-  // kick off revalidate tanpa menunggu (non-blocking)
-  if (revalidate) {
-    (async () => {
-      try {
-        // panggil service yang sudah ada, tapi paralel
-        const [stocks, sevenDays, receivables, recent] = await Promise.all([
-          this.loadStocks().catch(() => ({ ISI: 0, KOSONG: 0 })),
-          this.getSevenDaySales().catch(() => []),
-          this.getTotalReceivables().catch(() => 0),
-          this.getRecentSales(10).catch(() => []),
-        ]);
-
-        const snap = {
-          stocks,
-          sevenDays,          // [{date, qty}]
-          receivables,        // number
-          recentSales: recent, // array
-          _ts: Date.now(),
-        };
-        writeDashCache(snap);
-        try {
-          window.dispatchEvent(new CustomEvent("dashboard:snapshot", { detail: snap }));
-        } catch {}
-      } catch (e) {
-        // diam2 saja; UI tetap pakai cache/hasil awal
-        console.warn("[dash revalidate] gagal:", e?.message || e);
-      }
-    })();
-  }
-
-  return fresh || {
-    stocks: { ISI: 0, KOSONG: 0 },
-    sevenDays: [],
-    receivables: 0,
-    recentSales: [],
-    _ts: 0,
-  };
 };
