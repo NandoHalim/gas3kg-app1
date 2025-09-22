@@ -189,74 +189,99 @@ export default function DashboardView({ stocks = {} }) {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const fetchDashboard = async () => {
-    try {
-      setLoading(true);
+  // === FAST PATH: tampilkan snapshot instan dari cache, lalu revalidate di belakang layar
+  useEffect(() => {
+    let alive = true;
 
-      const rows = await DataService.loadSales(500);
+    (async () => {
+      // 1) ambil snapshot cepat (bisa dari cache localStorage)
+      const snap = await DataService.getDashboardSnapshot({ revalidate: true });
+      if (!alive) return;
+
+      setPiutang(snap.receivables ?? 0);
+      setSeries7(Array.isArray(snap.sevenDays) ? snap.sevenDays : []);
+      setRecent(Array.isArray(snap.recentSales) ? snap.recentSales : []);
+
+      // tampilkan UI terlebih dahulu
+      setLoading(false);
+
+      // 2) heavy compute untuk ringkasan keuangan + penjualan hari ini (non-blocking)
+      fetchHeavy();
+    })();
+
+    // dengarkan broadcast hasil revalidate snapshot
+    const onSnap = (e) => {
+      if (!alive) return;
+      const s = e.detail || {};
+      setPiutang(s.receivables ?? 0);
+      setSeries7(Array.isArray(s.sevenDays) ? s.sevenDays : []);
+      setRecent(Array.isArray(s.recentSales) ? s.recentSales : []);
+    };
+    window.addEventListener("dashboard:snapshot", onSnap, { passive: true });
+
+    // realtime supabase → revalidate ringan
+    const ch = supabase
+      .channel("dashboard-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, () => {
+        DataService.getDashboardSnapshot({ revalidate: true });
+        fetchHeavy(); // agar ringkasan keuangan ikut ter-update
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "stocks" }, () => {
+        DataService.getDashboardSnapshot({ revalidate: true });
+      })
+      .subscribe();
+
+    return () => {
+      alive = false;
+      window.removeEventListener("dashboard:snapshot", onSnap);
+      try { supabase.removeChannel(ch); } catch {}
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // bila HPP berubah → hitung ulang laba
+  useEffect(() => {
+    fetchHeavy();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hppSetting]);
+
+  // ===== heavy fetch (jalan di background, tidak blokir render awal)
+  const fetchHeavy = async () => {
+    try {
+      // Ambil data sekali secara paralel
+      const [rows, todaySum] = await Promise.all([
+        DataService.loadSales(500),
+        DataService.getSalesSummary({ from: todayStr(), to: todayStr() }).catch(() => ({ qty: 0, money: 0 })),
+      ]);
+
       const notVoid = (rows || []).filter(
         (r) => String(r.status || "").toUpperCase() !== "DIBATALKAN"
       );
 
       const qty = notVoid.reduce((a, b) => a + Number(b.qty || 0), 0);
-
       const paid = notVoid.filter(
         (r) =>
           String(r.method).toUpperCase() === "TUNAI" ||
           String(r.status || "").toUpperCase() === "LUNAS"
       );
-      const omzet = paid.reduce((a, b) => a + Number(b.total || 0), 0);
+
+      // gunakan r.total bila ada (lebih akurat), fallback ke qty*price
+      const getTotal = (r) =>
+        Number.isFinite(Number(r.total)) && Number(r.total) > 0
+          ? Number(r.total)
+          : (Number(r.qty) || 0) * (Number(r.price) || 0);
+
+      const omzet = paid.reduce((a, b) => a + getTotal(b), 0);
       const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * hppSetting, 0);
       const laba = omzet - hpp;
 
-      const todaySum =
-        (await DataService.getSalesSummary({
-          from: todayStr(),
-          to: todayStr(),
-        })) || { qty: 0, money: 0 };
-
-      const totalPiutang = await DataService.getTotalReceivables();
-      const s7 = await DataService.getSevenDaySales();
-      const r = await DataService.getRecentSales(5);
-
       setSum({ qty, omzet, laba });
-      setToday(todaySum);
-      setPiutang(totalPiutang ?? 0);
-      setSeries7(Array.isArray(s7) ? s7 : []);
-      setRecent(Array.isArray(r) ? r : []);
+      setToday(todaySum || { qty: 0, money: 0 });
       setErr("");
     } catch (e) {
       setErr(e.message || "Gagal memuat dashboard");
-    } finally {
-      setLoading(false);
     }
   };
-
-  useEffect(() => {
-    let alive = true;
-    fetchDashboard();
-
-    const ch = supabase
-      .channel("dashboard-rt")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "sales" },
-        () => alive && fetchDashboard()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "stocks" },
-        () => alive && fetchDashboard()
-      )
-      .subscribe();
-
-    return () => {
-      try {
-        supabase.removeChannel(ch);
-      } catch {}
-      alive = false;
-    };
-  }, [hppSetting]); // kalau admin ubah HPP → dashboard auto-refresh
 
   return (
     <Stack spacing={1.5}>
@@ -295,8 +320,8 @@ export default function DashboardView({ stocks = {} }) {
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Stok Isi"
-            value={loading ? <Skeleton width={60} /> : isi}
-            subtitle={isi <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Siap jual"}
+            value={loading ? <Skeleton width={60} /> : Number(stocks.ISI || 0)}
+            subtitle={Number(stocks.ISI || 0) <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Siap jual"}
             color="success"
             icon={<Inventory2Icon />}
           />
@@ -304,8 +329,8 @@ export default function DashboardView({ stocks = {} }) {
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Stok Kosong"
-            value={loading ? <Skeleton width={60} /> : kosong}
-            subtitle={kosong <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Tabung kembali"}
+            value={loading ? <Skeleton width={60} /> : Number(stocks.KOSONG || 0)}
+            subtitle={Number(stocks.KOSONG || 0) <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Tabung kembali"}
             color="error"
             icon={<Inventory2Icon />}
           />
@@ -334,7 +359,11 @@ export default function DashboardView({ stocks = {} }) {
       <Card>
         <CardHeader title="Kondisi Stok (Isi vs Kosong)" />
         <CardContent>
-          {loading ? <Skeleton height={24} /> : <StockProgress isi={isi} kosong={kosong} />}
+          {loading ? (
+            <Skeleton height={24} />
+          ) : (
+            <StockProgress isi={Number(stocks.ISI || 0)} kosong={Number(stocks.KOSONG || 0)} />
+          )}
         </CardContent>
       </Card>
 
@@ -439,7 +468,11 @@ export default function DashboardView({ stocks = {} }) {
                       <TableCell align="right">{x.qty}</TableCell>
                       <TableCell>{x.method}</TableCell>
                       <TableCell align="right">
-                        {fmtIDR((Number(x.qty) || 0) * (Number(x.price) || 0))}
+                        {fmtIDR(
+                          Number.isFinite(Number(x.total)) && Number(x.total) > 0
+                            ? Number(x.total)
+                            : (Number(x.qty) || 0) * (Number(x.price) || 0)
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
