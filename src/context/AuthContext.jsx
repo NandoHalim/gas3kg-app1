@@ -2,97 +2,76 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
-// Bentuk data yang dipakai komponen lain:
-// const { user, session, initializing, signIn, signOut, changePassword, refreshUser } = useAuth();
-const AuthContext = createContext(null);
+/**
+ * AuthContext:
+ * - user: objek user Supabase (null jika belum login)
+ * - initializing: true saat bootstrap auth (supaya guard/route bisa tunggu)
+ * - signOut: helper opsional
+ */
+const AuthContext = createContext({ user: null, initializing: true });
 
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [initializing, setInitializing] = useState(true);
 
-  // --- helper: refresh user dari Supabase
-  const refreshUser = async () => {
-    const { data, error } = await supabase.auth.getUser();
-    if (!error) setUser(data?.user || null);
-    return data?.user || null;
-  };
-
-  // --- mount: ambil session awal + pasang listener
   useEffect(() => {
-    let mounted = true;
+    let alive = true;
     let unsub = null;
 
     (async () => {
       try {
-        // 1) get session awal
-        const { data } = await supabase.auth.getSession();
-        if (!mounted) return;
-        setSession(data?.session || null);
-        setUser(data?.session?.user || null);
-      } catch {
-        if (!mounted) return;
-        setSession(null);
-        setUser(null);
+        // 1) Bootstrap: cek session saat ini
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn("[Auth] getSession error:", error.message);
+        }
+        const curUser = data?.session?.user ?? null;
+        if (alive) setUser(curUser);
+      } catch (e) {
+        console.warn("[Auth] getSession exception:", e?.message || e);
       } finally {
-        // PENTING: apapun hasilnya, tutup loading
-        if (mounted) setInitializing(false);
+        // Penting: matikan initializing meski gagal
+        if (alive) setInitializing(false);
       }
 
-      // 2) listener perubahan auth
-      const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-        if (!mounted) return;
-        setSession(nextSession);
-        setUser(nextSession?.user || null);
+      // 2) Subscribe perubahan auth
+      const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+        // event: 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED' | 'USER_UPDATED' | ...
+        const nextUser = session?.user ?? null;
+        setUser(nextUser);
+
+        // Emit event ringan untuk listener lain (opsional)
+        try {
+          window.dispatchEvent(new CustomEvent("auth:changed", { detail: { event, user: nextUser } }));
+        } catch {}
+
+        // Safety: di beberapa edge-case, pastikan initializing padam
+        setInitializing(false);
       });
-      unsub = sub?.subscription?.unsubscribe ?? sub?.unsubscribe ?? null;
+
+      unsub = sub?.subscription;
     })();
 
-    // cleanup
+    // Cleanup agar tidak double subscribe di React.StrictMode (dev)
     return () => {
-      mounted = false;
-      try { unsub && unsub(); } catch {}
+      alive = false;
+      try {
+        unsub?.unsubscribe?.();
+      } catch {}
     };
   }, []);
 
-  // --- actions
-  const signIn = async ({ email, password }) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    setSession(data.session);
-    setUser(data.user);
-    return data.user;
-  };
-
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    setSession(null);
-    setUser(null);
-  };
-
-  // ganti password (perlu reauth dengan password lama)
-  const changePassword = async (oldPassword, newPassword) => {
-    const email = user?.email;
-    if (!email) throw new Error("Tidak ada sesi pengguna.");
-
-    // re-auth
-    const { error: reauthErr } = await supabase.auth.signInWithPassword({
-      email,
-      password: oldPassword,
-    });
-    if (reauthErr) throw new Error("Password lama salah.");
-
-    // update password
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) throw error;
-    await refreshUser();
-    return true;
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn("[Auth] signOut error:", e?.message || e);
+    }
   };
 
   const value = useMemo(
-    () => ({ user, session, initializing, signIn, signOut, changePassword, refreshUser }),
-    [user, session, initializing]
+    () => ({ user, initializing, signOut }),
+    [user, initializing]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
