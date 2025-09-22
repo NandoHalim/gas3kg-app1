@@ -1,73 +1,50 @@
+// src/context/SettingsContext.jsx
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
-import { DataService } from "../services/DataService";
-
-// Bentuk data setting yg dipakai app
-const DEFAULTS = {
-  business_name: "Usaha Saya",
-  default_price: 23000,
-  hpp: 0,
-  payment_methods: ["TUNAI", "TRANSFER", "HUTANG"],
-};
+import { DataService } from "../services/DataService.js";
 
 const Ctx = createContext({
-  settings: DEFAULTS,
+  settings: {},
   loading: true,
-  saveSettings: async (_payload) => {},
-  changePassword: async (_old, _next) => {},
+  saveSettings: async () => {},
+  changePassword: async () => {},
 });
 
 export const useSettings = () => useContext(Ctx);
 
-export function SettingProvider({ children }) {
-  const [settings, setSettings] = useState(DEFAULTS);
+export function SettingsProvider({ children }) {
+  const [settings, setSettings] = useState({});
   const [loading, setLoading] = useState(true);
 
-  // initial load
+  // initial load dari DataService
   useEffect(() => {
-    let on = true;
+    let alive = true;
     (async () => {
       try {
-        setLoading(true);
-        const s = await DataService.getSettings();
-        const merged = { ...DEFAULTS, ...(s || {}) };
-        if (on) setSettings(merged);
+        const s = await DataService.getActiveSettings();
+        if (alive) setSettings(s);
+      } catch (e) {
+        console.warn("[SettingsProvider] gagal ambil settings:", e.message);
       } finally {
-        if (on) setLoading(false);
+        if (alive) setLoading(false);
       }
     })();
-    return () => { on = false; };
+
+    // subscribe perubahan settings
+    const unsub = DataService.onSettingsChange((s) => setSettings(s));
+    return () => {
+      alive = false;
+      unsub?.();
+    };
   }, []);
 
-  // simpan + sinkronkan state global
   const saveSettings = async (payload) => {
-    const safe = { ...payload };
-    // jaga business_name tidak kosong
-    if ("business_name" in safe) {
-      const trimmed = String(safe.business_name || "").trim();
-      if (!trimmed) {
-        safe.business_name = settings.business_name || DEFAULTS.business_name;
-      } else {
-        safe.business_name = trimmed;
-      }
-    }
-    await DataService.saveSettings(safe);
-    setSettings((prev) => ({ ...prev, ...safe }));
+    await DataService.saveSettings(payload);
+    setSettings(await DataService.getActiveSettings());
   };
 
-  // ganti password
-  const changePassword = async (oldPass, newPass) => {
-    const { data: u } = await supabase.auth.getUser();
-    const email = u?.user?.email;
-    if (!email) throw new Error("Tidak ada sesi login.");
-
-    // verifikasi oldPass dengan sign-in ulang (silent)
-    const signIn = await supabase.auth.signInWithPassword({ email, password: oldPass });
-    if (signIn.error) throw new Error("Password lama salah.");
-
-    const upd = await supabase.auth.updateUser({ password: newPass });
-    if (upd.error) throw new Error(upd.error.message || "Gagal mengubah password.");
-    return true;
+  // sementara fungsi ganti password dummy
+  const changePassword = async (_oldPass, _newPass) => {
+    return Promise.resolve(true);
   };
 
   return (
