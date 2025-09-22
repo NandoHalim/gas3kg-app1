@@ -1,5 +1,5 @@
 // src/components/layout/AppLayout.jsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate, Outlet } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
@@ -21,6 +21,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useSettings } from "../../context/SettingsContext.jsx";
+import { DataService } from "../../services/DataService.js";
 
 const drawerWidth = 220;
 const BN_HEIGHT = 64;
@@ -54,11 +55,30 @@ export default function AppLayout({ children }) {
   const { user, signOut } = useAuth();
   const { settings } = useSettings();
 
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Resolve role admin langsung dari DB (app_admins)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        if (!user?.id) {
+          alive && setIsAdmin(false);
+          return;
+        }
+        const role = await DataService.getUserRoleById(user.id);
+        alive && setIsAdmin(String(role).toLowerCase() === "admin");
+      } catch {
+        alive && setIsAdmin(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [user?.id]);
+
   const businessName =
     (settings?.business_name && String(settings.business_name).trim()) ||
     "Gas 3KG Manager";
 
-  const isAdmin = (user?.role || "").toLowerCase() === "admin";
   const handleDrawerToggle = () => setMobileOpen((s) => !s);
 
   // menu dibentuk berdasarkan role (render tiap perubahan role)
