@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useEffect, useState, Suspense, lazy } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout.jsx";
@@ -22,6 +21,37 @@ import { DataService } from "./services/DataService.js";
 import { supabase } from "./lib/supabase.js";
 import { COLORS } from "./utils/constants.js";
 
+/* ---------- Error Boundary sederhana ---------- */
+class RouteErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    if (import.meta.env.DEV) {
+      // hanya log di dev; di prod console.* sudah dibersihkan oleh plugin vite
+      // eslint-disable-next-line no-console
+      console.error("Route render error:", error, info);
+    }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 16, color: "#b91c1c" }}>
+          <h3 style={{ marginTop: 0 }}>❌ Terjadi kesalahan saat memuat halaman</h3>
+          <div style={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 13 }}>
+            {this.state.error?.message || String(this.state.error)}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const { user, initializing } = useAuth();
   const toast = useToast();
@@ -39,7 +69,10 @@ export default function App() {
       const map = await DataService.loadStocks();
       setStocks(map);
     } catch (e) {
-      console.error("❌ Refresh stok gagal:", e?.message || e);
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.error("❌ Refresh stok gagal:", e?.message || e);
+      }
     }
   };
 
@@ -52,7 +85,10 @@ export default function App() {
         const map = await DataService.loadStocks();
         if (alive) setStocks(map);
       } catch (e) {
-        console.error(e);
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.error(e);
+        }
       }
     })();
 
@@ -128,50 +164,52 @@ export default function App() {
   return (
     <AppLayout onResetAll={handleResetAll}>
       <main style={{ flex: 1 }}>
-        {/* Suspense untuk semua route yang di-lazy */}
-        <Suspense fallback={<div style={{ padding: 16 }}>Memuat halaman…</div>}>
-          <Routes>
-            <Route path="/" element={<DashboardView stocks={stocks} />} />
-            <Route
-              path="/stok"
-              element={
-                <StokView
-                  stocks={stocks}
-                  onSaved={setStocks}
-                  onCancel={() => navigate("/")}
-                />
-              }
-            />
-            <Route
-              path="/penjualan"
-              element={
-                <PenjualanView
-                  stocks={stocks}
-                  onSaved={setStocks}
-                  onCancel={() => navigate("/")}
-                />
-              }
-            />
+        {/* Suspense + ErrorBoundary untuk halaman lazy */}
+        <RouteErrorBoundary>
+          <Suspense fallback={<div style={{ padding: 16 }}>Memuat halaman…</div>}>
+            <Routes>
+              <Route path="/" element={<DashboardView stocks={stocks} />} />
+              <Route
+                path="/stok"
+                element={
+                  <StokView
+                    stocks={stocks}
+                    onSaved={setStocks}
+                    onCancel={() => navigate("/")}
+                  />
+                }
+              />
+              <Route
+                path="/penjualan"
+                element={
+                  <PenjualanView
+                    stocks={stocks}
+                    onSaved={setStocks}
+                    onCancel={() => navigate("/")}
+                  />
+                }
+              />
 
-            {/* ⬇️ ini sekarang lazy-loaded */}
-            <Route
-              path="/riwayat"
-              element={<RiwayatView onCancel={() => navigate("/")} />}
-            />
+              {/* ⬇️ ini sekarang lazy-loaded */}
+              <Route
+                path="/riwayat"
+                element={<RiwayatView onCancel={() => navigate("/")} />}
+              />
 
-            {/* menu tambahan */}
-            <Route
-              path="/transaksi"
-              element={<TransaksiView stocks={stocks} onSaved={setStocks} />}
-            />
-            <Route path="/pelanggan" element={<PelangganView />} />
-            <Route path="/broadcast" element={<BroadcastView />} />
+              {/* menu tambahan */}
+              <Route
+                path="/transaksi"
+                element={<TransaksiView stocks={stocks} onSaved={setStocks} />}
+              />
+              <Route path="/pelanggan" element={<PelangganView />} />
+              <Route path="/broadcast" element={<BroadcastView />} />
 
-            {/* ⬇️ lazy-loaded */}
-            <Route path="/laporan" element={<LaporanView />} />
-            <Route path="/pengaturan" element={<PengaturanView />} />
-          </Routes>
-        </Suspense>
+              {/* ⬇️ lazy-loaded */}
+              <Route path="/laporan" element={<LaporanView />} />
+              <Route path="/pengaturan" element={<PengaturanView />} />
+            </Routes>
+          </Suspense>
+        </RouteErrorBoundary>
       </main>
 
       <footer
