@@ -3,78 +3,111 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { supabase } from "../lib/supabase";
 
 /**
- * AuthContext:
- * - user: objek user Supabase (null jika belum login)
- * - initializing: true saat bootstrap auth (supaya guard/route bisa tunggu)
- * - signOut: helper opsional
+ * AuthContext
+ * - Menyediakan: user, initializing, signInEmailPassword, signOut, changePassword
+ * - Menjamin: flag `initializing` SELALU dimatikan, bahkan saat error
+ * - Cleanup: unsubscribe onAuthStateChange saat unmount
  */
-const AuthContext = createContext({ user: null, initializing: true });
+
+const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [initializing, setInitializing] = useState(true);
 
+  // --- Initial session + listener
   useEffect(() => {
-    let alive = true;
+    let isMounted = true;
     let unsub = null;
 
     (async () => {
       try {
-        // 1) Bootstrap: cek session saat ini
+        // 1) Ambil session awal
         const { data, error } = await supabase.auth.getSession();
-        if (error) {
-          console.warn("[Auth] getSession error:", error.message);
+        if (error) console.warn("[Auth] getSession error:", error.message);
+        if (isMounted) {
+          setUser(data?.session?.user ?? null);
         }
-        const curUser = data?.session?.user ?? null;
-        if (alive) setUser(curUser);
       } catch (e) {
         console.warn("[Auth] getSession exception:", e?.message || e);
       } finally {
-        // Penting: matikan initializing meski gagal
-        if (alive) setInitializing(false);
+        // Penting: matikan initializing meski error
+        if (isMounted) setInitializing(false);
       }
 
-      // 2) Subscribe perubahan auth
-      const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-        // event: 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED' | 'USER_UPDATED' | ...
-        const nextUser = session?.user ?? null;
-        setUser(nextUser);
-
-        // Emit event ringan untuk listener lain (opsional)
-        try {
-          window.dispatchEvent(new CustomEvent("auth:changed", { detail: { event, user: nextUser } }));
-        } catch {}
-
-        // Safety: di beberapa edge-case, pastikan initializing padam
+      // 2) Dengarkan perubahan auth
+      const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (!isMounted) return;
+        setUser(session?.user ?? null);
+        // Pastikan initializing padam juga jika state datang terlambat
         setInitializing(false);
       });
 
-      unsub = sub?.subscription;
+      unsub = () => {
+        try {
+          sub?.subscription?.unsubscribe?.();
+        } catch {}
+      };
     })();
 
-    // Cleanup agar tidak double subscribe di React.StrictMode (dev)
     return () => {
-      alive = false;
+      isMounted = false;
       try {
-        unsub?.unsubscribe?.();
+        unsub && unsub();
       } catch {}
     };
   }, []);
 
+  // --- Actions
+  const signInEmailPassword = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    // `onAuthStateChange` akan meng-update `user`; kita tetap kembalikan data untuk caller.
+    return data;
+  };
+
   const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.warn("[Auth] signOut error:", e?.message || e);
-    }
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  };
+
+  /**
+   * Ubah password user yang sedang login.
+   * - Re-auth sederhana: verifikasi oldPass dengan signIn ulang (tidak mengubah sesi aktif).
+   * - Lalu panggil updateUser({ password })
+   */
+  const changePassword = async (oldPass, newPass) => {
+    const { data: u } = await supabase.auth.getUser();
+    const email = u?.user?.email;
+    if (!email) throw new Error("Tidak ada sesi aktif.");
+
+    // Re-auth dengan oldPass untuk keamanan dasar
+    const reauth = await supabase.auth.signInWithPassword({ email, password: oldPass });
+    if (reauth.error) throw new Error("Password lama salah.");
+
+    const { error } = await supabase.auth.updateUser({ password: newPass });
+    if (error) throw error;
+    return true;
   };
 
   const value = useMemo(
-    () => ({ user, initializing, signOut }),
+    () => ({
+      user,
+      initializing,
+      signInEmailPassword,
+      signOut,
+      changePassword,
+    }),
     [user, initializing]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export const useAuth = () => useContext(AuthContext);
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth harus dipakai di dalam <AuthProvider>");
+  }
+  return ctx;
+}
