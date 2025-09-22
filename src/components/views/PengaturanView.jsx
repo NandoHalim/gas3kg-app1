@@ -94,7 +94,6 @@ function SettingsAdmin() {
 
   // ganti password (admin sendiri)
   const [oldPass, setOldPass] = useState("");
-  the:
   const [newPass, setNewPass] = useState("");
   const [newPass2, setNewPass2] = useState("");
 
