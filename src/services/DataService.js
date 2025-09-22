@@ -736,6 +736,7 @@ export const DataService = {
     return { totalTransaksi, totalNilai, rataRata, hutangAktif };
   },
 
+
   // ====== AUTH/ROLE UTIL (via public.app_admins)
   async getUserRoleById(userId) {
     try {
@@ -757,10 +758,49 @@ export const DataService = {
     }
   },
 
+  // ==== Tambahan: helper kompatibel lama
+  async isAdmin() {
+    try {
+      // cache ringan 5 menit
+      const CK = "__isAdmin_cache_v1";
+      const raw = localStorage.getItem(CK);
+      if (raw) {
+        const c = JSON.parse(raw);
+        if (Date.now() - (c.ts || 0) < 5 * 60 * 1000) return !!c.val;
+      }
+
+      const { data } = await supabase.auth.getUser();
+      const uid = data?.user?.id || "";
+      if (!uid) return false;
+
+      // 1) cek app_admins
+      const { data: adm, error: eAdm } = await supabase
+        .from("app_admins")
+        .select("user_id")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (!eAdm && adm?.user_id) {
+        localStorage.setItem(CK, JSON.stringify({ val: true, ts: Date.now() }));
+        return true;
+      }
+
+      // 2) fallback cek app_user_meta
+      const { data: meta, error: eMeta } = await supabase
+        .from("app_user_meta")
+        .select("role")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      const isAdmin = !eMeta && (meta?.role || "").toLowerCase() === "admin";
+      localStorage.setItem(CK, JSON.stringify({ val: isAdmin, ts: Date.now() }));
+      return isAdmin;
+    } catch {
+      return false;
+    }
+  },
+
   // ====== USER MANAGEMENT (via SQL function public.manage_user) ======
-  /**
-   * action: 'set_role' | 'flag_reset' | 'unflag_reset' | 'delete_local'
-   */
   async manageUser({ actorId, userId, action, role = null }) {
     if (!actorId) throw new Error("actorId wajib");
     if (!userId) throw new Error("userId target wajib");
@@ -773,10 +813,9 @@ export const DataService = {
       p_role: role,
     });
     if (error) throw new Error(errMsg(error, "Gagal menjalankan manage_user"));
-    return data; // "ok:..."
+    return data;
   },
 
-  /** Baca metadata lokal user (role, force_reset) */
   async getUserMeta(userId) {
     if (!userId) return null;
     const { data, error } = await supabase
@@ -788,7 +827,6 @@ export const DataService = {
     return data || null;
   },
 
-  /** Ambil semua entri lokal yang pernah tercatat */
   async getAllLocalUsers() {
     const { data: metas, error: e1 } = await supabase
       .from("app_user_meta")
