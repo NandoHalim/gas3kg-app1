@@ -25,7 +25,6 @@ import { useSettings } from "../../context/SettingsContext.jsx";
 import { DataService } from "../../services/DataService.js";
 import { DEFAULT_PRICE, PRICE_OPTIONS, PAYMENT_METHODS } from "../../utils/constants.js";
 import { fmtIDR } from "../../utils/helpers.js";
-import { supabase } from "../../lib/supabase.js";
 
 /* ===== Wrapper: resolve role & redirect non-admin ===== */
 export default function PengaturanView() {
@@ -69,6 +68,7 @@ export default function PengaturanView() {
 /* ===== Halaman pengaturan utk admin ===== */
 function SettingsAdmin() {
   const toast = useToast();
+  const { user } = useAuth(); // diperlukan untuk actorId
   const { settings, loading: settingsLoading, saveSettings, changePassword } = useSettings();
 
   // TAB
@@ -124,7 +124,7 @@ function SettingsAdmin() {
           Array.isArray(merged.payment_methods) ? merged.payment_methods : PAYMENT_METHODS
         );
 
-        await fetchUsers(); // ambil user via edge function
+        await fetchUsers();
         setErr("");
       } catch (e) {
         if (!alive) return;
@@ -134,7 +134,7 @@ function SettingsAdmin() {
       }
     })();
     return () => { alive = false; };
-  }, [settingsLoading]); // reload bila SettingContext selesai
+  }, [settingsLoading]);
 
   const summary = useMemo(() => ({
     hargaLabel: fmtIDR(defaultPrice),
@@ -193,14 +193,11 @@ function SettingsAdmin() {
     }
   };
 
-  /* ====== USER MANAGEMENT (via Edge Function manage_users) ====== */
+  /* ====== USER MANAGEMENT (pakai DataService) ====== */
   async function fetchUsers() {
     try {
-      const { data, error } = await supabase.functions.invoke("manage_users", {
-        body: { action: "list" },
-      });
-      if (error) throw error;
-      setUsers(Array.isArray(data) ? data : []);
+      const arr = await DataService.getAllLocalUsers();
+      setUsers(arr);
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal memuat pengguna" });
       setUsers([]);
@@ -215,14 +212,16 @@ function SettingsAdmin() {
     }
     try {
       setBusy(true);
-      // di sini hanya simpan role awal (opsional)
-      await supabase.functions.invoke("manage_users", {
-        body: { action: newRole === "admin" ? "inviteAdmin" : "inviteUser", email },
+      await DataService.manageUser({
+        actorId: user?.id,
+        userId: email, // bisa email atau UID; fungsi SQL kamu harus handle
+        action: "set_role",
+        role: newRole,
       });
       setNewEmail("");
       setNewRole("user");
       await fetchUsers();
-      toast?.show?.({ type: "success", message: "Undangan/penambahan user diproses." });
+      toast?.show?.({ type: "success", message: "User ditambahkan / diundang." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal menambah user" });
     } finally {
@@ -233,11 +232,12 @@ function SettingsAdmin() {
   const doResetUserData = async (id) => {
     try {
       setUserBusyId(id);
-      const { error } = await supabase.functions.invoke("manage_users", {
-        body: { action: "reset", userId: id },
+      await DataService.manageUser({
+        actorId: user?.id,
+        userId: id,
+        action: "flag_reset",
       });
-      if (error) throw error;
-      toast?.show?.({ type: "success", message: "Data user direset." });
+      toast?.show?.({ type: "success", message: "User ditandai untuk reset data." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal reset user" });
     } finally {
@@ -249,12 +249,13 @@ function SettingsAdmin() {
   const doDeleteUser = async (id) => {
     try {
       setUserBusyId(id);
-      const { error } = await supabase.functions.invoke("manage_users", {
-        body: { action: "delete", userId: id },
+      await DataService.manageUser({
+        actorId: user?.id,
+        userId: id,
+        action: "delete_local",
       });
-      if (error) throw error;
       await fetchUsers();
-      toast?.show?.({ type: "success", message: "User dihapus." });
+      toast?.show?.({ type: "success", message: "User dihapus dari lokal." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal menghapus user" });
     } finally {
@@ -266,10 +267,12 @@ function SettingsAdmin() {
   const doToggleAdmin = async (id, makeAdmin) => {
     try {
       setUserBusyId(id);
-      const { error } = await supabase.functions.invoke("manage_users", {
-        body: { action: makeAdmin ? "grantAdmin" : "revokeAdmin", userId: id },
+      await DataService.manageUser({
+        actorId: user?.id,
+        userId: id,
+        action: "set_role",
+        role: makeAdmin ? "admin" : "user",
       });
-      if (error) throw error;
       await fetchUsers();
       toast?.show?.({ type: "success", message: makeAdmin ? "User dijadikan admin." : "Hak admin dicabut." });
     } catch (e) {
@@ -554,7 +557,7 @@ function SettingsAdmin() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Email</TableCell>
+                    <TableCell>Email / UID</TableCell>
                     <TableCell>Role</TableCell>
                     <TableCell align="right">Aksi</TableCell>
                   </TableRow>
@@ -568,31 +571,36 @@ function SettingsAdmin() {
                     </TableRow>
                   )}
                   {users.map((u) => (
-                    <TableRow key={u.id} hover>
-                      <TableCell>{u.email}</TableCell>
+                    <TableRow key={u.user_id || u.id} hover>
+                      <TableCell>{u.email || u.user_id}</TableCell>
                       <TableCell sx={{ textTransform: "lowercase", fontWeight: 600 }}>
-                        {u.role}
+                        {u.role || (u.is_admin ? "admin" : "user")}
                       </TableCell>
                       <TableCell align="right">
                         <Tooltip title="Reset data user">
                           <span>
                             <IconButton
-                              onClick={() => setConfirmUserResetOpen({ open: true, id: u.id })}
-                              disabled={userBusyId === u.id}
+                              onClick={() => setConfirmUserResetOpen({ open: true, id: u.user_id || u.id })}
+                              disabled={userBusyId === (u.user_id || u.id)}
                             >
                               <ShieldIcon />
                             </IconButton>
                           </span>
                         </Tooltip>
 
-                        {u.role === "admin" ? (
+                        {(u.role || (u.is_admin ? "admin" : "user")) === "admin" ? (
                           <Tooltip title="Cabut hak admin">
                             <span>
                               <IconButton
                                 onClick={() =>
-                                  setConfirmUserRoleOpen({ open: true, id: u.id, email: u.email, makeAdmin: false })
+                                  setConfirmUserRoleOpen({
+                                    open: true,
+                                    id: u.user_id || u.id,
+                                    email: u.email || u.user_id,
+                                    makeAdmin: false
+                                  })
                                 }
-                                disabled={userBusyId === u.id}
+                                disabled={userBusyId === (u.user_id || u.id)}
                               >
                                 <PersonRemoveIcon />
                               </IconButton>
@@ -603,9 +611,14 @@ function SettingsAdmin() {
                             <span>
                               <IconButton
                                 onClick={() =>
-                                  setConfirmUserRoleOpen({ open: true, id: u.id, email: u.email, makeAdmin: true })
+                                  setConfirmUserRoleOpen({
+                                    open: true,
+                                    id: u.user_id || u.id,
+                                    email: u.email || u.user_id,
+                                    makeAdmin: true
+                                  })
                                 }
-                                disabled={userBusyId === u.id}
+                                disabled={userBusyId === (u.user_id || u.id)}
                               >
                                 <PersonAddIcon />
                               </IconButton>
@@ -613,13 +626,17 @@ function SettingsAdmin() {
                           </Tooltip>
                         )}
 
-                        <Tooltip title="Hapus user">
+                        <Tooltip title="Hapus user (local meta)">
                           <span>
                             <IconButton
                               onClick={() =>
-                                setConfirmUserDeleteOpen({ open: true, id: u.id, email: u.email })
+                                setConfirmUserDeleteOpen({
+                                  open: true,
+                                  id: u.user_id || u.id,
+                                  email: u.email || u.user_id
+                                })
                               }
-                              disabled={userBusyId === u.id}
+                              disabled={userBusyId === (u.user_id || u.id)}
                             >
                               <DeleteIcon />
                             </IconButton>
@@ -714,8 +731,8 @@ function SettingsAdmin() {
         <DialogTitle>Hapus User</DialogTitle>
         <DialogContent dividers>
           <Typography>
-            Hapus user <b>{confirmUserDeleteOpen.email}</b> secara permanen?
-            Tindakan ini tidak bisa dibatalkan.
+            Hapus user <b>{confirmUserDeleteOpen.email}</b> dari metadata lokal?
+            (Akun auth tidak dihapus dari Auth.)
           </Typography>
         </DialogContent>
         <DialogActions>
