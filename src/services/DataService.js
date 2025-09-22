@@ -529,6 +529,8 @@ export const DataService = {
       if (isVoid) {
         const m = note.match(/sale_id\s*=\s*(\d+)/i);
         const sid = m ? Number(m[1]) : null;
+        the_inv:
+        0;
         const inv = sid && invoiceMap[sid] ? invoiceMap[sid] : sid ? `INV#${sid}` : "";
         const reason =
           (note.split(/alasan:|reason:/i)[1] || note.split("—")[1] || "")
@@ -734,7 +736,80 @@ export const DataService = {
       .reduce((a, r) => a + (Number(r.qty) || 0) * (Number(r.price) || 0), 0);
 
     return { totalTransaksi, totalNilai, rataRata, hutangAktif };
-  }
+  },
+
+  // ====== AUTH/ROLE UTIL (via public.app_admins)
+  async getUserRoleById(userId) {
+    try {
+      if (!userId) return "user";
+      const { data, error } = await supabase
+        .from("app_admins")
+        .select("user_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) {
+        console.warn("[DataService.getUserRoleById] error:", error.message);
+        return "user";
+      }
+      return data?.user_id ? "admin" : "user";
+    } catch (e) {
+      console.warn("[DataService.getUserRoleById] exception:", e?.message || e);
+      return "user";
+    }
+  },
+
+  // ====== USER MANAGEMENT (via SQL function public.manage_user) ======
+  /**
+   * trigger aksi manajemen user:
+   * action: 'set_role' | 'flag_reset' | 'unflag_reset' | 'delete_local'
+   * role: 'admin' | 'user' (hanya jika action==='set_role')
+   */
+  async manageUser({ actorId, userId, action, role = null }) {
+    if (!actorId) throw new Error("actorId wajib");
+    if (!userId) throw new Error("userId target wajib");
+    if (!action) throw new Error("action wajib");
+
+    const { data, error } = await supabase.rpc("manage_user", {
+      p_actor: actorId,
+      p_user_id: userId,
+      p_action: action,
+      p_role: role,
+    });
+    if (error) throw new Error(errMsg(error, "Gagal menjalankan manage_user"));
+    return data; // "ok:..."
+  },
+
+  /** Baca metadata lokal user (role, force_reset) */
+  async getUserMeta(userId) {
+    if (!userId) return null;
+    const { data, error } = await supabase
+      .from("app_user_meta")
+      .select("user_id, role, force_reset, updated_at")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) return null;
+    return data || null;
+  },
+
+  /** Ambil semua entri lokal yang pernah tercatat (tanpa email) */
+  async getAllLocalUsers() {
+    const { data: metas, error: e1 } = await supabase
+      .from("app_user_meta")
+      .select("user_id, role, force_reset, updated_at");
+    if (e1) throw new Error(errMsg(e1, "Gagal ambil daftar pengguna"));
+
+    const { data: admins } = await supabase.from("app_admins").select("user_id");
+    const adminSet = new Set((admins || []).map((a) => a.user_id));
+
+    return (metas || []).map((m) => ({
+      user_id: m.user_id,
+      role: m.role || (adminSet.has(m.user_id) ? "admin" : "user"),
+      force_reset: !!m.force_reset,
+      updated_at: m.updated_at,
+      is_admin: adminSet.has(m.user_id),
+    }));
+  },
 }; // << tutup DataService
 
 // ====== SETTINGS (FE via localStorage + broadcast agar “efek langsung”) ======
@@ -846,7 +921,7 @@ DataService.hardResetAll = async function () {
   return this.resetAllData();
 };
 
-// ==== Role helper
+// ==== Role helper (legacy FE cache; dipertahankan untuk kompatibilitas)
 DataService.isAdmin = async function () {
   try {
     const { data } = await supabase.auth.getUser();
@@ -862,23 +937,76 @@ DataService.isAdmin = async function () {
   }
 };
 
-// ====== AUTH/ROLE UTIL (via public.app_admins)
-DataService.getUserRoleById = async function (userId) {
-  try {
-    if (!userId) return "user";
-    const { data, error } = await supabase
-      .from("app_admins")
-      .select("user_id")
-      .eq("user_id", userId)
-      .maybeSingle();
+/* =========================
+   DASHBOARD SNAPSHOT (FAST)
+   ========================= */
 
-    if (error) {
-      console.warn("[DataService.getUserRoleById] error:", error.message);
-      return "user";
-    }
-    return data?.user_id ? "admin" : "user";
-  } catch (e) {
-    console.warn("[DataService.getUserRoleById] exception:", e?.message || e);
-    return "user";
+// cache helper (localStorage)
+const DASH_CACHE_KEY = "dash_snap_v1";
+function readDashCache() {
+  try {
+    const raw = localStorage.getItem(DASH_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
   }
+}
+function writeDashCache(obj) {
+  try { localStorage.setItem(DASH_CACHE_KEY, JSON.stringify(obj)); } catch {}
+}
+
+/**
+ * Ambil snapshot dashboard secepat mungkin.
+ * - Return dari cache jika masih fresh → UI tampil instan
+ * - Lalu revalidate paralel dan siarkan event 'dashboard:snapshot'
+ *
+ * @param {object} opt
+ * @param {boolean} opt.revalidate - jalankan fetch ulang di belakang layar
+ * @param {number} opt.maxAgeMs - usia cache maksimal (default 3 menit)
+ */
+DataService.getDashboardSnapshot = async function getDashboardSnapshot({
+  revalidate = true,
+  maxAgeMs = 3 * 60 * 1000,
+} = {}) {
+  const now = Date.now();
+  const cached = readDashCache();
+  const fresh = cached && (now - (cached._ts || 0) < maxAgeMs) ? cached : null;
+
+  // kick off revalidate tanpa menunggu (non-blocking)
+  if (revalidate) {
+    (async () => {
+      try {
+        // panggil service yang sudah ada, tapi paralel
+        const [stocks, sevenDays, receivables, recent] = await Promise.all([
+          this.loadStocks().catch(() => ({ ISI: 0, KOSONG: 0 })),
+          this.getSevenDaySales().catch(() => []),
+          this.getTotalReceivables().catch(() => 0),
+          this.getRecentSales(10).catch(() => []),
+        ]);
+
+        const snap = {
+          stocks,
+          sevenDays,          // [{date, qty}]
+          receivables,        // number
+          recentSales: recent, // array
+          _ts: Date.now(),
+        };
+        writeDashCache(snap);
+        try {
+          window.dispatchEvent(new CustomEvent("dashboard:snapshot", { detail: snap }));
+        } catch {}
+      } catch (e) {
+        // diam2 saja; UI tetap pakai cache/hasil awal
+        console.warn("[dash revalidate] gagal:", e?.message || e);
+      }
+    })();
+  }
+
+  return fresh || {
+    stocks: { ISI: 0, KOSONG: 0 },
+    sevenDays: [],
+    receivables: 0,
+    recentSales: [],
+    _ts: 0,
+  };
 };
