@@ -25,6 +25,26 @@ import { useSettings } from "../../context/SettingsContext.jsx";
 const drawerWidth = 220;
 const BN_HEIGHT = 64;
 
+// Prefetch ringan: petakan key → dynamic import (tidak mengubah routing)
+const prefetchMap = {
+  dashboard: () => import("../views/DashboardView.jsx"),
+  transaksi: () => import("../views/TransaksiView.jsx"),
+  stok: () => import("../views/StokView.jsx"),
+  riwayat: () => import("../views/RiwayatView.jsx"),
+  pelanggan: () => import("../views/PelangganView.jsx"),
+  broadcast: () => import("../views/BroadcastView.jsx"),
+  laporan: () => import("../views/LaporanView.jsx"),
+  pengaturan: () => import("../views/PengaturanView.jsx"),
+};
+const prefetchRoute = (key) => {
+  try {
+    const fn = prefetchMap[key];
+    if (typeof fn === "function") fn();
+  } catch {
+    /* abaikan error prefetch */
+  }
+};
+
 export default function AppLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [bottomNav] = useState("dashboard");
@@ -91,6 +111,9 @@ export default function AppLayout({ children }) {
               component={NavLink}
               to={item.path}
               onClick={() => setMobileOpen(false)}
+              // Prefetch saat hover/tap
+              onMouseEnter={() => prefetchRoute(item.key)}
+              onTouchStart={() => prefetchRoute(item.key)}
             >
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.label} />
@@ -216,6 +239,9 @@ export default function AppLayout({ children }) {
                 value={item.key}
                 label={item.label}
                 icon={item.icon}
+                // Prefetch saat hover/tap
+                onMouseEnter={() => prefetchRoute(item.key)}
+                onTouchStart={() => prefetchRoute(item.key)}
               />
             ))}
           </BottomNavigation>
