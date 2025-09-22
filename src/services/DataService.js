@@ -51,6 +51,7 @@ export const DataService = {
     return rowsToStockObject(data);
   },
 
+  // Tambah stok ISI (HARUS menukar dari KOSONG yang cukup)
   async addIsi({ qty, date, note }) {
     if (!(qty > 0)) throw new Error("Jumlah harus > 0");
     const yyyy = Number(String(date).slice(0, 4));
@@ -58,12 +59,15 @@ export const DataService = {
       throw new Error(`Tanggal harus antara ${MIN_YEAR}-${MAX_YEAR}`);
     }
 
+    // pagar tambahan (DB tetap validasi)
     try {
       const snap = await this.loadStocks();
       if (Number(qty) > Number(snap.KOSONG || 0)) {
         throw new Error("Stok KOSONG tidak cukup untuk ditukar menjadi ISI");
       }
-    } catch {}
+    } catch {
+      /* DB tetap validasi */
+    }
 
     const { data, error } = await supabase.rpc("stock_add_isi", {
       p_qty: qty,
@@ -84,6 +88,7 @@ export const DataService = {
       .order("id", { ascending: false })
       .limit(limit);
 
+    // fallback ke tabel sales (tanpa 'invoice_display')
     if (error && (error.message || "").toLowerCase().includes("does not exist")) {
       const res2 = await supabase
         .from("sales")
@@ -192,7 +197,7 @@ export const DataService = {
     return rowsToStockObject(resp.data);
   },
 
- // ====== RINGKASAN ======
+  // ====== RINGKASAN ======
   async getSalesSummary({ from, to }) {
     const { data, error } = await supabase
       .from("sales")
@@ -524,8 +529,6 @@ export const DataService = {
       if (isVoid) {
         const m = note.match(/sale_id\s*=\s*(\d+)/i);
         const sid = m ? Number(m[1]) : null;
-        the_inv:
-        0;
         const inv = sid && invoiceMap[sid] ? invoiceMap[sid] : sid ? `INV#${sid}` : "";
         const reason =
           (note.split(/alasan:|reason:/i)[1] || note.split("—")[1] || "")
@@ -756,9 +759,7 @@ export const DataService = {
 
   // ====== USER MANAGEMENT (via SQL function public.manage_user) ======
   /**
-   * trigger aksi manajemen user:
    * action: 'set_role' | 'flag_reset' | 'unflag_reset' | 'delete_local'
-   * role: 'admin' | 'user' (hanya jika action==='set_role')
    */
   async manageUser({ actorId, userId, action, role = null }) {
     if (!actorId) throw new Error("actorId wajib");
@@ -787,7 +788,7 @@ export const DataService = {
     return data || null;
   },
 
-  /** Ambil semua entri lokal yang pernah tercatat (tanpa email) */
+  /** Ambil semua entri lokal yang pernah tercatat */
   async getAllLocalUsers() {
     const { data: metas, error: e1 } = await supabase
       .from("app_user_meta")
@@ -805,7 +806,6 @@ export const DataService = {
       is_admin: adminSet.has(m.user_id),
     }));
   },
-
 }; // << tutup DataService
 
 /* =========================
@@ -903,6 +903,11 @@ function writeDashCache(obj) {
   try { localStorage.setItem(DASH_CACHE_KEY, JSON.stringify(obj)); } catch {}
 }
 
+/**
+ * Ambil snapshot dashboard secepat mungkin.
+ * - Return dari cache jika masih fresh → UI tampil instan
+ * - Lalu revalidate paralel dan siarkan event 'dashboard:snapshot'
+ */
 DataService.getDashboardSnapshot = async function ({
   revalidate = true,
   maxAgeMs = 3 * 60 * 1000,
@@ -930,7 +935,7 @@ DataService.getDashboardSnapshot = async function ({
         writeDashCache(snap);
         try { window.dispatchEvent(new CustomEvent("dashboard:snapshot", { detail: snap })); } catch {}
       } catch (e) {
-        console.warn("[getDashboardSnapshot] gagal revalidate:", e.message);
+        console.warn("[getDashboardSnapshot] gagal revalidate:", e?.message || e);
       }
     })();
   }
@@ -943,4 +948,3 @@ DataService.getDashboardSnapshot = async function ({
     _ts: 0,
   };
 };
-
