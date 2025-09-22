@@ -887,3 +887,60 @@ DataService.onSettingsChange = function (handler) {
   window.addEventListener("settings:updated", fn);
   return () => window.removeEventListener("settings:updated", fn);
 };
+
+/* =========================
+   DASHBOARD SNAPSHOT (FAST)
+   ========================= */
+const DASH_CACHE_KEY = "dash_snap_v1";
+function readDashCache() {
+  try {
+    return JSON.parse(localStorage.getItem(DASH_CACHE_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+function writeDashCache(obj) {
+  try { localStorage.setItem(DASH_CACHE_KEY, JSON.stringify(obj)); } catch {}
+}
+
+DataService.getDashboardSnapshot = async function ({
+  revalidate = true,
+  maxAgeMs = 3 * 60 * 1000,
+} = {}) {
+  const now = Date.now();
+  const cached = readDashCache();
+  const fresh = cached && now - (cached._ts || 0) < maxAgeMs ? cached : null;
+
+  if (revalidate) {
+    (async () => {
+      try {
+        const [stocks, sevenDays, receivables, recent] = await Promise.all([
+          this.loadStocks().catch(() => ({ ISI: 0, KOSONG: 0 })),
+          this.getSevenDaySales().catch(() => []),
+          this.getTotalReceivables().catch(() => 0),
+          this.getRecentSales(10).catch(() => []),
+        ]);
+        const snap = {
+          stocks,
+          sevenDays,
+          receivables,
+          recentSales: recent,
+          _ts: Date.now(),
+        };
+        writeDashCache(snap);
+        try { window.dispatchEvent(new CustomEvent("dashboard:snapshot", { detail: snap })); } catch {}
+      } catch (e) {
+        console.warn("[getDashboardSnapshot] gagal revalidate:", e.message);
+      }
+    })();
+  }
+
+  return fresh || {
+    stocks: { ISI: 0, KOSONG: 0 },
+    sevenDays: [],
+    receivables: 0,
+    recentSales: [],
+    _ts: 0,
+  };
+};
+
