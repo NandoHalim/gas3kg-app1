@@ -26,7 +26,7 @@ import { DataService } from "../../services/DataService.js";
 import { DEFAULT_PRICE, PRICE_OPTIONS, PAYMENT_METHODS } from "../../utils/constants.js";
 import { fmtIDR } from "../../utils/helpers.js";
 
-/* ===== Wrapper: resolve role & redirect non-admin ===== */
+/* ===== Guard: hanya admin ===== */
 export default function PengaturanView() {
   const { user, initializing } = useAuth();
   const [role, setRole] = useState(null);
@@ -36,7 +36,7 @@ export default function PengaturanView() {
     (async () => {
       if (initializing) return;
       if (!user) { on && setRole("user"); return; }
-      const r = await DataService.getUserRoleById(user.id).catch(()=>"user");
+      const r = await DataService.getUserRoleById(user.id).catch(() => "user");
       on && setRole((r || "user").toLowerCase());
     })();
     return () => { on = false; };
@@ -68,16 +68,13 @@ export default function PengaturanView() {
 /* ===== Halaman pengaturan utk admin ===== */
 function SettingsAdmin() {
   const toast = useToast();
-  const { user } = useAuth(); // diperlukan untuk actorId
+  const { user } = useAuth(); // diperlukan untuk actorId (UUID)
   const { settings, loading: settingsLoading, saveSettings, changePassword } = useSettings();
 
   // TAB
   const [tab, setTab] = useState(0); // 0: Pengaturan Dasar, 1: Manajemen User
 
-  // state settings (local form)
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-
+  // state settings (form lokal)
   const [businessName, setBusinessName] = useState("");
   const [defaultPrice, setDefaultPrice] = useState(DEFAULT_PRICE);
   const [hpp, setHpp] = useState(0);
@@ -85,7 +82,7 @@ function SettingsAdmin() {
 
   // users
   const [users, setUsers] = useState([]);
-  const [newEmail, setNewEmail] = useState("");
+  const [newEmailOrUid, setNewEmailOrUid] = useState(""); // UID lebih disarankan
   const [newRole, setNewRole] = useState("user");
 
   // busy flags
@@ -107,34 +104,35 @@ function SettingsAdmin() {
   const [confirmUserDeleteOpen, setConfirmUserDeleteOpen] = useState({ open: false, id: null, email: "" });
   const [confirmUserRoleOpen, setConfirmUserRoleOpen] = useState({ open: false, id: null, email: "", makeAdmin: true });
 
-  // initial load dari DataService + sinkron ke SettingContext
+  /* Sinkron form ⇄ SettingsContext */
+  useEffect(() => {
+    // Saat context selesai load atau berubah, isi form dari context
+    if (!settingsLoading) {
+      setBusinessName(settings?.business_name || "");
+      setDefaultPrice(Number(settings?.default_price || DEFAULT_PRICE));
+      setHpp(Number(settings?.hpp || 0));
+      setPaymentMethods(
+        Array.isArray(settings?.payment_methods) && settings?.payment_methods.length
+          ? settings.payment_methods
+          : PAYMENT_METHODS
+      );
+    }
+  }, [settingsLoading, settings]);
+
+  /* Load daftar user lokal (admin, role, flag) */
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        setLoading(true);
-        const s = await DataService.getSettings();
+        const arr = await DataService.getAllLocalUsers();
         if (!alive) return;
-        const merged = { ...settings, ...(s || {}) };
-
-        setBusinessName(merged.business_name || "");
-        setDefaultPrice(Number(merged.default_price || DEFAULT_PRICE));
-        setHpp(Number(merged.hpp || 0));
-        setPaymentMethods(
-          Array.isArray(merged.payment_methods) ? merged.payment_methods : PAYMENT_METHODS
-        );
-
-        await fetchUsers();
-        setErr("");
+        setUsers(arr);
       } catch (e) {
-        if (!alive) return;
-        setErr(e.message || "Gagal memuat pengaturan");
-      } finally {
-        if (alive) setLoading(false);
+        setUsers([]);
       }
     })();
     return () => { alive = false; };
-  }, [settingsLoading]);
+  }, []);
 
   const summary = useMemo(() => ({
     hargaLabel: fmtIDR(defaultPrice),
@@ -146,7 +144,7 @@ function SettingsAdmin() {
   const doSaveSettings = async () => {
     try {
       setBusy(true);
-      const safeName = String(businessName || "").trim() || settings.business_name || "Usaha Saya";
+      const safeName = String(businessName || "").trim() || settings?.business_name || "Usaha Saya";
       await saveSettings({
         business_name: safeName,
         default_price: Number(defaultPrice) || DEFAULT_PRICE,
@@ -193,35 +191,30 @@ function SettingsAdmin() {
     }
   };
 
-  /* ====== USER MANAGEMENT (pakai DataService) ====== */
-  async function fetchUsers() {
-    try {
-      const arr = await DataService.getAllLocalUsers();
-      setUsers(arr);
-    } catch (e) {
-      toast?.show?.({ type: "error", message: e.message || "Gagal memuat pengguna" });
-      setUsers([]);
-    }
-  }
+  /* ====== USER MANAGEMENT (via DataService.manageUser) ====== */
+  const isUUID = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
 
   const addUser = async () => {
-    const email = newEmail.trim();
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      toast?.show?.({ type: "error", message: "Email tidak valid" });
+    const idOrEmail = newEmailOrUid.trim();
+    if (!idOrEmail) {
+      toast?.show?.({ type: "error", message: "Masukkan UID atau email pengguna" });
       return;
     }
     try {
       setBusy(true);
+      // Catatan: SQL function 'manage_user' yang kita buat menerima UUID.
+      // Jika kamu masukkan email di sini, pastikan fungsi SQL-mu resolve email -> UUID.
       await DataService.manageUser({
         actorId: user?.id,
-        userId: email, // bisa email atau UID; fungsi SQL kamu harus handle
+        userId: idOrEmail,
         action: "set_role",
         role: newRole,
       });
-      setNewEmail("");
+      setNewEmailOrUid("");
       setNewRole("user");
-      await fetchUsers();
-      toast?.show?.({ type: "success", message: "User ditambahkan / diundang." });
+      const arr = await DataService.getAllLocalUsers();
+      setUsers(arr);
+      toast?.show?.({ type: "success", message: "User ditambahkan / di-update rolenya." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal menambah user" });
     } finally {
@@ -254,8 +247,9 @@ function SettingsAdmin() {
         userId: id,
         action: "delete_local",
       });
-      await fetchUsers();
-      toast?.show?.({ type: "success", message: "User dihapus dari lokal." });
+      const arr = await DataService.getAllLocalUsers();
+      setUsers(arr);
+      toast?.show?.({ type: "success", message: "User dihapus dari metadata lokal." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal menghapus user" });
     } finally {
@@ -273,7 +267,8 @@ function SettingsAdmin() {
         action: "set_role",
         role: makeAdmin ? "admin" : "user",
       });
-      await fetchUsers();
+      const arr = await DataService.getAllLocalUsers();
+      setUsers(arr);
       toast?.show?.({ type: "success", message: makeAdmin ? "User dijadikan admin." : "Hak admin dicabut." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal mengubah role" });
@@ -308,6 +303,8 @@ function SettingsAdmin() {
     }
   };
 
+  const showSettingsSkeleton = settingsLoading;
+
   return (
     <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
       <Stack direction="row" alignItems="center" spacing={1}>
@@ -321,15 +318,13 @@ function SettingsAdmin() {
         <Tab label="Manajemen User" icon={<AdminPanelSettingsIcon />} iconPosition="start" />
       </Tabs>
 
-      {err && <Alert severity="error" variant="outlined">{err}</Alert>}
-
       {/* ======= TAB 0: PENGATURAN DASAR ======= */}
       {tab === 0 && (
         <>
           <Card>
             <CardHeader title="Pengaturan Dasar (Global)" />
             <CardContent>
-              {loading ? (
+              {showSettingsSkeleton ? (
                 <Stack spacing={1}><Skeleton height={36}/><Skeleton height={36}/><Skeleton height={36}/></Stack>
               ) : (
                 <Grid container spacing={2}>
@@ -526,10 +521,10 @@ function SettingsAdmin() {
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Email pengguna baru"
-                  placeholder="nama@domain.com"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
+                  label="UID atau Email pengguna"
+                  placeholder="UUID Supabase atau email"
+                  value={newEmailOrUid}
+                  onChange={(e) => setNewEmailOrUid(e.target.value)}
                 />
               </Grid>
               <Grid item xs={12} md={3}>
@@ -548,7 +543,7 @@ function SettingsAdmin() {
               </Grid>
               <Grid item xs={12} md="auto">
                 <Button variant="contained" onClick={addUser} disabled={busy}>
-                  Tambah / Undang
+                  Tambah / Set Role
                 </Button>
               </Grid>
             </Grid>
@@ -557,7 +552,7 @@ function SettingsAdmin() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Email / UID</TableCell>
+                    <TableCell>UID</TableCell>
                     <TableCell>Role</TableCell>
                     <TableCell align="right">Aksi</TableCell>
                   </TableRow>
@@ -571,8 +566,8 @@ function SettingsAdmin() {
                     </TableRow>
                   )}
                   {users.map((u) => (
-                    <TableRow key={u.user_id || u.id} hover>
-                      <TableCell>{u.email || u.user_id}</TableCell>
+                    <TableRow key={u.user_id} hover>
+                      <TableCell>{u.user_id}</TableCell>
                       <TableCell sx={{ textTransform: "lowercase", fontWeight: 600 }}>
                         {u.role || (u.is_admin ? "admin" : "user")}
                       </TableCell>
@@ -580,8 +575,8 @@ function SettingsAdmin() {
                         <Tooltip title="Reset data user">
                           <span>
                             <IconButton
-                              onClick={() => setConfirmUserResetOpen({ open: true, id: u.user_id || u.id })}
-                              disabled={userBusyId === (u.user_id || u.id)}
+                              onClick={() => setConfirmUserResetOpen({ open: true, id: u.user_id })}
+                              disabled={userBusyId === u.user_id}
                             >
                               <ShieldIcon />
                             </IconButton>
@@ -595,12 +590,12 @@ function SettingsAdmin() {
                                 onClick={() =>
                                   setConfirmUserRoleOpen({
                                     open: true,
-                                    id: u.user_id || u.id,
-                                    email: u.email || u.user_id,
+                                    id: u.user_id,
+                                    email: u.user_id,
                                     makeAdmin: false
                                   })
                                 }
-                                disabled={userBusyId === (u.user_id || u.id)}
+                                disabled={userBusyId === u.user_id}
                               >
                                 <PersonRemoveIcon />
                               </IconButton>
@@ -613,12 +608,12 @@ function SettingsAdmin() {
                                 onClick={() =>
                                   setConfirmUserRoleOpen({
                                     open: true,
-                                    id: u.user_id || u.id,
-                                    email: u.email || u.user_id,
+                                    id: u.user_id,
+                                    email: u.user_id,
                                     makeAdmin: true
                                   })
                                 }
-                                disabled={userBusyId === (u.user_id || u.id)}
+                                disabled={userBusyId === u.user_id}
                               >
                                 <PersonAddIcon />
                               </IconButton>
@@ -632,11 +627,11 @@ function SettingsAdmin() {
                               onClick={() =>
                                 setConfirmUserDeleteOpen({
                                   open: true,
-                                  id: u.user_id || u.id,
-                                  email: u.email || u.user_id
+                                  id: u.user_id,
+                                  email: u.user_id
                                 })
                               }
-                              disabled={userBusyId === (u.user_id || u.id)}
+                              disabled={userBusyId === u.user_id}
                             >
                               <DeleteIcon />
                             </IconButton>
@@ -707,7 +702,7 @@ function SettingsAdmin() {
         <DialogTitle>Reset Data User</DialogTitle>
         <DialogContent dividers>
           <Typography>
-            Tindakan ini akan <b>menghapus data transaksi & stok milik user tersebut</b>.
+            Tindakan ini akan <b>menandai user</b> untuk reset data pada login berikutnya.
             Lanjutkan?
           </Typography>
         </DialogContent>
@@ -728,11 +723,10 @@ function SettingsAdmin() {
         open={confirmUserDeleteOpen.open}
         onClose={() => setConfirmUserDeleteOpen({ open: false, id: null, email: "" })}
       >
-        <DialogTitle>Hapus User</DialogTitle>
+        <DialogTitle>Hapus User (Metadata Lokal)</DialogTitle>
         <DialogContent dividers>
           <Typography>
-            Hapus user <b>{confirmUserDeleteOpen.email}</b> dari metadata lokal?
-            (Akun auth tidak dihapus dari Auth.)
+            Hapus metadata lokal untuk <b>{confirmUserDeleteOpen.email}</b>? (Akun Auth tidak dihapus)
           </Typography>
         </DialogContent>
         <DialogActions>
