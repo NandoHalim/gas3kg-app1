@@ -1,12 +1,10 @@
-// src/components/views/DashboardView.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { COLORS } from "../../utils/constants.js";
 import { fmtIDR, todayStr } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
 import { supabase } from "../../lib/supabase.js";
 import { useSettings } from "../../context/SettingsContext.jsx";
 
-// MUI
 import {
   Box,
   Grid,
@@ -38,14 +36,7 @@ const LOW_STOCK_THRESHOLD = 5;
 function StatTile({ title, value, subtitle, color = "primary", icon }) {
   return (
     <Card sx={{ height: "100%", display: "flex" }}>
-      <CardContent
-        sx={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          py: 1.5,
-        }}
-      >
+      <CardContent sx={{ flex: 1, display: "flex", alignItems: "center", py: 1.5 }}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: "100%" }}>
           <Box
             sx={{
@@ -92,11 +83,7 @@ function StockProgress({ isi, kosong }) {
       <LinearProgress
         variant="determinate"
         value={pctIsi}
-        sx={{
-          height: 10,
-          borderRadius: 5,
-          "& .MuiLinearProgress-bar": { borderRadius: 5 },
-        }}
+        sx={{ height: 10, borderRadius: 5, "& .MuiLinearProgress-bar": { borderRadius: 5 } }}
         color="success"
       />
       <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
@@ -110,7 +97,6 @@ function StockProgress({ isi, kosong }) {
 /* ====== Chart 7 Hari Terakhir ====== */
 function MiniBarChartLabeled({ data = [] }) {
   const max = Math.max(1, ...data.map((d) => Number(d.qty || 0)));
-
   const labelOf = (iso) => {
     try {
       const dt = new Date(iso);
@@ -159,11 +145,7 @@ function MiniBarChartLabeled({ data = [] }) {
           );
         })}
         {!data.length && (
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ gridColumn: "1 / -1", textAlign: "center" }}
-          >
+          <Typography variant="body2" color="text.secondary" sx={{ gridColumn: "1 / -1", textAlign: "center" }}>
             Belum ada data penjualan
           </Typography>
         )}
@@ -173,126 +155,154 @@ function MiniBarChartLabeled({ data = [] }) {
 }
 
 /* ====== Main View ====== */
-export default function DashboardView({ stocks = {} }) {
-  const isi = Number(stocks.ISI || 0);
-  const kosong = Number(stocks.KOSONG || 0);
-  const total = isi + kosong;
-
+export default function DashboardView({ stocks: stocksFromApp = {} }) {
+  // --- Settings (untuk HPP) ---
   const { settings } = useSettings();
-  const hppSetting = Number(settings?.hpp || 0); // ambil HPP dari pengaturan
+  const hppSetting = Number(settings?.hpp || 0);
 
-  const [sum, setSum] = useState({ qty: 0, omzet: 0, laba: 0 });
-  const [today, setToday] = useState({ qty: 0, money: 0 });
+  // --- STATE UTAMA, diisi dari snapshot dulu agar cepat ---
+  const [stocks, setStocks] = useState(stocksFromApp);
+  const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
   const [recent, setRecent] = useState([]);
-  const [series7, setSeries7] = useState([]);
+
+  // --- STATE BERAT (hitung dari sales) menyusul nanti ---
+  const [sum, setSum] = useState({ qty: 0, omzet: 0, laba: 0 });
+  const [today, setToday] = useState({ qty: 0, money: 0 });
+
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // === FAST PATH: tampilkan snapshot instan dari cache, lalu revalidate di belakang layar
+  // Throttle guard utk realtime refresh
+  const busyRef = useRef(false);
+  const idleTimer = useRef(null);
+
+  // 1) Render cepat: ambil snapshot (cache) lalu revalidate di belakang layar (sudah dilakukan DataService)
   useEffect(() => {
     let alive = true;
 
     (async () => {
-      // 1) ambil snapshot cepat (bisa dari cache localStorage)
-      const snap = await DataService.getDashboardSnapshot({ revalidate: true });
-      if (!alive) return;
+      try {
+        // Ambil cache dulu (instant), sambil DataService revalidate di background
+        const snap = await DataService.getDashboardSnapshot({ revalidate: true });
+        if (!alive) return;
 
-      setPiutang(snap.receivables ?? 0);
-      setSeries7(Array.isArray(snap.sevenDays) ? snap.sevenDays : []);
-      setRecent(Array.isArray(snap.recentSales) ? snap.recentSales : []);
-
-      // tampilkan UI terlebih dahulu
-      setLoading(false);
-
-      // 2) heavy compute untuk ringkasan keuangan + penjualan hari ini (non-blocking)
-      fetchHeavy();
+        setStocks(snap.stocks || { ISI: 0, KOSONG: 0 });
+        setSeries7(snap.sevenDays || []);
+        setPiutang(snap.receivables || 0);
+        setRecent(snap.recentSales || []);
+        setLoading(false);
+      } catch (e) {
+        if (!alive) return;
+        setErr(e.message || "Gagal memuat dashboard");
+        setLoading(false);
+      }
     })();
 
-    // dengarkan broadcast hasil revalidate snapshot
+    // Dengarkan hasil revalidate (broadcast 'dashboard:snapshot')
     const onSnap = (e) => {
-      if (!alive) return;
-      const s = e.detail || {};
-      setPiutang(s.receivables ?? 0);
-      setSeries7(Array.isArray(s.sevenDays) ? s.sevenDays : []);
-      setRecent(Array.isArray(s.recentSales) ? s.recentSales : []);
+      const d = e?.detail || {};
+      setStocks(d.stocks || { ISI: 0, KOSONG: 0 });
+      setSeries7(Array.isArray(d.sevenDays) ? d.sevenDays : []);
+      setPiutang(Number.isFinite(d.receivables) ? d.receivables : 0);
+      setRecent(Array.isArray(d.recentSales) ? d.recentSales : []);
     };
-    window.addEventListener("dashboard:snapshot", onSnap, { passive: true });
-
-    // realtime supabase → revalidate ringan
-    const ch = supabase
-      .channel("dashboard-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, () => {
-        DataService.getDashboardSnapshot({ revalidate: true });
-        fetchHeavy(); // agar ringkasan keuangan ikut ter-update
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "stocks" }, () => {
-        DataService.getDashboardSnapshot({ revalidate: true });
-      })
-      .subscribe();
+    window.addEventListener("dashboard:snapshot", onSnap);
 
     return () => {
       alive = false;
       window.removeEventListener("dashboard:snapshot", onSnap);
-      try { supabase.removeChannel(ch); } catch {}
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // bila HPP berubah → hitung ulang laba
+  // 2) Hitung angka berat (qty total, omzet, laba, penjualan hari ini) dilakukan setelah UI tampil
   useEffect(() => {
-    fetchHeavy();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let alive = true;
+    const doHeavy = async () => {
+      try {
+        // sedikit tunda supaya paint awal selesai
+        await new Promise((r) => setTimeout(r, 50));
+
+        // batasi limit agar cepat; untuk ringkasan cukup 500-800
+        const rows = await DataService.loadSales(500);
+        if (!alive) return;
+
+        const notVoid = rows.filter((r) => String(r.status || "").toUpperCase() !== "DIBATALKAN");
+        const qty = notVoid.reduce((a, b) => a + Number(b.qty || 0), 0);
+
+        const paid = notVoid.filter(
+          (r) =>
+            String(r.method).toUpperCase() === "TUNAI" ||
+            String(r.status || "").toUpperCase() === "LUNAS"
+        );
+        const omzet = paid.reduce((a, b) => a + Number(b.total || 0), 0);
+        const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * (Number(hppSetting) || 0), 0);
+        const laba = omzet - hpp;
+
+        const todaySum =
+          (await DataService.getSalesSummary({ from: todayStr(), to: todayStr() })) ||
+          { qty: 0, money: 0 };
+
+        setSum({ qty, omzet, laba });
+        setToday(todaySum);
+      } catch (e) {
+        if (!alive) return;
+        // Jangan blok UI, cukup catat error ringan
+        console.warn("[Dashboard heavy]", e?.message || e);
+      }
+    };
+
+    // Jalankan berat saat browser idle (fallback ke timeout)
+    const ric =
+      "requestIdleCallback" in window
+        ? window.requestIdleCallback
+        : (cb) => setTimeout(() => cb({ timeRemaining: () => 50 }), 150);
+    const cancel =
+      "cancelIdleCallback" in window ? window.cancelIdleCallback : (id) => clearTimeout(id);
+
+    const id = ric(doHeavy);
+    return () => {
+      alive = false;
+      cancel(id);
+    };
   }, [hppSetting]);
 
-  // ===== heavy fetch (jalan di background, tidak blokir render awal)
-  const fetchHeavy = async () => {
-    try {
-      // Ambil data sekali secara paralel
-      const [rows, todaySum] = await Promise.all([
-        DataService.loadSales(500),
-        DataService.getSalesSummary({ from: todayStr(), to: todayStr() }).catch(() => ({ qty: 0, money: 0 })),
-      ]);
+  // 3) Realtime → minta revalidate snapshot (ringan), throttle biar tidak spam
+  useEffect(() => {
+    const askRevalidate = () => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      // minta DataService revalidate (ambil data terbaru & broadcast)
+      DataService.getDashboardSnapshot({ revalidate: true });
 
-      const notVoid = (rows || []).filter(
-        (r) => String(r.status || "").toUpperCase() !== "DIBATALKAN"
-      );
+      // lepas throttle setelah jeda
+      clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(() => (busyRef.current = false), 1200);
+    };
 
-      const qty = notVoid.reduce((a, b) => a + Number(b.qty || 0), 0);
-      const paid = notVoid.filter(
-        (r) =>
-          String(r.method).toUpperCase() === "TUNAI" ||
-          String(r.status || "").toUpperCase() === "LUNAS"
-      );
+    const ch = supabase
+      .channel("dashboard-rt-lite")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, askRevalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "stocks" }, askRevalidate)
+      .subscribe();
 
-      // gunakan r.total bila ada (lebih akurat), fallback ke qty*price
-      const getTotal = (r) =>
-        Number.isFinite(Number(r.total)) && Number(r.total) > 0
-          ? Number(r.total)
-          : (Number(r.qty) || 0) * (Number(r.price) || 0);
+    return () => {
+      try {
+        supabase.removeChannel(ch);
+      } catch {}
+      clearTimeout(idleTimer.current);
+    };
+  }, []);
 
-      const omzet = paid.reduce((a, b) => a + getTotal(b), 0);
-      const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * hppSetting, 0);
-      const laba = omzet - hpp;
-
-      setSum({ qty, omzet, laba });
-      setToday(todaySum || { qty: 0, money: 0 });
-      setErr("");
-    } catch (e) {
-      setErr(e.message || "Gagal memuat dashboard");
-    }
-  };
+  // ---- derived values
+  const isi = Number(stocks?.ISI || 0);
+  const kosong = Number(stocks?.KOSONG || 0);
+  const total = isi + kosong;
 
   return (
     <Stack spacing={1.5}>
       {/* Header */}
-      <Stack
-        direction="row"
-        alignItems="baseline"
-        justifyContent="space-between"
-        flexWrap="wrap"
-        sx={{ gap: 1 }}
-      >
+      <Stack direction="row" alignItems="baseline" justifyContent="space-between" flexWrap="wrap" sx={{ gap: 1 }}>
         <Box>
           <Typography variant="h5" fontWeight={800}>
             Dashboard
@@ -301,27 +311,18 @@ export default function DashboardView({ stocks = {} }) {
             Ringkasan stok & penjualan.
           </Typography>
         </Box>
-        <Chip
-          label={`Total Tabung: ${total}`}
-          variant="outlined"
-          color="default"
-          sx={{ fontWeight: 700 }}
-        />
+        <Chip label={`Total Tabung: ${total}`} variant="outlined" color="default" sx={{ fontWeight: 700 }} />
       </Stack>
 
-      {err && (
-        <Alert severity="error" variant="outlined">
-          {err}
-        </Alert>
-      )}
+      {err && <Alert severity="error" variant="outlined">{err}</Alert>}
 
       {/* Ringkasan Stok & Penjualan */}
       <Grid container spacing={1.5} alignItems="stretch">
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Stok Isi"
-            value={loading ? <Skeleton width={60} /> : Number(stocks.ISI || 0)}
-            subtitle={Number(stocks.ISI || 0) <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Siap jual"}
+            value={loading ? <Skeleton width={60} /> : isi}
+            subtitle={isi <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Siap jual"}
             color="success"
             icon={<Inventory2Icon />}
           />
@@ -329,8 +330,8 @@ export default function DashboardView({ stocks = {} }) {
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Stok Kosong"
-            value={loading ? <Skeleton width={60} /> : Number(stocks.KOSONG || 0)}
-            subtitle={Number(stocks.KOSONG || 0) <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Tabung kembali"}
+            value={loading ? <Skeleton width={60} /> : kosong}
+            subtitle={kosong <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Tabung kembali"}
             color="error"
             icon={<Inventory2Icon />}
           />
@@ -359,11 +360,7 @@ export default function DashboardView({ stocks = {} }) {
       <Card>
         <CardHeader title="Kondisi Stok (Isi vs Kosong)" />
         <CardContent>
-          {loading ? (
-            <Skeleton height={24} />
-          ) : (
-            <StockProgress isi={Number(stocks.ISI || 0)} kosong={Number(stocks.KOSONG || 0)} />
-          )}
+          {loading ? <Skeleton height={24} /> : <StockProgress isi={isi} kosong={kosong} />}
         </CardContent>
       </Card>
 
@@ -383,11 +380,7 @@ export default function DashboardView({ stocks = {} }) {
                 <Stack spacing={1}>
                   <RowKV k="Omzet (dibayar)" v={fmtIDR(sum.omzet)} />
                   <RowKV k="HPP" v={`− ${fmtIDR(sum.omzet - sum.laba)}`} />
-                  <RowKV
-                    k="Laba"
-                    v={fmtIDR(sum.laba)}
-                    vSx={{ color: "success.main", fontWeight: 700 }}
-                  />
+                  <RowKV k="Laba" v={fmtIDR(sum.laba)} vSx={{ color: "success.main", fontWeight: 700 }} />
                 </Stack>
               )}
             </CardContent>
@@ -468,11 +461,7 @@ export default function DashboardView({ stocks = {} }) {
                       <TableCell align="right">{x.qty}</TableCell>
                       <TableCell>{x.method}</TableCell>
                       <TableCell align="right">
-                        {fmtIDR(
-                          Number.isFinite(Number(x.total)) && Number(x.total) > 0
-                            ? Number(x.total)
-                            : (Number(x.qty) || 0) * (Number(x.price) || 0)
-                        )}
+                        {fmtIDR((Number(x.qty) || 0) * (Number(x.price) || 0))}
                       </TableCell>
                     </TableRow>
                   ))}
