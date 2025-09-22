@@ -4,7 +4,8 @@ import {
   Box, Stack, Typography, Card, CardHeader, CardContent, Grid, TextField, Button,
   Chip, Table, TableHead, TableRow, TableCell, TableBody, Paper, TableContainer,
   MenuItem, Select, FormControl, InputLabel, IconButton, Tooltip, Alert, Dialog,
-  DialogTitle, DialogContent, DialogActions, Skeleton, Checkbox, ListItemText
+  DialogTitle, DialogContent, DialogActions, Skeleton, Checkbox, ListItemText,
+  Tabs, Tab
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SaveIcon from "@mui/icons-material/Save";
@@ -15,6 +16,8 @@ import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import SettingsSuggestIcon from "@mui/icons-material/SettingsSuggest";
 import ShieldIcon from "@mui/icons-material/Shield";
 import LockResetIcon from "@mui/icons-material/LockReset";
+import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
+import PersonAddIcon from "@mui/icons-material/PersonAddAlt";
 
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -22,6 +25,7 @@ import { useSettings } from "../../context/SettingsContext.jsx";
 import { DataService } from "../../services/DataService.js";
 import { DEFAULT_PRICE, PRICE_OPTIONS, PAYMENT_METHODS } from "../../utils/constants.js";
 import { fmtIDR } from "../../utils/helpers.js";
+import { supabase } from "../../lib/supabase.js";
 
 /* ===== Wrapper: resolve role & redirect non-admin ===== */
 export default function PengaturanView() {
@@ -33,7 +37,7 @@ export default function PengaturanView() {
     (async () => {
       if (initializing) return;
       if (!user) { on && setRole("user"); return; }
-      const r = await DataService.getUserRoleById(user.id).catch(() => "user");
+      const r = await DataService.getUserRoleById(user.id).catch(()=>"user");
       on && setRole((r || "user").toLowerCase());
     })();
     return () => { on = false; };
@@ -67,6 +71,9 @@ function SettingsAdmin() {
   const toast = useToast();
   const { settings, loading: settingsLoading, saveSettings, changePassword } = useSettings();
 
+  // TAB
+  const [tab, setTab] = useState(0); // 0: Pengaturan Dasar, 1: Manajemen User
+
   // state settings (local form)
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -80,10 +87,14 @@ function SettingsAdmin() {
   const [users, setUsers] = useState([]);
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState("user");
+
+  // busy flags
   const [busy, setBusy] = useState(false);
+  const [userBusyId, setUserBusyId] = useState(null);
 
   // ganti password (admin sendiri)
   const [oldPass, setOldPass] = useState("");
+  the:
   const [newPass, setNewPass] = useState("");
   const [newPass2, setNewPass2] = useState("");
 
@@ -91,7 +102,11 @@ function SettingsAdmin() {
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
   const [confirmPwdOpen, setConfirmPwdOpen] = useState(false);
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+
+  // dialog user mgmt
   const [confirmUserResetOpen, setConfirmUserResetOpen] = useState({ open: false, id: null });
+  const [confirmUserDeleteOpen, setConfirmUserDeleteOpen] = useState({ open: false, id: null, email: "" });
+  const [confirmUserRoleOpen, setConfirmUserRoleOpen] = useState({ open: false, id: null, email: "", makeAdmin: true });
 
   // initial load dari DataService + sinkron ke SettingContext
   useEffect(() => {
@@ -110,9 +125,7 @@ function SettingsAdmin() {
           Array.isArray(merged.payment_methods) ? merged.payment_methods : PAYMENT_METHODS
         );
 
-        const u = await DataService.getUsers();
-        if (!alive) return;
-        setUsers(Array.isArray(u) ? u : []);
+        await fetchUsers(); // ambil user via edge function
         setErr("");
       } catch (e) {
         if (!alive) return;
@@ -122,7 +135,7 @@ function SettingsAdmin() {
       }
     })();
     return () => { alive = false; };
-  }, [settingsLoading]);
+  }, [settingsLoading]); // reload bila SettingContext selesai
 
   const summary = useMemo(() => ({
     hargaLabel: fmtIDR(defaultPrice),
@@ -130,7 +143,7 @@ function SettingsAdmin() {
     metodeLabel: (paymentMethods || []).join(", "),
   }), [defaultPrice, hpp, paymentMethods]);
 
-  /* ====== actions with confirmation ====== */
+  /* ====== SETTINGS actions ====== */
   const doSaveSettings = async () => {
     try {
       setBusy(true);
@@ -141,7 +154,7 @@ function SettingsAdmin() {
         hpp: Number(hpp) || 0,
         payment_methods: paymentMethods,
       });
-      toast?.show?.({ type: "success", message: "Pengaturan disimpan." });
+      toast?.show?.({ type: "success", message: "Pengaturan disimpan (global)." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal menyimpan pengaturan" });
     } finally {
@@ -181,18 +194,19 @@ function SettingsAdmin() {
     }
   };
 
-  const doResetUserPassword = async (id) => {
+  /* ====== USER MANAGEMENT (via Edge Function manage_users) ====== */
+  async function fetchUsers() {
     try {
-      setBusy(true);
-      await DataService.resetUserPassword({ user_id: id });
-      toast?.show?.({ type: "success", message: "Permintaan reset password dikirim." });
+      const { data, error } = await supabase.functions.invoke("manage_users", {
+        body: { action: "list" },
+      });
+      if (error) throw error;
+      setUsers(Array.isArray(data) ? data : []);
     } catch (e) {
-      toast?.show?.({ type: "error", message: e.message || "Gagal reset password user" });
-    } finally {
-      setBusy(false);
-      setConfirmUserResetOpen({ open: false, id: null });
+      toast?.show?.({ type: "error", message: e.message || "Gagal memuat pengguna" });
+      setUsers([]);
     }
-  };
+  }
 
   const addUser = async () => {
     const email = newEmail.trim();
@@ -202,12 +216,14 @@ function SettingsAdmin() {
     }
     try {
       setBusy(true);
-      await DataService.addUser({ email, role: newRole });
-      const u = await DataService.getUsers();
-      setUsers(u || []);
+      // di sini hanya simpan role awal (opsional)
+      await supabase.functions.invoke("manage_users", {
+        body: { action: newRole === "admin" ? "inviteAdmin" : "inviteUser", email },
+      });
       setNewEmail("");
       setNewRole("user");
-      toast?.show?.({ type: "success", message: "User ditambahkan." });
+      await fetchUsers();
+      toast?.show?.({ type: "success", message: "Undangan/penambahan user diproses." });
     } catch (e) {
       toast?.show?.({ type: "error", message: e.message || "Gagal menambah user" });
     } finally {
@@ -215,17 +231,53 @@ function SettingsAdmin() {
     }
   };
 
-  const changeUserRole = async (id, role) => {
+  const doResetUserData = async (id) => {
     try {
-      setBusy(true);
-      await DataService.updateUserRole({ user_id: id, role });
-      const u = await DataService.getUsers();
-      setUsers(u || []);
-      toast?.show?.({ type: "success", message: "Role diperbarui." });
+      setUserBusyId(id);
+      const { error } = await supabase.functions.invoke("manage_users", {
+        body: { action: "reset", userId: id },
+      });
+      if (error) throw error;
+      toast?.show?.({ type: "success", message: "Data user direset." });
     } catch (e) {
-      toast?.show?.({ type: "error", message: e.message || "Gagal update role" });
+      toast?.show?.({ type: "error", message: e.message || "Gagal reset user" });
     } finally {
-      setBusy(false);
+      setUserBusyId(null);
+      setConfirmUserResetOpen({ open: false, id: null });
+    }
+  };
+
+  const doDeleteUser = async (id) => {
+    try {
+      setUserBusyId(id);
+      const { error } = await supabase.functions.invoke("manage_users", {
+        body: { action: "delete", userId: id },
+      });
+      if (error) throw error;
+      await fetchUsers();
+      toast?.show?.({ type: "success", message: "User dihapus." });
+    } catch (e) {
+      toast?.show?.({ type: "error", message: e.message || "Gagal menghapus user" });
+    } finally {
+      setUserBusyId(null);
+      setConfirmUserDeleteOpen({ open: false, id: null, email: "" });
+    }
+  };
+
+  const doToggleAdmin = async (id, makeAdmin) => {
+    try {
+      setUserBusyId(id);
+      const { error } = await supabase.functions.invoke("manage_users", {
+        body: { action: makeAdmin ? "grantAdmin" : "revokeAdmin", userId: id },
+      });
+      if (error) throw error;
+      await fetchUsers();
+      toast?.show?.({ type: "success", message: makeAdmin ? "User dijadikan admin." : "Hak admin dicabut." });
+    } catch (e) {
+      toast?.show?.({ type: "error", message: e.message || "Gagal mengubah role" });
+    } finally {
+      setUserBusyId(null);
+      setConfirmUserRoleOpen({ open: false, id: null, email: "", makeAdmin: true });
     }
   };
 
@@ -259,301 +311,332 @@ function SettingsAdmin() {
       <Stack direction="row" alignItems="center" spacing={1}>
         <Typography variant="h5" fontWeight={800}>Pengaturan</Typography>
         <Chip icon={<SettingsSuggestIcon />} label="Admin Only" size="small" sx={{ ml: 1 }} />
+        <Box sx={{ ml: "auto" }} />
       </Stack>
+
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable">
+        <Tab label="Pengaturan Dasar" />
+        <Tab label="Manajemen User" icon={<AdminPanelSettingsIcon />} iconPosition="start" />
+      </Tabs>
 
       {err && <Alert severity="error" variant="outlined">{err}</Alert>}
 
-      {/* 1. Pengaturan Dasar */}
-      <Card>
-        <CardHeader title="Pengaturan Dasar" />
-        <CardContent>
-          {loading ? (
-            <Stack spacing={1}><Skeleton height={36}/><Skeleton height={36}/><Skeleton height={36}/></Stack>
-          ) : (
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Nama Usaha"
-                  fullWidth
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
-                  placeholder="Toko Gas 3KG"
-                  helperText="Tidak akan disimpan kosong — akan memakai nama terakhir yang valid."
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel id="default-price-label">Harga Default</InputLabel>
-                  <Select
-                    labelId="default-price-label"
-                    label="Harga Default"
-                    value={defaultPrice}
-                    onChange={(e) => setDefaultPrice(Number(e.target.value))}
-                  >
-                    {PRICE_OPTIONS.map((p) => (
-                      <MenuItem key={p} value={p}>{fmtIDR(p)}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
+      {/* ======= TAB 0: PENGATURAN DASAR ======= */}
+      {tab === 0 && (
+        <>
+          <Card>
+            <CardHeader title="Pengaturan Dasar (Global)" />
+            <CardContent>
+              {loading ? (
+                <Stack spacing={1}><Skeleton height={36}/><Skeleton height={36}/><Skeleton height={36}/></Stack>
+              ) : (
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Nama Usaha"
+                      fullWidth
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      placeholder="Toko Gas 3KG"
+                      helperText="Tidak akan disimpan kosong — akan memakai nama terakhir yang valid."
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
+                      <InputLabel id="default-price-label">Harga Default</InputLabel>
+                      <Select
+                        labelId="default-price-label"
+                        label="Harga Default"
+                        value={defaultPrice}
+                        onChange={(e) => setDefaultPrice(Number(e.target.value))}
+                      >
+                        {PRICE_OPTIONS.map((p) => (
+                          <MenuItem key={p} value={p}>{fmtIDR(p)}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
 
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  type="number"
-                  label="HPP per Tabung"
-                  fullWidth
-                  value={hpp}
-                  onChange={(e) => setHpp(Math.max(0, Number(e.target.value || 0)))}
-                  helperText="Untuk perhitungan Laba Rugi"
-                  inputProps={{ min: 0 }}
-                />
-              </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      type="number"
+                      label="HPP per Tabung"
+                      fullWidth
+                      value={hpp}
+                      onChange={(e) => setHpp(Math.max(0, Number(e.target.value || 0)))}
+                      helperText="Untuk perhitungan Laba Rugi"
+                      inputProps={{ min: 0 }}
+                    />
+                  </Grid>
 
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel id="payment-methods-label">Metode Pembayaran Aktif</InputLabel>
-                  <Select
-                    multiple
-                    labelId="payment-methods-label"
-                    label="Metode Pembayaran Aktif"
-                    value={paymentMethods}
-                    onChange={(e) => setPaymentMethods(e.target.value)}
-                    renderValue={(selected) => selected.join(", ")}
-                  >
-                    {PAYMENT_METHODS.map((m) => (
-                      <MenuItem key={m} value={m}>
-                        <Checkbox checked={paymentMethods.indexOf(m) > -1} />
-                        <ListItemText primary={m} />
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
+                      <InputLabel id="payment-methods-label">Metode Pembayaran Aktif</InputLabel>
+                      <Select
+                        multiple
+                        labelId="payment-methods-label"
+                        label="Metode Pembayaran Aktif"
+                        value={paymentMethods}
+                        onChange={(e) => setPaymentMethods(e.target.value)}
+                        renderValue={(selected) => selected.join(", ")}
+                      >
+                        {PAYMENT_METHODS.map((m) => (
+                          <MenuItem key={m} value={m}>
+                            <Checkbox checked={paymentMethods.indexOf(m) > -1} />
+                            <ListItemText primary={m} />
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
 
-              <Grid item xs={12}>
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Chip label={`Harga default: ${summary.hargaLabel}`} />
-                  <Chip label={`HPP: ${summary.hppLabel}`} />
-                  <Chip label={`Metode: ${summary.metodeLabel}`} />
-                </Stack>
-              </Grid>
+                  <Grid item xs={12}>
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      <Chip label={`Harga default: ${summary.hargaLabel}`} />
+                      <Chip label={`HPP: ${summary.hppLabel}`} />
+                      <Chip label={`Metode: ${summary.metodeLabel}`} />
+                    </Stack>
+                  </Grid>
 
-              <Grid item xs={12}>
-                <Stack direction="row" spacing={1} justifyContent="flex-end">
-                  <Button
-                    startIcon={<SaveIcon />}
-                    variant="contained"
-                    onClick={() => setConfirmSaveOpen(true)}
-                    disabled={busy}
-                  >
-                    Simpan Pengaturan
-                  </Button>
-                </Stack>
-              </Grid>
-            </Grid>
-          )}
-        </CardContent>
-      </Card>
+                  <Grid item xs={12}>
+                    <Stack direction="row" spacing={1} justifyContent="flex-end">
+                      <Button
+                        startIcon={<SaveIcon />}
+                        variant="contained"
+                        onClick={() => setConfirmSaveOpen(true)}
+                        disabled={busy}
+                      >
+                        Simpan Pengaturan
+                      </Button>
+                    </Stack>
+                  </Grid>
+                </Grid>
+              )}
+            </CardContent>
+          </Card>
 
-      {/* 2. Ganti Password (admin sendiri) */}
-      <Card>
-        <CardHeader title="Ganti Password" />
-        <CardContent>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
-              <TextField
-                type="password" label="Password Lama" fullWidth
-                value={oldPass} onChange={(e)=>setOldPass(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <TextField
-                type="password" label="Password Baru" fullWidth
-                value={newPass} onChange={(e)=>setNewPass(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <TextField
-                type="password" label="Ulangi Password Baru" fullWidth
-                value={newPass2} onChange={(e)=>setNewPass2(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <Stack direction="row" justifyContent="flex-end">
-                <Button
-                  startIcon={<LockResetIcon />} variant="outlined"
-                  onClick={() => setConfirmPwdOpen(true)} disabled={busy}
-                >
-                  Ganti Password
-                </Button>
-              </Stack>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
-
-      {/* 3. Pengguna & Hak Akses (placeholder FE) */}
-      <Card>
-        <CardHeader
-          title="Pengguna & Hak Akses"
-          action={<Chip icon={<AdminPanelSettingsIcon />} label="Admin mengelola user" size="small" />}
-        />
-        <CardContent>
-          {loading ? (
-            <Stack spacing={1}>
-              <Skeleton height={36} /><Skeleton height={36} /><Skeleton height={36} />
-            </Stack>
-          ) : (
-            <>
-              <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid item xs={12} md={6}>
+          {/* Ganti Password (admin sendiri) */}
+          <Card>
+            <CardHeader title="Ganti Password" />
+            <CardContent>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={4}>
                   <TextField
-                    fullWidth
-                    label="Email pengguna baru"
-                    placeholder="nama@domain.com"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
+                    type="password" label="Password Lama" fullWidth
+                    value={oldPass} onChange={(e)=>setOldPass(e.target.value)}
                   />
                 </Grid>
-                <Grid item xs={12} md={3}>
-                  <FormControl fullWidth>
-                    <InputLabel id="new-role">Role</InputLabel>
-                    <Select
-                      labelId="new-role"
-                      label="Role"
-                      value={newRole}
-                      onChange={(e) => setNewRole(e.target.value)}
-                    >
-                      <MenuItem value="user">user</MenuItem>
-                      <MenuItem value="admin">admin</MenuItem>
-                    </Select>
-                  </FormControl>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    type="password" label="Password Baru" fullWidth
+                    value={newPass} onChange={(e)=>setNewPass(e.target.value)}
+                  />
                 </Grid>
-                <Grid item xs={12} md="auto">
-                  <Button variant="contained" onClick={addUser} disabled={busy}>
-                    Tambah User
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    type="password" label="Ulangi Password Baru" fullWidth
+                    value={newPass2} onChange={(e)=>setNewPass2(e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <Stack direction="row" justifyContent="flex-end">
+                    <Button
+                      startIcon={<LockResetIcon />} variant="outlined"
+                      onClick={() => setConfirmPwdOpen(true)} disabled={busy}
+                    >
+                      Ganti Password
+                    </Button>
+                  </Stack>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+
+          {/* Backup & Restore */}
+          <Card>
+            <CardHeader title="Backup & Restore Data" />
+            <CardContent>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item>
+                  <Button
+                    startIcon={<DownloadIcon />}
+                    variant="outlined"
+                    onClick={onExport}
+                    disabled={busy}
+                  >
+                    Export (Excel/JSON)
+                  </Button>
+                </Grid>
+                <Grid item>
+                  <Button
+                    component="label"
+                    startIcon={<UploadIcon />}
+                    variant="outlined"
+                    disabled={busy}
+                  >
+                    Import
+                    <input
+                      hidden
+                      type="file"
+                      accept=".json,application/json"
+                      onChange={(e) => onImport(e.target.files?.[0])}
+                    />
                   </Button>
                 </Grid>
               </Grid>
+              <Box sx={{ mt: 1, color: "text.secondary", fontSize: 12 }}>
+                Export akan menyimpan snapshot stok, penjualan, dan pelanggan.
+              </Box>
+            </CardContent>
+          </Card>
 
-              <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
-                <Table size="small">
-                  <TableHead>
+          {/* Hard Reset */}
+          <Card>
+            <CardHeader title="Hard Reset (Hapus Semua Data)" />
+            <CardContent>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Tindakan ini akan menghapus seluruh data (stok, log, penjualan, pelanggan).
+                Pastikan Anda sudah melakukan backup.
+              </Alert>
+              <Button
+                color="error"
+                variant="contained"
+                startIcon={<RestartAltIcon />}
+                onClick={() => setConfirmResetOpen(true)}
+                disabled={busy}
+              >
+                Hard Reset
+              </Button>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* ======= TAB 1: MANAJEMEN USER ======= */}
+      {tab === 1 && (
+        <Card>
+          <CardHeader
+            title="Manajemen User"
+            action={<Chip icon={<AdminPanelSettingsIcon />} label="Admin mengelola user" size="small" />}
+          />
+          <CardContent>
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Email pengguna baru"
+                  placeholder="nama@domain.com"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel id="new-role">Role</InputLabel>
+                  <Select
+                    labelId="new-role"
+                    label="Role"
+                    value={newRole}
+                    onChange={(e) => setNewRole(e.target.value)}
+                  >
+                    <MenuItem value="user">user</MenuItem>
+                    <MenuItem value="admin">admin</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md="auto">
+                <Button variant="contained" onClick={addUser} disabled={busy}>
+                  Tambah / Undang
+                </Button>
+              </Grid>
+            </Grid>
+
+            <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Email</TableCell>
+                    <TableCell>Role</TableCell>
+                    <TableCell align="right">Aksi</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {!users.length && (
                     <TableRow>
-                      <TableCell>Email</TableCell>
-                      <TableCell>Role</TableCell>
-                      <TableCell align="right">Aksi</TableCell>
+                      <TableCell colSpan={3} sx={{ color: "text.secondary" }}>
+                        Belum ada user
+                      </TableCell>
                     </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {!users.length && (
-                      <TableRow>
-                        <TableCell colSpan={3} sx={{ color: "text.secondary" }}>
-                          Belum ada user
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {users.map((u) => (
-                      <TableRow key={u.id} hover>
-                        <TableCell>{u.email}</TableCell>
-                        <TableCell sx={{ minWidth: 160 }}>
-                          <Select
-                            size="small" fullWidth value={u.role}
-                            onChange={(e) => changeUserRole(u.id, e.target.value)}
-                            disabled={busy}
-                          >
-                            <MenuItem value="user">user</MenuItem>
-                            <MenuItem value="admin">admin</MenuItem>
-                          </Select>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Tooltip title="Reset password user (konfirmasi)">
+                  )}
+                  {users.map((u) => (
+                    <TableRow key={u.id} hover>
+                      <TableCell>{u.email}</TableCell>
+                      <TableCell sx={{ textTransform: "lowercase", fontWeight: 600 }}>
+                        {u.role}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Reset data user">
+                          <span>
+                            <IconButton
+                              onClick={() => setConfirmUserResetOpen({ open: true, id: u.id })}
+                              disabled={userBusyId === u.id}
+                            >
+                              <ShieldIcon />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+
+                        {u.role === "admin" ? (
+                          <Tooltip title="Cabut hak admin">
                             <span>
                               <IconButton
-                                onClick={() => setConfirmUserResetOpen({ open: true, id: u.id })}
-                                disabled={busy}
+                                onClick={() =>
+                                  setConfirmUserRoleOpen({ open: true, id: u.id, email: u.email, makeAdmin: false })
+                                }
+                                disabled={userBusyId === u.id}
                               >
-                                <ShieldIcon />
+                                <PersonRemoveIcon />
                               </IconButton>
                             </span>
                           </Tooltip>
-                          <Tooltip title="Hapus (placeholder)">
+                        ) : (
+                          <Tooltip title="Jadikan admin">
                             <span>
-                              <IconButton disabled>
-                                <DeleteIcon />
+                              <IconButton
+                                onClick={() =>
+                                  setConfirmUserRoleOpen({ open: true, id: u.id, email: u.email, makeAdmin: true })
+                                }
+                                disabled={userBusyId === u.id}
+                              >
+                                <PersonAddIcon />
                               </IconButton>
                             </span>
                           </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </>
-          )}
-        </CardContent>
-      </Card>
+                        )}
 
-      {/* 4. Backup & Restore */}
-      <Card>
-        <CardHeader title="Backup & Restore Data" />
-        <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item>
-              <Button
-                startIcon={<DownloadIcon />}
-                variant="outlined"
-                onClick={onExport}
-                disabled={busy}
-              >
-                Export (Excel/JSON)
-              </Button>
-            </Grid>
-            <Grid item>
-              <Button
-                component="label"
-                startIcon={<UploadIcon />}
-                variant="outlined"
-                disabled={busy}
-              >
-                Import
-                <input
-                  hidden
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={(e) => onImport(e.target.files?.[0])}
-                />
-              </Button>
-            </Grid>
-          </Grid>
-          <Box sx={{ mt: 1, color: "text.secondary", fontSize: 12 }}>
-            Export akan menyimpan snapshot stok, penjualan, dan pelanggan.
-          </Box>
-        </CardContent>
-      </Card>
+                        <Tooltip title="Hapus user">
+                          <span>
+                            <IconButton
+                              onClick={() =>
+                                setConfirmUserDeleteOpen({ open: true, id: u.id, email: u.email })
+                              }
+                              disabled={userBusyId === u.id}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* 5. Hard Reset */}
-      <Card>
-        <CardHeader title="Hard Reset (Hapus Semua Data)" />
-        <CardContent>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            Tindakan ini akan menghapus seluruh data (stok, log, penjualan, pelanggan).
-            Pastikan Anda sudah melakukan backup.
-          </Alert>
-          <Button
-            color="error"
-            variant="contained"
-            startIcon={<RestartAltIcon />}
-            onClick={() => setConfirmResetOpen(true)}
-            disabled={busy}
-          >
-            Hard Reset
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* ====== Dialog Konfirmasi ====== */}
+      {/* ====== Dialog Konfirmasi (Settings) ====== */}
       <Dialog open={confirmSaveOpen} onClose={() => setConfirmSaveOpen(false)}>
         <DialogTitle>Konfirmasi</DialogTitle>
         <DialogContent dividers>
@@ -600,14 +683,16 @@ function SettingsAdmin() {
         </DialogActions>
       </Dialog>
 
+      {/* ====== Dialog Konfirmasi (User Mgmt) ====== */}
       <Dialog
         open={confirmUserResetOpen.open}
         onClose={() => setConfirmUserResetOpen({ open: false, id: null })}
       >
-        <DialogTitle>Konfirmasi Reset Password User</DialogTitle>
+        <DialogTitle>Reset Data User</DialogTitle>
         <DialogContent dividers>
           <Typography>
-            Kirim permintaan reset password ke user ini?
+            Tindakan ini akan <b>menghapus data transaksi & stok milik user tersebut</b>.
+            Lanjutkan?
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -615,10 +700,59 @@ function SettingsAdmin() {
           <Button
             startIcon={<ShieldIcon />}
             variant="contained"
-            onClick={() => doResetUserPassword(confirmUserResetOpen.id)}
-            disabled={busy}
+            onClick={() => doResetUserData(confirmUserResetOpen.id)}
+            disabled={userBusyId === confirmUserResetOpen.id}
           >
-            Ya, Kirim
+            Ya, Reset
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={confirmUserDeleteOpen.open}
+        onClose={() => setConfirmUserDeleteOpen({ open: false, id: null, email: "" })}
+      >
+        <DialogTitle>Hapus User</DialogTitle>
+        <DialogContent dividers>
+          <Typography>
+            Hapus user <b>{confirmUserDeleteOpen.email}</b> secara permanen?
+            Tindakan ini tidak bisa dibatalkan.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmUserDeleteOpen({ open: false, id: null, email: "" })}>Batal</Button>
+          <Button
+            color="error"
+            variant="contained"
+            startIcon={<DeleteIcon />}
+            onClick={() => doDeleteUser(confirmUserDeleteOpen.id)}
+            disabled={userBusyId === confirmUserDeleteOpen.id}
+          >
+            Ya, Hapus
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={confirmUserRoleOpen.open}
+        onClose={() => setConfirmUserRoleOpen({ open: false, id: null, email: "", makeAdmin: true })}
+      >
+        <DialogTitle>{confirmUserRoleOpen.makeAdmin ? "Jadikan Admin" : "Cabut Hak Admin"}</DialogTitle>
+        <DialogContent dividers>
+          <Typography>
+            {confirmUserRoleOpen.makeAdmin
+              ? <>Jadikan <b>{confirmUserRoleOpen.email}</b> sebagai admin?</>
+              : <>Cabut hak admin dari <b>{confirmUserRoleOpen.email}</b>?</>}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmUserRoleOpen({ open: false, id: null, email: "", makeAdmin: true })}>Batal</Button>
+          <Button
+            variant="contained"
+            onClick={() => doToggleAdmin(confirmUserRoleOpen.id, confirmUserRoleOpen.makeAdmin)}
+            disabled={userBusyId === confirmUserRoleOpen.id}
+          >
+            Ya, Lanjutkan
           </Button>
         </DialogActions>
       </Dialog>
