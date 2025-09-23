@@ -621,7 +621,7 @@ export const DataService = {
     return rowsToStockObject(data);
   },
 
-  // ====== PELANGGAN ======
+  // ====== PELANGGAN  ======
   async getCustomers({ q = "", filter = "ALL", limit = 300 } = {}) {
     let qry = supabase
       .from("view_customers_overview")
