@@ -29,7 +29,8 @@ export function SettingsProvider({ children }) {
         setLoading(true);
         const s = await DataService.getActiveSettings();
         if (isMounted) {
-          setSettings({ ...SAFE_DEFAULTS, ...(s || {}) });
+          // ✅ gunakan hasil dari DB/LS langsung, jangan di-merge ulang dengan SAFE_DEFAULTS
+          setSettings(s || SAFE_DEFAULTS);
           setError("");
         }
       } catch (e) {
@@ -49,7 +50,9 @@ export function SettingsProvider({ children }) {
 
     return () => {
       isMounted = false;
-      try { unsubscribe && unsubscribe(); } catch {}
+      try {
+        unsubscribe && unsubscribe();
+      } catch {}
     };
   }, []);
 
@@ -66,7 +69,8 @@ export function SettingsProvider({ children }) {
     setLoading(true);
     try {
       const s = await DataService.getSettings();
-      setSettings({ ...SAFE_DEFAULTS, ...(s || {}) });
+      // ✅ sama: jangan merge ulang SAFE_DEFAULTS
+      setSettings(s || SAFE_DEFAULTS);
       setError("");
     } catch (e) {
       setError(e?.message || "Gagal refresh pengaturan");
@@ -75,7 +79,7 @@ export function SettingsProvider({ children }) {
     }
   };
 
-  // util ganti password (dipakai di PengaturanView) – sinkron dengan AuthContext patch
+  // util ganti password (dipakai di PengaturanView)
   const changePassword = async (oldPass, newPass) => {
     const { data: u } = await supabase.auth.getUser();
     const email = u?.user?.email;
