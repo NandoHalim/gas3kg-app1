@@ -1,3 +1,4 @@
+// src/lib/supabase.js
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -7,7 +8,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,       // simpan session di localStorage
     autoRefreshToken: true,     // refresh token otomatis
-    detectSessionInUrl: true,   // dukung login lewat redirect
+    detectSessionInUrl: true,   // dukung login lewat redirect (OAuth, magic link, dsb)
   },
 });
 
