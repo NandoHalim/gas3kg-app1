@@ -833,34 +833,48 @@ function writeLS(obj) {
 }
 
 DataService.getSettings = async function () {
+  // 1) Coba RPC (aman dari CORS REST)
   try {
-    const { data, error } = await supabase
-      .from("app_settings")
-      .select("business_name, default_price, hpp, payment_methods, updated_at")
-      .eq("id", 1)
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!data) throw new Error("app_settings kosong");
+    const r = await supabase.rpc("get_app_settings");
+    if (r.error) throw r.error;
+    const row = Array.isArray(r.data) ? r.data[0] : r.data;
+    if (!row) throw new Error("app_settings kosong");
 
     const normalized = {
-      business_name: data.business_name || "",
-      default_price: Number(data.default_price) || 0,
-      hpp: Number(data.hpp) || 0,
-      payment_methods: Array.isArray(data.payment_methods)
-        ? data.payment_methods
-        : [],
-      updated_at: data.updated_at || null,
+      business_name: row.business_name ?? "",
+      default_price: row.default_price ?? 0,
+      hpp: row.hpp ?? 0,
+      payment_methods: Array.isArray(row.payment_methods) ? row.payment_methods : [],
+      updated_at: row.updated_at ?? null,
     };
-
-    // ✅ hanya tulis ke LS kalau berhasil ambil data dari DB
     writeLS(normalized);
     try { window.__appSettings = normalized; } catch {}
     return normalized;
-  } catch (e) {
-    console.warn("[getSettings] fallback:", e?.message);
-    // ✅ kalau gagal, pakai cache lama (tidak overwrite LS dengan kosong)
-    return readLS();
+  } catch (_) {
+    // 2) Fallback REST (kalau RPC belum dibuat)
+    try {
+      const { data, error } = await supabase
+        .from("app_settings")
+        .select("business_name, default_price, hpp, payment_methods, updated_at")
+        .eq("id", 1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("app_settings kosong");
+
+      const normalized = {
+        business_name: data.business_name ?? "",
+        default_price: data.default_price ?? 0,
+        hpp: data.hpp ?? 0,
+        payment_methods: Array.isArray(data.payment_methods) ? data.payment_methods : [],
+        updated_at: data.updated_at ?? null,
+      };
+      writeLS(normalized);
+      try { window.__appSettings = normalized; } catch {}
+      return normalized;
+    } catch (e2) {
+      console.warn("[getSettings] fallback LS:", e2?.message);
+      return readLS(); // 3) Fallback terakhir: cache lama
+    }
   }
 };
 DataService.getActiveSettings = async function () {
@@ -883,42 +897,39 @@ DataService.saveSettings = async function (payload) {
   const cur = await this.getSettings().catch(() => readLS());
   const merged = { ...cur, ...payload };
 
-  // Normalisasi payment_methods → selalu array JSON valid
-  const normalizePayMethods = (v) => {
-    if (Array.isArray(v)) return v;
-    if (!v) return [];
-    return String(v)
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-  };
+  // 1) Coba RPC admin-only
+  try {
+    const r = await supabase.rpc("set_app_settings", {
+      p_business_name: merged.business_name ?? null,
+      p_default_price: Number(merged.default_price) || 0,
+      p_hpp: Number(merged.hpp) || 0,
+      p_payment_methods: Array.isArray(merged.payment_methods)
+        ? merged.payment_methods
+        : [],
+    });
+    if (r.error) throw r.error;
+  } catch (_) {
+    // 2) Fallback REST update (kalau RPC belum ada)
+    const { error } = await supabase
+      .from("app_settings")
+      .update({
+        business_name: merged.business_name ?? null,
+        default_price: Number(merged.default_price) || 0,
+        hpp: Number(merged.hpp) || 0,
+        payment_methods: Array.isArray(merged.payment_methods)
+          ? merged.payment_methods
+          : [],
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", 1);
+    if (error) throw new Error(error.message || "Gagal menyimpan pengaturan");
+  }
 
-  // UPDATE murni agar tidak memicu RLS INSERT
-  const { error } = await supabase
-    .from("app_settings")
-    .update({
-      business_name: merged.business_name || null,
-      default_price: Number(merged.default_price) || null,
-      hpp: Number(merged.hpp) || null,
-      payment_methods: normalizePayMethods(merged.payment_methods),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", 1);
-
-  if (error) throw new Error(error.message || "Gagal menyimpan pengaturan");
-
+  // local cache + broadcast
   writeLS(merged);
-  try { window.__appSettings = merged; } catch {}
   try { window.dispatchEvent(new CustomEvent("settings:updated", { detail: merged })); } catch {}
   return true;
 };
-
-DataService.onSettingsChange = function (handler) {
-  const fn = (e) => handler?.(e?.detail || readLS());
-  window.addEventListener("settings:updated", fn);
-  return () => window.removeEventListener("settings:updated", fn);
-};
-
 /* =========================
    DASHBOARD SNAPSHOT (FAST)
    ========================= */
