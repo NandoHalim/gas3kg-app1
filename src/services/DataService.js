@@ -739,65 +739,43 @@ export const DataService = {
 
   // ====== AUTH/ROLE UTIL (via public.app_admins)
   async getUserRoleById(userId) {
+    // Gunakan RPC server-side; abaikan argumen karena server sudah pakai auth.uid()
     try {
-      if (!userId) return "user";
-      const { data, error } = await supabase
-        .from("app_admins")
-        .select("user_id")
-        .eq("user_id", userId)
-        .maybeSingle();
-
+      const { data, error } = await supabase.rpc("get_user_role");
       if (error) {
-        console.warn("[DataService.getUserRoleById] error:", error.message);
+        console.warn("[DataService.getUserRoleById] rpc error:", error.message);
         return "user";
       }
-      return data?.user_id ? "admin" : "user";
+      return (data || "user"); // 'admin' | 'user'
     } catch (e) {
       console.warn("[DataService.getUserRoleById] exception:", e?.message || e);
       return "user";
     }
+  
   },
 
   // ==== Tambahan: helper kompatibel lama
   async isAdmin() {
     try {
-      // cache ringan 5 menit
+      // cache ringan 5 menit tetap berlaku
       const CK = "__isAdmin_cache_v1";
       const raw = localStorage.getItem(CK);
       if (raw) {
-        const c = JSON.parse(raw);
-        if (Date.now() - (c.ts || 0) < 5 * 60 * 1000) return !!c.val;
+        try {
+          const c = JSON.parse(raw);
+          if (Date.now() - (c.ts || 0) < 5 * 60 * 1000) return !!c.val;
+        } catch {}
       }
-
-      const { data } = await supabase.auth.getUser();
-      const uid = data?.user?.id || "";
-      if (!uid) return false;
-
-      // 1) cek app_admins
-      const { data: adm, error: eAdm } = await supabase
-        .from("app_admins")
-        .select("user_id")
-        .eq("user_id", uid)
-        .maybeSingle();
-
-      if (!eAdm && adm?.user_id) {
-        localStorage.setItem(CK, JSON.stringify({ val: true, ts: Date.now() }));
-        return true;
-      }
-
-      // 2) fallback cek app_user_meta
-      const { data: meta, error: eMeta } = await supabase
-        .from("app_user_meta")
-        .select("role")
-        .eq("user_id", uid)
-        .maybeSingle();
-
-      const isAdmin = !eMeta && (meta?.role || "").toLowerCase() === "admin";
-      localStorage.setItem(CK, JSON.stringify({ val: isAdmin, ts: Date.now() }));
-      return isAdmin;
-    } catch {
+      const { data, error } = await supabase.rpc("is_admin");
+      if (error) throw error;
+      const val = !!data;
+      localStorage.setItem(CK, JSON.stringify({ val, ts: Date.now() }));
+      return val;
+    } catch (e) {
+      console.warn("[DataService.isAdmin] rpc error:", e?.message || e);
       return false;
     }
+  
   },
 
   // ====== USER MANAGEMENT (via SQL function public.manage_user) ======
