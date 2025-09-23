@@ -736,7 +736,6 @@ export const DataService = {
     return { totalTransaksi, totalNilai, rataRata, hutangAktif };
   },
 
-
   // ====== AUTH/ROLE UTIL (via public.app_admins)
   async getUserRoleById(userId) {
     // Gunakan RPC server-side; abaikan argumen karena server sudah pakai auth.uid()
@@ -751,7 +750,6 @@ export const DataService = {
       console.warn("[DataService.getUserRoleById] exception:", e?.message || e);
       return "user";
     }
-  
   },
 
   // ==== Tambahan: helper kompatibel lama
@@ -775,7 +773,6 @@ export const DataService = {
       console.warn("[DataService.isAdmin] rpc error:", e?.message || e);
       return false;
     }
-  
   },
 
   // ====== USER MANAGEMENT (via SQL function public.manage_user) ======
@@ -877,29 +874,28 @@ DataService.saveSettings = async function (payload) {
   const cur = await this.getSettings().catch(() => readLS());
   const merged = { ...cur, ...payload };
 
-    // Normalisasi payment_methods → selalu array JSON valid
-    const normalizePayMethods = (v) => {
-      if (Array.isArray(v)) return v;
-      if (!v) return [];
-      return String(v)
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-    };
+  // Normalisasi payment_methods → selalu array JSON valid
+  const normalizePayMethods = (v) => {
+    if (Array.isArray(v)) return v;
+    if (!v) return [];
+    return String(v)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  };
 
+  // UPDATE murni agar tidak memicu RLS INSERT
   const { error } = await supabase
     .from("app_settings")
-    .upsert(
-      {
-        id: 1,
-        business_name: merged.business_name || null,
-        default_price: Number(merged.default_price) || null,
-        hpp: Number(merged.hpp) || null,
-        payment_methods: merged.payment_methods || null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    );
+    .update({
+      business_name: merged.business_name || null,
+      default_price: Number(merged.default_price) || null,
+      hpp: Number(merged.hpp) || null,
+      payment_methods: normalizePayMethods(merged.payment_methods),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", 1);
+
   if (error) throw new Error(error.message || "Gagal menyimpan pengaturan");
 
   writeLS(merged);
