@@ -841,22 +841,28 @@ DataService.getSettings = async function () {
       .maybeSingle();
 
     if (error) throw error;
+    if (!data) throw new Error("app_settings kosong");
 
     const normalized = {
-      business_name: data?.business_name || "",
-      default_price: Number(data?.default_price) || 0,
-      hpp: Number(data?.hpp) || 0,
-      payment_methods: Array.isArray(data?.payment_methods) ? data.payment_methods : [],
-      updated_at: data?.updated_at || null,
+      business_name: data.business_name || "",
+      default_price: Number(data.default_price) || 0,
+      hpp: Number(data.hpp) || 0,
+      payment_methods: Array.isArray(data.payment_methods)
+        ? data.payment_methods
+        : [],
+      updated_at: data.updated_at || null,
     };
+
+    // ✅ hanya tulis ke LS kalau berhasil ambil data dari DB
     writeLS(normalized);
     try { window.__appSettings = normalized; } catch {}
     return normalized;
-  } catch {
+  } catch (e) {
+    console.warn("[getSettings] fallback:", e?.message);
+    // ✅ kalau gagal, pakai cache lama (tidak overwrite LS dengan kosong)
     return readLS();
   }
 };
-
 DataService.getActiveSettings = async function () {
   const s = await this.getSettings().catch(() => readLS());
   return {
