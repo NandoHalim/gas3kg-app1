@@ -877,6 +877,16 @@ DataService.saveSettings = async function (payload) {
   const cur = await this.getSettings().catch(() => readLS());
   const merged = { ...cur, ...payload };
 
+    // Normalisasi payment_methods → selalu array JSON valid
+    const normalizePayMethods = (v) => {
+      if (Array.isArray(v)) return v;
+      if (!v) return [];
+      return String(v)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    };
+
   const { error } = await supabase
     .from("app_settings")
     .upsert(
