@@ -865,17 +865,20 @@ DataService.getSettings = async function () {
 };
 DataService.getActiveSettings = async function () {
   const s = await this.getSettings().catch(() => readLS());
+
   return {
-    business_name: s.business_name || "",
-    default_price: Number(s.default_price) > 0 ? Number(s.default_price) : DEFAULT_PRICE,
-    hpp: Number(s.hpp) > 0 ? Number(s.hpp) : 0,
-    payment_methods: Array.isArray(s.payment_methods) && s.payment_methods.length
+    business_name: s?.business_name ?? "",
+    // Kalau null/undefined → baru pakai DEFAULT_PRICE. Kalau 0 → tetap 0.
+    default_price: s?.default_price ?? DEFAULT_PRICE,
+    // Kalau null/undefined → 0; kalau 0 sah → tetap 0.
+    hpp: s?.hpp ?? 0,
+    // Kalau bukan array → pakai PAYMENT_METHODS; kalau [] sah → tetap [].
+    payment_methods: Array.isArray(s?.payment_methods)
       ? s.payment_methods
       : PAYMENT_METHODS,
-    updated_at: s.updated_at || null,
+    updated_at: s?.updated_at ?? null,
   };
 };
-
 DataService.saveSettings = async function (payload) {
   const cur = await this.getSettings().catch(() => readLS());
   const merged = { ...cur, ...payload };
