@@ -32,6 +32,31 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 
 const LOW_STOCK_THRESHOLD = 5;
 
+/* ====== Helpers untuk rolling 7 hari ====== */
+const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+const isoDate = (d) => startOfDay(d).toISOString().slice(0,10);
+
+function buildLast7DaysSeries(rows = []) {
+  const buckets = new Map();
+  rows.forEach(r => {
+    const dt = startOfDay(new Date(r.created_at || r.date || Date.now()));
+    const key = isoDate(dt);
+    const qty = Number(r.qty || 0);
+    if (String(r.status || "").toUpperCase() === "DIBATALKAN") return;
+    buckets.set(key, (buckets.get(key) || 0) + qty);
+  });
+
+  const today = startOfDay(new Date());
+  const series = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = isoDate(d);
+    series.push({ date: d.toISOString(), qty: buckets.get(key) || 0 });
+  }
+  return series;
+}
+
 /* ====== Small UI parts ====== */
 function StatTile({ title, value, subtitle, color = "primary", icon }) {
   return (
@@ -160,35 +185,32 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
   const { settings } = useSettings();
   const hppSetting = Number(settings?.hpp || 0);
 
-  // --- STATE UTAMA, diisi dari snapshot dulu agar cepat ---
+  // --- STATE UTAMA ---
   const [stocks, setStocks] = useState(stocksFromApp);
   const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
   const [recent, setRecent] = useState([]);
 
-  // --- STATE BERAT (hitung dari sales) menyusul nanti ---
   const [sum, setSum] = useState({ qty: 0, omzet: 0, laba: 0 });
   const [today, setToday] = useState({ qty: 0, money: 0 });
 
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Throttle guard utk realtime refresh
   const busyRef = useRef(false);
   const idleTimer = useRef(null);
 
-  // 1) Render cepat: ambil snapshot (cache) lalu revalidate di belakang layar (sudah dilakukan DataService)
+  // 1) Snapshot cepat
   useEffect(() => {
     let alive = true;
 
     (async () => {
       try {
-        // Ambil cache dulu (instant), sambil DataService revalidate di background
         const snap = await DataService.getDashboardSnapshot({ revalidate: true });
         if (!alive) return;
 
         setStocks(snap.stocks || { ISI: 0, KOSONG: 0 });
-        setSeries7(snap.sevenDays || []);
+        setSeries7(snap.sevenDays || []); // fallback awal
         setPiutang(snap.receivables || 0);
         setRecent(snap.recentSales || []);
         setLoading(false);
@@ -199,7 +221,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       }
     })();
 
-    // Dengarkan hasil revalidate (broadcast 'dashboard:snapshot')
     const onSnap = (e) => {
       const d = e?.detail || {};
       setStocks(d.stocks || { ISI: 0, KOSONG: 0 });
@@ -215,15 +236,12 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     };
   }, []);
 
-  // 2) Hitung angka berat (qty total, omzet, laba, penjualan hari ini) dilakukan setelah UI tampil
+  // 2) Hitung berat (omzet, laba, today)
   useEffect(() => {
     let alive = true;
     const doHeavy = async () => {
       try {
-        // sedikit tunda supaya paint awal selesai
         await new Promise((r) => setTimeout(r, 50));
-
-        // batasi limit agar cepat; untuk ringkasan cukup 500-800
         const rows = await DataService.loadSales(500);
         if (!alive) return;
 
@@ -247,12 +265,10 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         setToday(todaySum);
       } catch (e) {
         if (!alive) return;
-        // Jangan blok UI, cukup catat error ringan
         console.warn("[Dashboard heavy]", e?.message || e);
       }
     };
 
-    // Jalankan berat saat browser idle (fallback ke timeout)
     const ric =
       "requestIdleCallback" in window
         ? window.requestIdleCallback
@@ -267,15 +283,13 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     };
   }, [hppSetting]);
 
-  // 3) Realtime → minta revalidate snapshot (ringan), throttle biar tidak spam
+  // 3) Realtime revalidate snapshot
   useEffect(() => {
     const askRevalidate = () => {
       if (busyRef.current) return;
       busyRef.current = true;
-      // minta DataService revalidate (ambil data terbaru & broadcast)
       DataService.getDashboardSnapshot({ revalidate: true });
 
-      // lepas throttle setelah jeda
       clearTimeout(idleTimer.current);
       idleTimer.current = setTimeout(() => (busyRef.current = false), 1200);
     };
@@ -287,14 +301,37 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       .subscribe();
 
     return () => {
-      try {
-        supabase.removeChannel(ch);
-      } catch {}
+      try { supabase.removeChannel(ch); } catch {}
       clearTimeout(idleTimer.current);
     };
   }, []);
 
-  // ---- derived values
+  // 4) Tambahan: Hitung ulang 7 hari terakhir realtime
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const from = new Date();
+        from.setDate(from.getDate() - 6);
+        from.setHours(0,0,0,0);
+        const to = new Date();
+
+        const rows = await DataService.loadSalesByDateRange(
+          from.toISOString(),
+          to.toISOString()
+        );
+
+        if (!alive) return;
+        const last7 = buildLast7DaysSeries(rows);
+        setSeries7(last7);
+      } catch (e) {
+        console.warn("[series7]", e?.message || e);
+      }
+    })();
+    return () => { alive = false; };
+  }, [recent, today.qty, stocks]);
+
+  // ---- derived
   const isi = Number(stocks?.ISI || 0);
   const kosong = Number(stocks?.KOSONG || 0);
   const total = isi + kosong;

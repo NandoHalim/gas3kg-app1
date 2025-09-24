@@ -214,6 +214,19 @@ export const DataService = {
     return { qty, money };
   },
 
+  // ====== PENJUALAN (tambahan range) ======
+  async loadSalesByDateRange(fromISO, toISO) {
+    let { data, error } = await supabase
+      .from("sales")
+      .select("id,customer,qty,price,total,method,status,created_at,note")
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO)
+      .order("created_at", { ascending: true });
+
+    if (error) throw new Error(errMsg(error, "Gagal ambil penjualan (by range)"));
+    return data || [];
+  },
+
   // Grafik 7 hari (exclude VOID) + fallback
   async getSevenDaySales() {
     let { data, error } = await supabase
