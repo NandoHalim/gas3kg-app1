@@ -24,25 +24,18 @@ import {
   Paper,
   Alert,
   Skeleton,
-  IconButton,
-  Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  Divider,
 } from "@mui/material";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import FullscreenIcon from "@mui/icons-material/Fullscreen";
-import CloseIcon from "@mui/icons-material/Close";
 
 const LOW_STOCK_THRESHOLD = 5;
 
 /* ====== Helpers untuk rolling 7 hari ====== */
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
 const isoDate = (d) => startOfDay(d).toISOString().slice(0,10);
+const fmtPct = (n) => (n === null || n === undefined) ? "–" : `${(Number(n)).toFixed(1)}%`;
 
 function buildLast7DaysSeries(rows = []) {
   const buckets = new Map();
@@ -64,13 +57,6 @@ function buildLast7DaysSeries(rows = []) {
   }
   return series;
 }
-
-const dayLabel = (iso) => {
-  try {
-    const dt = new Date(iso);
-    return dt.toLocaleDateString("id-ID", { weekday: "short" }); // Kam, Jum, ...
-  } catch { return "-"; }
-};
 
 /* ====== Small UI parts ====== */
 function StatTile({ title, value, subtitle, color = "primary", icon }) {
@@ -135,7 +121,7 @@ function StockProgress({ isi, kosong }) {
 }
 
 /* ====== Chart 7 Hari Terakhir ====== */
-function MiniBarChartLabeled({ data = [], height = 160 }) {
+function MiniBarChartLabeled({ data = [] }) {
   const max = Math.max(1, ...data.map((d) => Number(d.qty || 0)));
   const labelOf = (iso) => {
     try {
@@ -156,7 +142,7 @@ function MiniBarChartLabeled({ data = [], height = 160 }) {
           gridTemplateColumns: `repeat(${Math.max(data.length, 1)}, 1fr)`,
           alignItems: "end",
           gap: 1.5,
-          height,
+          height: 160,
         }}
       >
         {data.map((d, i) => {
@@ -212,9 +198,14 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // --- Tambahan analitik 7-hari ---
-  const [weeklyGrowthPct, setWeeklyGrowthPct] = useState(null);
-  const [chartOpen, setChartOpen] = useState(false);
+  // --- STATE ANALITIK (baru) ---
+  const [analytics, setAnalytics] = useState({
+    topCustomers: [],
+    weekly: null,
+    monthly: null,
+    yoy: null,
+  });
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
   const busyRef = useRef(false);
   const idleTimer = useRef(null);
@@ -325,7 +316,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     };
   }, []);
 
-  // 4) Tambahan: Hitung ulang 7 hari terakhir realtime + weekly growth
+  // 4) Tambahan: Hitung ulang 7 hari terakhir realtime
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -335,22 +326,15 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         from.setHours(0,0,0,0);
         const to = new Date();
 
-        // rows raw utk bangun series7 yang benar-benar rolling T-6..T
-        const rows = await DataService.loadSalesByDateRange(
+        // NB: jika kamu sudah sediakan RPC daily summary, bisa pakai itu juga
+        const rows = await DataService.loadSalesByDateRange?.(
           from.toISOString(),
           to.toISOString()
-        );
-        if (!alive) return;
-        const last7 = buildLast7DaysSeries(rows);
-        setSeries7(last7);
+        ).catch(() => []);
 
-        // growth minggu ini vs minggu lalu
-        if (DataService.getWeeklyComparison) {
-          const wk = await DataService.getWeeklyComparison({ onlyPaid: true }).catch(() => null);
-          if (alive && wk && typeof wk.growthPct === "number") {
-            setWeeklyGrowthPct(wk.growthPct);
-          }
-        }
+        if (!alive) return;
+        const last7 = buildLast7DaysSeries(rows || []);
+        setSeries7(last7);
       } catch (e) {
         console.warn("[series7]", e?.message || e);
       }
@@ -358,16 +342,79 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     return () => { alive = false; };
   }, [recent, today.qty, stocks]);
 
+  // 5) Muat ANALITIK via RPC-only (Top Customers + Weekly + Monthly + YoY)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setAnalyticsLoading(true);
+        const [tops, comps] = await Promise.all([
+          DataService.getTopCustomersPeriod?.({ period: "this_month", limit: 5, onlyPaid: true }).catch(() => []),
+          DataService.getComparisonsSummary?.({ onlyPaid: true }).catch(() => ({})),
+        ]);
+
+        if (!alive) return;
+
+        // Hitung growthPct untuk weekly (karena RPC weekly hanya return nilai qty/value)
+        const wk = comps?.weekly || null;
+        const weeklyGrowthPct = wk && wk.last_week_qty
+          ? ((Number(wk.this_week_qty || 0) - Number(wk.last_week_qty || 0)) / Number(wk.last_week_qty)) * 100
+          : null;
+
+        // Monthly growth (qty, omzet, laba)
+        const mo = comps?.monthly || null;
+        const monthlyGrowthQty = mo && mo.last_month_qty
+          ? ((Number(mo.this_month_qty || 0) - Number(mo.last_month_qty || 0)) / Number(mo.last_month_qty)) * 100
+          : null;
+        const monthlyGrowthOmzet = mo && mo.last_month_value
+          ? ((Number(mo.this_month_value || 0) - Number(mo.last_month_value || 0)) / Number(mo.last_month_value)) * 100
+          : null;
+        const monthlyGrowthLaba = mo && mo.last_month_laba
+          ? ((Number(mo.this_month_laba || 0) - Number(mo.last_month_laba || 0)) / Number(mo.last_month_laba)) * 100
+          : null;
+
+        // YoY growth (qty, omzet, laba)
+        const yy = comps?.yoy || null;
+        const yoyGrowthQty = yy && yy.last_year_qty
+          ? ((Number(yy.this_year_qty || 0) - Number(yy.last_year_qty || 0)) / Number(yy.last_year_qty)) * 100
+          : null;
+        const yoyGrowthOmzet = yy && yy.last_year_value
+          ? ((Number(yy.this_year_value || 0) - Number(yy.last_year_value || 0)) / Number(yy.last_year_value)) * 100
+          : null;
+        const yoyGrowthLaba = yy && yy.last_year_laba
+          ? ((Number(yy.this_year_laba || 0) - Number(yy.last_year_laba || 0)) / Number(yy.last_year_laba)) * 100
+          : null;
+
+        setAnalytics({
+          topCustomers: tops || [],
+          weekly: wk ? { ...wk, growthPct: weeklyGrowthPct } : null,
+          monthly: mo ? {
+            ...mo,
+            growthPctQty: monthlyGrowthQty,
+            growthPctOmzet: monthlyGrowthOmzet,
+            growthPctLaba: monthlyGrowthLaba,
+          } : null,
+          yoy: yy ? {
+            ...yy,
+            growthPctQty: yoyGrowthQty,
+            growthPctOmzet: yoyGrowthOmzet,
+            growthPctLaba: yoyGrowthLaba,
+          } : null,
+        });
+      } catch (e) {
+        console.warn("[Analytics]", e?.message || e);
+      } finally {
+        setAnalyticsLoading(false);
+      }
+    })();
+
+    return () => { alive = false; };
+  }, []); // load sekali saat mount
+
   // ---- derived
   const isi = Number(stocks?.ISI || 0);
   const kosong = Number(stocks?.KOSONG || 0);
   const total = isi + kosong;
-
-  // ---- insight 7-hari (peak, low, avg, total)
-  const total7 = series7.reduce((a,b)=>a + Number(b.qty||0), 0);
-  const avg7 = series7.length ? Math.round(total7 / series7.length) : 0;
-  const peak = series7.reduce((p,c)=> (c.qty > (p?.qty||-1) ? c : p), null);
-  const low = series7.reduce((p,c)=> (c.qty < (p?.qty??Infinity) ? c : p), null);
 
   return (
     <Stack spacing={1.5}>
@@ -491,62 +538,128 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         </Grid>
       </Grid>
 
-      {/* Penjualan 7 Hari Terakhir + Insight + Expand */}
+      {/* Penjualan 7 Hari Terakhir */}
       <Card>
-        <CardHeader
-          title="Penjualan 7 Hari Terakhir"
-          action={
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Chip size="small" label="Rolling" variant="outlined" />
-              <Tooltip title="Perbesar grafik">
-                <IconButton onClick={() => setChartOpen(true)} aria-label="expand-chart">
-                  <FullscreenIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-          }
-        />
+        <CardHeader title="Penjualan 7 Hari Terakhir" />
         <CardContent>
-          {loading ? (
-            <Skeleton height={120} />
+          {loading ? <Skeleton height={120} /> : <MiniBarChartLabeled data={series7} />}
+        </CardContent>
+      </Card>
+
+      {/* ====== Analitik Penjualan (BARU) ====== */}
+      <Card>
+        <CardHeader title="Analitik Penjualan" />
+        <CardContent>
+          {analyticsLoading ? (
+            <Stack spacing={1}>
+              <Skeleton height={28} />
+              <Skeleton height={28} />
+              <Skeleton height={28} />
+            </Stack>
           ) : (
-            <>
-              <MiniBarChartLabeled data={series7} />
-              {/* Insight kecil di bawah chart */}
-              <Divider sx={{ my: 1.25 }} />
-              <Grid container spacing={1}>
-                <Grid item xs={6} sm={3}>
-                  <Typography variant="caption" color="text.secondary">Total 7 hari</Typography>
-                  <Typography variant="subtitle2" fontWeight={700}>{total7} tabung</Typography>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Typography variant="caption" color="text.secondary">Rata-rata/Hari</Typography>
-                  <Typography variant="subtitle2" fontWeight={700}>{avg7} tabung</Typography>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Typography variant="caption" color="text.secondary">Peak</Typography>
-                  <Typography variant="subtitle2" fontWeight={700}>
-                    {peak ? `${dayLabel(peak.date)} (${peak.qty})` : "-"}
-                  </Typography>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Typography variant="caption" color="text.secondary">Lowest</Typography>
-                  <Typography variant="subtitle2" fontWeight={700}>
-                    {low ? `${dayLabel(low.date)} (${low.qty})` : "-"}
-                  </Typography>
-                </Grid>
+            <Grid container spacing={2}>
+              {/* Top Customers */}
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                  Top Customers (bulan ini)
+                </Typography>
+                <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Pelanggan</TableCell>
+                        <TableCell align="right">Transaksi</TableCell>
+                        <TableCell align="right">Total</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {(analytics.topCustomers || []).map((c, i) => (
+                        <TableRow key={i} hover>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>{c.customer_name}</TableCell>
+                          <TableCell align="right">{c.total_transaksi}</TableCell>
+                          <TableCell align="right">{fmtIDR(c.total_value)}</TableCell>
+                        </TableRow>
+                      ))}
+                      {!analytics.topCustomers?.length && (
+                        <TableRow>
+                          <TableCell colSpan={3} align="center" sx={{ color: "text.secondary" }}>
+                            Belum ada data
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </Grid>
-              {typeof weeklyGrowthPct === "number" && (
-                <Box sx={{ mt: 1 }}>
-                  <Chip
-                    size="small"
-                    color={weeklyGrowthPct >= 0 ? "success" : "error"}
-                    label={`Δ vs minggu lalu: ${weeklyGrowthPct >= 0 ? "+" : ""}${weeklyGrowthPct.toFixed(1)}%`}
-                    variant="outlined"
+
+              {/* Perbandingan Weekly / Monthly / YoY */}
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                  Perbandingan
+                </Typography>
+                <Stack spacing={1.25}>
+                  {/* Weekly */}
+                  <RowKV
+                    k="Weekly (Qty)"
+                    v={
+                      analytics.weekly
+                        ? `${analytics.weekly.this_week_qty} vs ${analytics.weekly.last_week_qty} (${fmtPct(analytics.weekly.growthPct)})`
+                        : "-"
+                    }
                   />
-                </Box>
-              )}
-            </>
+                  {/* Monthly */}
+                  <RowKV
+                    k="Monthly (Qty)"
+                    v={
+                      analytics.monthly
+                        ? `${analytics.monthly.this_month_qty} vs ${analytics.monthly.last_month_qty} (${fmtPct(analytics.monthly.growthPctQty)})`
+                        : "-"
+                    }
+                  />
+                  <RowKV
+                    k="Monthly (Omzet)"
+                    v={
+                      analytics.monthly
+                        ? `${fmtIDR(analytics.monthly.this_month_value)} vs ${fmtIDR(analytics.monthly.last_month_value)} (${fmtPct(analytics.monthly.growthPctOmzet)})`
+                        : "-"
+                    }
+                  />
+                  <RowKV
+                    k="Monthly (Laba)"
+                    v={
+                      analytics.monthly
+                        ? `${fmtIDR(analytics.monthly.this_month_laba)} vs ${fmtIDR(analytics.monthly.last_month_laba)} (${fmtPct(analytics.monthly.growthPctLaba)})`
+                        : "-"
+                    }
+                  />
+                  {/* YoY */}
+                  <RowKV
+                    k="YoY (Qty)"
+                    v={
+                      analytics.yoy
+                        ? `${analytics.yoy.this_year_qty} vs ${analytics.yoy.last_year_qty} (${fmtPct(analytics.yoy.growthPctQty)})`
+                        : "-"
+                    }
+                  />
+                  <RowKV
+                    k="YoY (Omzet)"
+                    v={
+                      analytics.yoy
+                        ? `${fmtIDR(analytics.yoy.this_year_value)} vs ${fmtIDR(analytics.yoy.last_year_value)} (${fmtPct(analytics.yoy.growthPctOmzet)})`
+                        : "-"
+                    }
+                  />
+                  <RowKV
+                    k="YoY (Laba)"
+                    v={
+                      analytics.yoy
+                        ? `${fmtIDR(analytics.yoy.this_year_laba)} vs ${fmtIDR(analytics.yoy.last_year_laba)} (${fmtPct(analytics.yoy.growthPctLaba)})`
+                        : "-"
+                    }
+                  />
+                </Stack>
+              </Grid>
+            </Grid>
           )}
         </CardContent>
       </Card>
@@ -600,57 +713,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
           )}
         </CardContent>
       </Card>
-
-      {/* Dialog fullscreen chart */}
-      <Dialog
-        fullScreen
-        open={chartOpen}
-        onClose={() => setChartOpen(false)}
-        PaperProps={{ sx: { bgcolor: "background.default" } }}
-      >
-        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Typography variant="subtitle1" fontWeight={700}>Penjualan 7 Hari Terakhir</Typography>
-          <IconButton onClick={() => setChartOpen(false)} aria-label="close-chart">
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Tip: putar perangkat ke <b>landscape</b> untuk tampilan lebih lebar.
-          </Typography>
-          <Card variant="outlined">
-            <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
-              <MiniBarChartLabeled data={series7} height={280} />
-            </CardContent>
-          </Card>
-          <Box sx={{ mt: 2 }}>
-            <Grid container spacing={1.5}>
-              <Grid item xs={6} sm={3}>
-                <RowKV k="Total 7 hari" v={`${total7} tabung`} />
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <RowKV k="Rata-rata/Hari" v={`${avg7} tabung`} />
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <RowKV k="Peak" v={peak ? `${dayLabel(peak.date)} (${peak.qty})` : "-"} />
-              </Grid>
-              <Grid item xs={6} sm={3}>
-                <RowKV k="Lowest" v={low ? `${dayLabel(low.date)} (${low.qty})` : "-"} />
-              </Grid>
-            </Grid>
-            {typeof weeklyGrowthPct === "number" && (
-              <Box sx={{ mt: 1 }}>
-                <Chip
-                  size="small"
-                  color={weeklyGrowthPct >= 0 ? "success" : "error"}
-                  label={`Δ vs minggu lalu: ${weeklyGrowthPct >= 0 ? "+" : ""}${weeklyGrowthPct.toFixed(1)}%`}
-                  variant="outlined"
-                />
-              </Box>
-            )}
-          </Box>
-        </DialogContent>
-      </Dialog>
     </Stack>
   );
 }

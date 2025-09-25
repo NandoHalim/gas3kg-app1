@@ -832,188 +832,209 @@ export const DataService = {
       is_admin: adminSet.has(m.user_id),
     }));
   },
-  // =======================================================
-  // ===============   SALES ANALYTICS   ===================
-  // =======================================================
+ // =======================================================
+// ===============   SALES ANALYTICS (RPC)  ==============
+// =======================================================
 
-  // Ambil transaksi mentah per rentang (reusable)
-  async getSalesByDateRange({ from, to, onlyPaid = false }) {
-    let q = supabase
-      .from("sales")
-      .select("id, customer, qty, price, total, method, status, created_at, laba, hpp")
-      .gte("created_at", from)
-      .lte("created_at", to)
-      .neq("status", "DIBATALKAN");
+/** Util: hitung rentang tanggal standar (dipakai di TopCustomersPeriod & summary) */
+DataService.getPeriodRange = function (type) {
+  const now = new Date();
 
-    if (onlyPaid) q = q.eq("status", "LUNAS");
-    const { data, error } = await q.order("created_at", { ascending: true });
-    if (error) throw new Error(error.message || "Gagal ambil sales by range");
-    return data || [];
-  },
+  const startOfWeek = (d) => {
+    const x = new Date(d);
+    const dow = (x.getDay() + 6) % 7; // Sen=0..Min=6
+    x.setDate(x.getDate() - dow);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
+  const endOfWeek = (d) => {
+    const s = startOfWeek(d);
+    const e = new Date(s);
+    e.setDate(s.getDate() + 6);
+    e.setHours(23, 59, 59, 999);
+    return e;
+  };
 
-  // Ringkasan harian (7/30 hari, apa pun rentangnya)
-  async getDailySummary({ from, to, onlyPaid = false }) {
-    // Coba dari view teragregasi (lebih cepat)
-    const tryView = async (viewName) => {
-      let v = supabase
-        .from(viewName)
-        .select("tanggal, total_qty, total_value, total_laba")
-        .gte("tanggal", from)
-        .lte("tanggal", to);
-      const res = await v.order("tanggal", { ascending: true });
-      return res;
-    };
+  const startOfMonth = (y, m) => {
+    const d = new Date(y, m, 1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+  const endOfMonth = (y, m) => {
+    const d = new Date(y, m + 1, 0);
+    d.setHours(23, 59, 59, 999);
+    return d;
+  };
 
-    // 1) coba daily_clean
-    let res = await tryView("view_sales_daily_clean");
-    if (!res.error && res.data?.length) {
-      return res.data.map(r => ({
-        date: r.tanggal,
-        qty: Number(r.total_qty || 0),
-        omzet: Number(r.total_value || 0),
-        laba: Number(r.total_laba || 0),
-      }));
+  const iso = (d) => d.toISOString();
+
+  switch (type) {
+    case "this_week": {
+      const s = startOfWeek(now);
+      const e = endOfWeek(now);
+      return { from: iso(s), to: iso(e) };
     }
-
-    // 2) fallback ke view_sales_daily
-    res = await tryView("view_sales_daily");
-    if (!res.error && res.data?.length) {
-      return res.data.map(r => ({
-        date: r.tanggal,
-        qty: Number(r.total_qty || 0),
-        omzet: Number(r.total_value || 0),
-        laba: Number(r.total_laba || 0),
-      }));
+    case "last_week": {
+      const curS = startOfWeek(now);
+      const s = new Date(curS);
+      s.setDate(curS.getDate() - 7);
+      const e = new Date(curS);
+      e.setDate(curS.getDate() - 1);
+      e.setHours(23, 59, 59, 999);
+      return { from: iso(s), to: iso(e) };
     }
-
-    // 3) fallback agregasi langsung dari sales
-    const rows = await this.getSalesByDateRange({ from, to, onlyPaid });
-    const byDate = new Map();
-    for (const r of rows) {
-      const d = String(r.created_at).slice(0, 10);
-      const cur = byDate.get(d) || { qty: 0, omzet: 0, laba: 0 };
-      cur.qty += Number(r.qty || 0);
-      cur.omzet += Number(r.total || (Number(r.qty||0)*Number(r.price||0)));
-      cur.laba += Number(r.laba || 0);
-      byDate.set(d, cur);
+    case "this_month": {
+      const y = now.getFullYear(),
+        m = now.getMonth();
+      const s = startOfMonth(y, m);
+      const e = endOfMonth(y, m);
+      return { from: iso(s), to: iso(e) };
     }
-    return Array.from(byDate.entries())
-      .sort((a,b) => a[0].localeCompare(b[0]))
-      .map(([date, v]) => ({ date, ...v }));
-  },
-
-  // Minggu ini vs minggu lalu (per hari Sen–Min)
-  async getWeeklyComparison({ onlyPaid = false } = {}) {
-    const today = new Date();
-    const day = (today.getDay()+6)%7; // Sen=0…Min=6
-    const startThis = new Date(today); startThis.setDate(today.getDate() - day); startThis.setHours(0,0,0,0);
-    const endThis = new Date(startThis); endThis.setDate(startThis.getDate() + 6); endThis.setHours(23,59,59,999);
-    const startLast = new Date(startThis); startLast.setDate(startThis.getDate() - 7);
-    const endLast = new Date(endThis); endLast.setDate(endThis.getDate() - 7);
-
-    const fmt = (d) => d.toISOString();
-
-    const [rowsThis, rowsLast] = await Promise.all([
-      this.getSalesByDateRange({ from: fmt(startThis), to: fmt(endThis), onlyPaid }),
-      this.getSalesByDateRange({ from: fmt(startLast), to: fmt(endLast), onlyPaid }),
-    ]);
-
-    const agg = (rows) => {
-      const byDow = Array(7).fill(0); // Sen=0..Min=6
-      for (const r of rows) {
-        const d = new Date(r.created_at);
-        const dow = (d.getDay()+6)%7;
-        byDow[dow] += Number(r.qty || 0);
-      }
-      return byDow;
-    };
-
-    const thisWeek = agg(rowsThis);
-    const lastWeek = agg(rowsLast);
-    const sum = a => a.reduce((x,y)=>x+y,0);
-    const growth = sum(lastWeek) ? (sum(thisWeek)-sum(lastWeek))/sum(lastWeek)*100 : null;
-
-    return { thisWeek, lastWeek, growthPct: growth };
-  },
-
-  // YoY (bandingkan periode yang sama tahun lalu)
-  async getYoYComparison({ from, to, onlyPaid = false }) {
-    const fromDate = new Date(from);
-    const toDate = new Date(to);
-
-    const fromPrev = new Date(fromDate); fromPrev.setFullYear(fromDate.getFullYear()-1);
-    const toPrev = new Date(toDate); toPrev.setFullYear(toDate.getFullYear()-1);
-
-    const [cur, prev] = await Promise.all([
-      this.getDailySummary({ from, to, onlyPaid }),
-      this.getDailySummary({ from: fromPrev.toISOString(), to: toPrev.toISOString(), onlyPaid }),
-    ]);
-
-    const total = (arr, k) => arr.reduce((a,b)=>a+Number(b[k]||0),0);
-    const nowQty = total(cur, "qty"), prevQty = total(prev, "qty");
-    const nowOmz = total(cur, "omzet"), prevOmz = total(prev, "omzet");
-    const growthQty = prevQty ? ((nowQty - prevQty) / prevQty) * 100 : null;
-    const growthOmz = prevOmz ? ((nowOmz - prevOmz) / prevOmz) * 100 : null;
-
-    return {
-      current: cur,
-      previous: prev,
-      summary: {
-        qtyNow: nowQty, qtyPrev: prevQty, qtyYoYPct: growthQty,
-        omzetNow: nowOmz, omzetPrev: prevOmz, omzetYoYPct: growthOmz,
-      }
-    };
-  },
-
-  // Top Customers (periode aktif)
-  async getTopCustomers({ from, to, limit = 5, onlyPaid = false }) {
-    let q = supabase
-      .from("sales")
-      .select("customer, qty, total, price, status, created_at")
-      .gte("created_at", from)
-      .lte("created_at", to)
-      .neq("status", "DIBATALKAN");
-
-    if (onlyPaid) q = q.eq("status", "LUNAS");
-
-    const { data, error } = await q;
-    if (error) throw new Error(error.message || "Gagal ambil top customers");
-
-    const byCust = new Map();
-    for (const r of (data || [])) {
-      const key = r.customer || "PUBLIC";
-      const cur = byCust.get(key) || { trx: 0, qty: 0, value: 0, lastDate: null };
-      cur.trx += 1;
-      cur.qty += Number(r.qty || 0);
-      cur.value += Number(r.total || (Number(r.qty||0) * Number(r.price||0)));
-      if (!cur.lastDate || new Date(r.created_at) > new Date(cur.lastDate)) {
-        cur.lastDate = r.created_at;
-      }
-      byCust.set(key, cur);
+    case "last_month": {
+      const y = now.getFullYear(),
+        m = now.getMonth();
+      const py = m === 0 ? y - 1 : y;
+      const pm = m === 0 ? 11 : m - 1;
+      const s = startOfMonth(py, pm);
+      const e = endOfMonth(py, pm);
+      return { from: iso(s), to: iso(e) };
     }
+    case "this_month_yoy": {
+      const y = now.getFullYear(),
+        m = now.getMonth();
+      const s = startOfMonth(y - 1, m);
+      const e = endOfMonth(y - 1, m);
+      return { from: iso(s), to: iso(e) };
+    }
+    default:
+      return null;
+  }
+};
 
-    const rows = Array.from(byCust.entries())
-      .map(([customer, v]) => ({ customer, ...v }))
-      .sort((a,b) => b.value - a.value)
-      .slice(0, limit);
+/** Daily summary (per hari) via RPC get_daily_summary */
+DataService.getDailySummary = async function ({ from, to, onlyPaid = false }) {
+  const { data, error } = await supabase.rpc("get_daily_summary", {
+    p_from: from,
+    p_to: to,
+    p_only_paid: onlyPaid,
+  });
+  if (error) throw new Error(error.message || "Gagal ambil daily summary");
+  // hasil: [{ tanggal: date, total_qty, total_value, total_laba }]
+  return data || [];
+};
 
-    return rows;
-  },
+/** Top Customers via RPC get_top_customers */
+DataService.getTopCustomers = async function ({
+  from,
+  to,
+  limit = 5,
+  onlyPaid = false,
+}) {
+  const { data, error } = await supabase.rpc("get_top_customers", {
+    p_from: from,
+    p_to: to,
+    p_limit: limit,
+    p_only_paid: onlyPaid,
+  });
+  if (error) throw new Error(error.message || "Gagal ambil top customers");
+  // hasil: [{ customer_name, total_transaksi, total_qty, total_value, last_tx_at }]
+  return data || [];
+};
 
-  // Quick KPIs (total, avg, laba) untuk kartu ringkasan
-  async getQuickKPIs({ from, to, onlyPaid = false }) {
-    const daily = await this.getDailySummary({ from, to, onlyPaid });
-    const days = daily.length || 1;
-    const sum = (k) => daily.reduce((a,b)=>a+Number(b[k]||0),0);
+/** Weekly comparison via RPC get_sales_weekly_comparison */
+DataService.getWeeklyComparison = async function ({
+  weekDate, // string 'YYYY-MM-DD' atau Date
+  onlyPaid = false,
+}) {
+  const paramDate =
+    typeof weekDate === "string" ? weekDate : new Date(weekDate).toISOString().slice(0, 10);
+  const { data, error } = await supabase.rpc("get_sales_weekly_comparison", {
+    p_week: paramDate,
+    p_only_paid: onlyPaid,
+  });
+  if (error) throw new Error(error.message || "Gagal ambil perbandingan mingguan");
+  // hasil: single row { this_week_qty, this_week_value, last_week_qty, last_week_value }
+  return data?.[0] || {
+    this_week_qty: 0,
+    this_week_value: 0,
+    last_week_qty: 0,
+    last_week_value: 0,
+  };
+};
 
-    const totalQty = sum("qty");
-    const totalOmzet = sum("omzet");
-    const totalLaba = sum("laba");
-    const avgPerDay = Math.round(totalQty / days);
+/** Monthly comparison (this vs last month) via RPC get_sales_monthly_comparison */
+DataService.getMonthlyComparison = async function ({
+  monthDate = new Date(), // tanggal apa saja di bulan target
+  onlyPaid = false,
+}) {
+  const paramDate =
+    typeof monthDate === "string" ? monthDate : new Date(monthDate).toISOString().slice(0, 10);
+  const { data, error } = await supabase.rpc("get_sales_monthly_comparison", {
+    p_month: paramDate,
+    p_only_paid: onlyPaid,
+  });
+  if (error) throw new Error(error.message || "Gagal ambil perbandingan bulanan");
+  // hasil: single row { this_month_qty, this_month_value, this_month_laba, last_month_* }
+  return (
+    data?.[0] || {
+      this_month_qty: 0,
+      this_month_value: 0,
+      this_month_laba: 0,
+      last_month_qty: 0,
+      last_month_value: 0,
+      last_month_laba: 0,
+    }
+  );
+};
 
-    return { totalQty, totalOmzet, totalLaba, avgPerDay, days };
-  },
+/** Monthly YoY via RPC get_sales_monthly_yoy */
+DataService.getMonthlyYoY = async function ({
+  monthDate = new Date(),
+  onlyPaid = false,
+}) {
+  const paramDate =
+    typeof monthDate === "string" ? monthDate : new Date(monthDate).toISOString().slice(0, 10);
+  const { data, error } = await supabase.rpc("get_sales_monthly_yoy", {
+    p_month: paramDate,
+    p_only_paid: onlyPaid,
+  });
+  if (error) throw new Error(error.message || "Gagal ambil perbandingan YoY");
+  // hasil: single row { this_year_qty/value/laba, last_year_qty/value/laba }
+  return (
+    data?.[0] || {
+      this_year_qty: 0,
+      this_year_value: 0,
+      this_year_laba: 0,
+      last_year_qty: 0,
+      last_year_value: 0,
+      last_year_laba: 0,
+    }
+  );
+};
 
+/** Helper: Top customers untuk periode standar (atau custom from/to) */
+DataService.getTopCustomersPeriod = async function ({
+  period = "this_month",
+  from,
+  to,
+  limit = 5,
+  onlyPaid = true,
+} = {}) {
+  let range = null;
+  if (!from || !to) range = this.getPeriodRange(period) || this.getPeriodRange("this_month");
+  const pFrom = from || range.from;
+  const pTo = to || range.to;
+  return this.getTopCustomers({ from: pFrom, to: pTo, limit, onlyPaid });
+};
+
+/** Ringkas perbandingan Weekly + Monthly + YoY sekaligus (semua via RPC) */
+DataService.getComparisonsSummary = async function ({ onlyPaid = true } = {}) {
+  const weekly = await this.getWeeklyComparison({ weekDate: new Date(), onlyPaid }).catch(() => null);
+  const monthly = await this.getMonthlyComparison({ monthDate: new Date(), onlyPaid }).catch(() => null);
+  const yoy = await this.getMonthlyYoY({ monthDate: new Date(), onlyPaid }).catch(() => null);
+
+  return { weekly, monthly, yoy };
+};
 
 }; // << tutup DataService
 
