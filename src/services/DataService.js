@@ -1039,6 +1039,53 @@ DataService.getComparisonsSummary = async function ({ onlyPaid = true } = {}) {
   return { weekly, monthly, yoy };
 };
 
+// --- Customer history by period (for modal) ---
+DataService.getCustomerSalesByRange = async function ({
+  from,
+  to,
+  customer,
+  onlyPaid = false,
+  limit = 500,
+}) {
+  if (!from || !to || !customer) return [];
+
+  // Utamakan view dengan invoice jika ada
+  let q = supabase
+    .from("view_sales_with_invoice")
+    .select("id,invoice:invoice_display,customer,qty,price,total,method,status,created_at,note")
+    .gte("created_at", from)
+    .lte("created_at", to)
+    .eq("customer", customer)
+    .neq("status", "DIBATALKAN")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (onlyPaid) q = q.eq("status", "LUNAS");
+
+  let { data, error } = await q;
+
+  // Fallback ke tabel sales jika view tidak ada
+  if (error && (error.message || "").toLowerCase().includes("does not exist")) {
+    let q2 = supabase
+      .from("sales")
+      .select("id,customer,qty,price,total,method,status,created_at,note")
+      .gte("created_at", from)
+      .lte("created_at", to)
+      .eq("customer", customer)
+      .neq("status", "DIBATALKAN")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (onlyPaid) q2 = q2.eq("status", "LUNAS");
+    const r2 = await q2;
+    data = r2.data || [];
+    error = r2.error;
+  }
+
+  if (error) throw new Error(error.message || "Gagal ambil riwayat pelanggan");
+  return data || [];
+};
+
 /* =========================
    SETTINGS (via Supabase + LS)
    ========================= */

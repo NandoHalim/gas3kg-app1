@@ -24,6 +24,12 @@ import {
   Paper,
   Alert,
   Skeleton,
+  // === tambahan untuk modal ===
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
@@ -207,8 +213,54 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
   });
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
+  // === state Modal Top Customer ===
+  const [custModal, setCustModal] = useState({ open: false, name: "", from: "", to: "" });
+  const [custRows, setCustRows] = useState([]);
+  const [custLoading, setCustLoading] = useState(false);
+  const [custTotalQty, setCustTotalQty] = useState(0);
+
   const busyRef = useRef(false);
   const idleTimer = useRef(null);
+
+  // util: range bulan ini
+  const getThisMonthRange = () => {
+    const now = new Date();
+    const s = new Date(now.getFullYear(), now.getMonth(), 1); s.setHours(0,0,0,0);
+    const e = new Date(now.getFullYear(), now.getMonth()+1, 0); e.setHours(23,59,59,999);
+    return { from: s.toISOString(), to: e.toISOString() };
+  };
+
+  // buka modal & load riwayat customer
+  const openCustomerHistory = async (name) => {
+    const { from, to } = getThisMonthRange();
+    setCustModal({ open: true, name, from, to });
+    setCustLoading(true);
+    try {
+      let rows = [];
+      if (DataService.getCustomerSalesByRange) {
+        rows = await DataService.getCustomerSalesByRange({ from, to, customer: name });
+      } else if (DataService.getSalesByDateRange) {
+        const all = await DataService.getSalesByDateRange({ from, to, onlyPaid: false });
+        rows = (all || []).filter(r => String(r.customer || "").toUpperCase() === String(name || "").toUpperCase());
+      } else {
+        const all = await DataService.loadSales(800);
+        rows = (all || []).filter(r => {
+          const t = new Date(r.created_at);
+          return t >= new Date(from) && t <= new Date(to) &&
+                 String(r.customer || "").toUpperCase() === String(name || "").toUpperCase();
+        });
+      }
+      setCustRows(rows);
+      setCustTotalQty(rows.reduce((a, r) => a + Number(r.qty || 0), 0));
+    } catch (e) {
+      console.warn("[cust history]", e?.message || e);
+      setCustRows([]);
+      setCustTotalQty(0);
+    } finally {
+      setCustLoading(false);
+    }
+  };
+  const closeCustomerHistory = () => setCustModal(s => ({ ...s, open: false }));
 
   // 1) Snapshot cepat
   useEffect(() => {
@@ -326,7 +378,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         from.setHours(0,0,0,0);
         const to = new Date();
 
-        // NB: jika kamu sudah sediakan RPC daily summary, bisa pakai itu juga
         const rows = await DataService.loadSalesByDateRange?.(
           from.toISOString(),
           to.toISOString()
@@ -355,13 +406,11 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 
         if (!alive) return;
 
-        // Hitung growthPct untuk weekly (karena RPC weekly hanya return nilai qty/value)
         const wk = comps?.weekly || null;
         const weeklyGrowthPct = wk && wk.last_week_qty
           ? ((Number(wk.this_week_qty || 0) - Number(wk.last_week_qty || 0)) / Number(wk.last_week_qty)) * 100
           : null;
 
-        // Monthly growth (qty, omzet, laba)
         const mo = comps?.monthly || null;
         const monthlyGrowthQty = mo && mo.last_month_qty
           ? ((Number(mo.this_month_qty || 0) - Number(mo.last_month_qty || 0)) / Number(mo.last_month_qty)) * 100
@@ -373,7 +422,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
           ? ((Number(mo.this_month_laba || 0) - Number(mo.last_month_laba || 0)) / Number(mo.last_month_laba)) * 100
           : null;
 
-        // YoY growth (qty, omzet, laba)
         const yy = comps?.yoy || null;
         const yoyGrowthQty = yy && yy.last_year_qty
           ? ((Number(yy.this_year_qty || 0) - Number(yy.last_year_qty || 0)) / Number(yy.last_year_qty)) * 100
@@ -575,9 +623,17 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                     <TableBody>
                       {(analytics.topCustomers || []).map((c, i) => (
                         <TableRow key={i} hover>
-                          <TableCell sx={{ whiteSpace: "nowrap" }}>{c.customer_name}</TableCell>
-                          <TableCell align="right">{c.total_transaksi}</TableCell>
-                          <TableCell align="right">{fmtIDR(c.total_value)}</TableCell>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={() => openCustomerHistory(c.customer_name || c.customer)}
+                            >
+                              {c.customer_name || c.customer}
+                            </Button>
+                          </TableCell>
+                          <TableCell align="right">{c.total_transaksi || c.trx}</TableCell>
+                          <TableCell align="right">{fmtIDR(c.total_value || c.value)}</TableCell>
                         </TableRow>
                       ))}
                       {!analytics.topCustomers?.length && (
@@ -598,7 +654,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                   Perbandingan
                 </Typography>
                 <Stack spacing={1.25}>
-                  {/* Weekly */}
                   <RowKV
                     k="Weekly (Qty)"
                     v={
@@ -607,7 +662,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                         : "-"
                     }
                   />
-                  {/* Monthly */}
                   <RowKV
                     k="Monthly (Qty)"
                     v={
@@ -632,7 +686,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                         : "-"
                     }
                   />
-                  {/* YoY */}
                   <RowKV
                     k="YoY (Qty)"
                     v={
@@ -713,6 +766,55 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
           )}
         </CardContent>
       </Card>
+
+      {/* ===== Modal Riwayat Pelanggan ===== */}
+      <Dialog open={custModal.open} onClose={closeCustomerHistory} fullWidth maxWidth="sm">
+        <DialogTitle>
+          Riwayat Transaksi — {custModal.name}
+          <Typography variant="caption" display="block" color="text.secondary">
+            Periode: {(custModal.from || "").slice(0,10)} s/d {(custModal.to || "").slice(0,10)}
+          </Typography>
+        </DialogTitle>
+        <DialogContent dividers>
+          {custLoading ? (
+            <LinearProgress />
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Tanggal</TableCell>
+                  <TableCell align="right">Qty</TableCell>
+                  <TableCell align="right">Total</TableCell>
+                  <TableCell>Metode</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {custRows.map((x) => (
+                  <TableRow key={x.id}>
+                    <TableCell>{String(x.created_at || "").slice(0,10)}</TableCell>
+                    <TableCell align="right">{x.qty}</TableCell>
+                    <TableCell align="right">{fmtIDR(x.total || (Number(x.qty||0) * Number(x.price||0)))}</TableCell>
+                    <TableCell>{x.method}</TableCell>
+                  </TableRow>
+                ))}
+                {!custRows.length && (
+                  <TableRow>
+                    <TableCell colSpan={4} sx={{ color: "text.secondary" }}>
+                      Tidak ada transaksi
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: "space-between" }}>
+          <Typography variant="body2" sx={{ pl: 1 }}>
+            Total Qty: <b>{custTotalQty}</b>
+          </Typography>
+          <Button onClick={closeCustomerHistory}>Tutup</Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }
