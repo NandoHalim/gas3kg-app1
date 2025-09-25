@@ -1,3 +1,4 @@
+// src/views/Dashboard/DashboardView.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { COLORS } from "../../utils/constants.js";
 import { fmtIDR, todayStr } from "../../utils/helpers.js";
@@ -24,7 +25,6 @@ import {
   Paper,
   Alert,
   Skeleton,
-  // === tambahan untuk modal ===
   Button,
   Dialog,
   DialogTitle,
@@ -38,10 +38,29 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 
 const LOW_STOCK_THRESHOLD = 5;
 
-/* ====== Helpers untuk rolling 7 hari ====== */
+/* ====== Helpers tanggal & label ====== */
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
 const isoDate = (d) => startOfDay(d).toISOString().slice(0,10);
-const fmtPct = (n) => (n === null || n === undefined) ? "–" : `${(Number(n)).toFixed(1)}%`;
+const fmtPct = (n) => (n === null || n === undefined || Number.isNaN(Number(n))) ? "–" : `${(Number(n)).toFixed(1)}%`;
+
+// format YYYY-MM-DD dari waktu lokal (untuk label, agar tidak bergeser timezone)
+const fmtLocalYMD = (d) => {
+  const x = new Date(d);
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, "0");
+  const dd = String(x.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+};
+
+// Range bulan ini (label lokal 1..akhir bulan, query pakai ISO)
+const getThisMonthRange = () => {
+  const now = new Date();
+  const s = new Date(now.getFullYear(), now.getMonth(), 1);
+  s.setHours(0, 0, 0, 0);
+  const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  e.setHours(23, 59, 59, 999);
+  return { from: s.toISOString(), to: e.toISOString(), fromLabel: fmtLocalYMD(s), toLabel: fmtLocalYMD(e) };
+};
 
 function buildLast7DaysSeries(rows = []) {
   const buckets = new Map();
@@ -213,54 +232,14 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
   });
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
-  // === state Modal Top Customer ===
-  const [custModal, setCustModal] = useState({ open: false, name: "", from: "", to: "" });
+  // --- STATE MODAL TOP CUSTOMER ---
+  const [custModal, setCustModal] = useState({ open: false, name: "", from: "", to: "", fromLabel: "", toLabel: "" });
   const [custRows, setCustRows] = useState([]);
-  const [custLoading, setCustLoading] = useState(false);
   const [custTotalQty, setCustTotalQty] = useState(0);
+  const [custLoading, setCustLoading] = useState(false);
 
   const busyRef = useRef(false);
   const idleTimer = useRef(null);
-
-  // util: range bulan ini
-  const getThisMonthRange = () => {
-    const now = new Date();
-    const s = new Date(now.getFullYear(), now.getMonth(), 1); s.setHours(0,0,0,0);
-    const e = new Date(now.getFullYear(), now.getMonth()+1, 0); e.setHours(23,59,59,999);
-    return { from: s.toISOString(), to: e.toISOString() };
-  };
-
-  // buka modal & load riwayat customer
-  const openCustomerHistory = async (name) => {
-    const { from, to } = getThisMonthRange();
-    setCustModal({ open: true, name, from, to });
-    setCustLoading(true);
-    try {
-      let rows = [];
-      if (DataService.getCustomerSalesByRange) {
-        rows = await DataService.getCustomerSalesByRange({ from, to, customer: name });
-      } else if (DataService.getSalesByDateRange) {
-        const all = await DataService.getSalesByDateRange({ from, to, onlyPaid: false });
-        rows = (all || []).filter(r => String(r.customer || "").toUpperCase() === String(name || "").toUpperCase());
-      } else {
-        const all = await DataService.loadSales(800);
-        rows = (all || []).filter(r => {
-          const t = new Date(r.created_at);
-          return t >= new Date(from) && t <= new Date(to) &&
-                 String(r.customer || "").toUpperCase() === String(name || "").toUpperCase();
-        });
-      }
-      setCustRows(rows);
-      setCustTotalQty(rows.reduce((a, r) => a + Number(r.qty || 0), 0));
-    } catch (e) {
-      console.warn("[cust history]", e?.message || e);
-      setCustRows([]);
-      setCustTotalQty(0);
-    } finally {
-      setCustLoading(false);
-    }
-  };
-  const closeCustomerHistory = () => setCustModal(s => ({ ...s, open: false }));
 
   // 1) Snapshot cepat
   useEffect(() => {
@@ -378,10 +357,9 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         from.setHours(0,0,0,0);
         const to = new Date();
 
-        const rows = await DataService.loadSalesByDateRange?.(
-          from.toISOString(),
-          to.toISOString()
-        ).catch(() => []);
+        const rows = await (DataService.loadSalesByDateRange
+          ? DataService.loadSalesByDateRange(from.toISOString(), to.toISOString())
+          : DataService.loadSales(800)).catch(() => []);
 
         if (!alive) return;
         const last7 = buildLast7DaysSeries(rows || []);
@@ -407,11 +385,12 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         if (!alive) return;
 
         const wk = comps?.weekly || null;
+        const mo = comps?.monthly || null;
+        const yy = comps?.yoy || null;
+
         const weeklyGrowthPct = wk && wk.last_week_qty
           ? ((Number(wk.this_week_qty || 0) - Number(wk.last_week_qty || 0)) / Number(wk.last_week_qty)) * 100
           : null;
-
-        const mo = comps?.monthly || null;
         const monthlyGrowthQty = mo && mo.last_month_qty
           ? ((Number(mo.this_month_qty || 0) - Number(mo.last_month_qty || 0)) / Number(mo.last_month_qty)) * 100
           : null;
@@ -422,7 +401,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
           ? ((Number(mo.this_month_laba || 0) - Number(mo.last_month_laba || 0)) / Number(mo.last_month_laba)) * 100
           : null;
 
-        const yy = comps?.yoy || null;
         const yoyGrowthQty = yy && yy.last_year_qty
           ? ((Number(yy.this_year_qty || 0) - Number(yy.last_year_qty || 0)) / Number(yy.last_year_qty)) * 100
           : null;
@@ -458,6 +436,43 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 
     return () => { alive = false; };
   }, []); // load sekali saat mount
+
+  // ---- Modal handlers ----
+  const openCustomerHistory = async (name) => {
+    const { from, to, fromLabel, toLabel } = getThisMonthRange();
+    setCustModal({ open: true, name, from, to, fromLabel, toLabel });
+    setCustLoading(true);
+    try {
+      let rows = [];
+      if (DataService.getCustomerSalesByRange) {
+        rows = await DataService.getCustomerSalesByRange({ from, to, customer: name });
+      } else if (DataService.getSalesByDateRange) {
+        const all = await DataService.getSalesByDateRange({ from, to, onlyPaid: false });
+        rows = (all || []).filter(
+          (r) => String(r.customer || "").toUpperCase() === String(name || "").toUpperCase()
+        );
+      } else {
+        const all = await DataService.loadSales(800);
+        rows = (all || []).filter((r) => {
+          const t = new Date(r.created_at);
+          return (
+            t >= new Date(from) &&
+            t <= new Date(to) &&
+            String(r.customer || "").toUpperCase() === String(name || "").toUpperCase()
+          );
+        });
+      }
+      setCustRows(rows);
+      setCustTotalQty(rows.reduce((a, r) => a + Number(r.qty || 0), 0));
+    } catch (e) {
+      console.warn("[cust history]", e?.message || e);
+      setCustRows([]);
+      setCustTotalQty(0);
+    } finally {
+      setCustLoading(false);
+    }
+  };
+  const closeCustomerHistory = () => setCustModal((s) => ({ ...s, open: false }));
 
   // ---- derived
   const isi = Number(stocks?.ISI || 0);
@@ -624,16 +639,12 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                       {(analytics.topCustomers || []).map((c, i) => (
                         <TableRow key={i} hover>
                           <TableCell sx={{ whiteSpace: "nowrap" }}>
-                            <Button
-                              size="small"
-                              variant="text"
-                              onClick={() => openCustomerHistory(c.customer_name || c.customer)}
-                            >
-                              {c.customer_name || c.customer}
+                            <Button size="small" onClick={() => openCustomerHistory(c.customer_name)}>
+                              {c.customer_name}
                             </Button>
                           </TableCell>
-                          <TableCell align="right">{c.total_transaksi || c.trx}</TableCell>
-                          <TableCell align="right">{fmtIDR(c.total_value || c.value)}</TableCell>
+                          <TableCell align="right">{c.total_transaksi}</TableCell>
+                          <TableCell align="right">{fmtIDR(c.total_value)}</TableCell>
                         </TableRow>
                       ))}
                       {!analytics.topCustomers?.length && (
@@ -768,49 +779,66 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       </Card>
 
       {/* ===== Modal Riwayat Pelanggan ===== */}
-      <Dialog open={custModal.open} onClose={closeCustomerHistory} fullWidth maxWidth="sm">
+      <Dialog open={custModal.open} onClose={closeCustomerHistory} maxWidth="md" fullWidth>
         <DialogTitle>
-          Riwayat Transaksi — {custModal.name}
+          Riwayat Transaksi — {custModal.name || "-"}
           <Typography variant="caption" display="block" color="text.secondary">
-            Periode: {(custModal.from || "").slice(0,10)} s/d {(custModal.to || "").slice(0,10)}
+            Periode: {custModal.fromLabel} s/d {custModal.toLabel}
           </Typography>
         </DialogTitle>
         <DialogContent dividers>
           {custLoading ? (
-            <LinearProgress />
+            <Stack spacing={1}>
+              <Skeleton height={28} />
+              <Skeleton height={28} />
+              <Skeleton height={28} />
+            </Stack>
           ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Tanggal</TableCell>
-                  <TableCell align="right">Qty</TableCell>
-                  <TableCell align="right">Total</TableCell>
-                  <TableCell>Metode</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {custRows.map((x) => (
-                  <TableRow key={x.id}>
-                    <TableCell>{String(x.created_at || "").slice(0,10)}</TableCell>
-                    <TableCell align="right">{x.qty}</TableCell>
-                    <TableCell align="right">{fmtIDR(x.total || (Number(x.qty||0) * Number(x.price||0)))}</TableCell>
-                    <TableCell>{x.method}</TableCell>
-                  </TableRow>
-                ))}
-                {!custRows.length && (
+            <TableContainer component={Paper} sx={{ borderRadius: 1 }}>
+              <Table size="small">
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={4} sx={{ color: "text.secondary" }}>
-                      Tidak ada transaksi
-                    </TableCell>
+                    <TableCell>Tanggal</TableCell>
+                    <TableCell align="right">Qty</TableCell>
+                    <TableCell align="right">Total</TableCell>
+                    <TableCell>Metode</TableCell>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {custRows.map((x) => (
+                    <TableRow key={x.id}>
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>{String(x.created_at || "").slice(0,10)}</TableCell>
+                      <TableCell align="right">{x.qty}</TableCell>
+                      <TableCell align="right">{fmtIDR(x.total || (Number(x.qty||0)*Number(x.price||0)))}</TableCell>
+                      <TableCell>
+                        {String(x.method || "").toUpperCase() === "HUTANG" ? (
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            color={String(x.status || "").toUpperCase() === "LUNAS" ? "success" : "error"}
+                            label={`HUTANG • ${String(x.status || "").toUpperCase() === "LUNAS" ? "Lunas" : "Belum"}`}
+                          />
+                        ) : (
+                          <Chip size="small" variant="outlined" label="TUNAI" />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!custRows.length && (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center" sx={{ color: "text.secondary" }}>
+                        Tidak ada transaksi pada periode ini
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
         </DialogContent>
-        <DialogActions sx={{ justifyContent: "space-between" }}>
-          <Typography variant="body2" sx={{ pl: 1 }}>
-            Total Qty: <b>{custTotalQty}</b>
+        <DialogActions sx={{ justifyContent: "space-between", px: 3 }}>
+          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+            Total Qty: {custTotalQty}
           </Typography>
           <Button onClick={closeCustomerHistory}>Tutup</Button>
         </DialogActions>
