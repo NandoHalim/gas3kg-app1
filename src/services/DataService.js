@@ -832,6 +832,9 @@ export const DataService = {
       is_admin: adminSet.has(m.user_id),
     }));
   },
+
+}; // << tutup DataService
+
  // =======================================================
 // ===============   SALES ANALYTICS (RPC)  ==============
 // =======================================================
@@ -1035,8 +1038,6 @@ DataService.getComparisonsSummary = async function ({ onlyPaid = true } = {}) {
 
   return { weekly, monthly, yoy };
 };
-
-}; // << tutup DataService
 
 /* =========================
    SETTINGS (via Supabase + LS)
