@@ -23,12 +23,30 @@ import {
   Tooltip,
 } from "@mui/material";
 
-// 🔧 Standarisasi field: lebar penuh + tinggi seragam (disesuaikan ke theme)
+// 🔧 Standarisasi field (mobile friendly)
 const FIELD_PROPS = { fullWidth: true, variant: "outlined", size: "medium" };
-const FIELD_SX = {
+const FIELD_SX_MOBILE = {
   mt: 1,
-  "& .MuiOutlinedInput-root": { borderRadius: 1, minHeight: 56 },
-  "& input": { paddingTop: 1.25, paddingBottom: 1.25 }, // jaga tinggi di iOS
+  "& .MuiOutlinedInput-root": {
+    borderRadius: 1,
+    minHeight: { xs: 48, md: 56 },
+  },
+  "& input": {
+    paddingTop: { xs: 1, md: 1.25 },
+    paddingBottom: { xs: 1, md: 1.25 },
+    fontSize: { xs: "16px", md: "inherit" }, // hindari zoom iOS
+  },
+  "& label": {
+    fontSize: { xs: "0.9rem", md: "1rem" },
+  },
+};
+
+// 🔧 Kartu mobile-friendly
+const CARD_SX = {
+  height: "100%",
+  "& .MuiCardContent-root": {
+    padding: { xs: 2, md: 3 },
+  },
 };
 
 export default function StokView({ stocks = {}, onSaved }) {
@@ -43,19 +61,50 @@ export default function StokView({ stocks = {}, onSaved }) {
   }, [stocks]);
 
   return (
-    <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
-      {/* Header */}
-      <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
-        <Typography variant="h4" fontWeight={600}>
+    <Stack
+      spacing={2}
+      sx={{
+        pb: { xs: 8, md: 2 },
+        height: "100vh",
+        overflowY: "auto",
+        "&::-webkit-scrollbar": { width: "8px" },
+        "&::-webkit-scrollbar-thumb": {
+          backgroundColor: "divider",
+          borderRadius: "4px",
+        },
+      }}
+    >
+      {/* Header responsif */}
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        alignItems={{ xs: "flex-start", sm: "center" }}
+        spacing={2}
+        sx={{ mb: 2 }}
+      >
+        <Typography
+          variant="h4"
+          fontWeight={600}
+          sx={{ fontSize: { xs: "1.75rem", sm: "2.125rem" } }}
+        >
           Stok
         </Typography>
-        <Stack direction="row" spacing={1} sx={{ ml: "auto" }}>
+
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            ml: { sm: "auto" },
+            mt: { xs: 1, sm: 0 },
+            width: { xs: "100%", sm: "auto" },
+            justifyContent: { xs: "space-between", sm: "flex-end" },
+          }}
+        >
           <Tooltip title="Stok ISI">
             <Chip
               label={`ISI: ${snap.ISI}`}
               color="success"
               variant="outlined"
-              sx={{ fontWeight: 700 }}
+              sx={{ fontWeight: 700, fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
             />
           </Tooltip>
           <Tooltip title="Stok KOSONG">
@@ -63,13 +112,22 @@ export default function StokView({ stocks = {}, onSaved }) {
               label={`KOSONG: ${snap.KOSONG}`}
               color="primary"
               variant="outlined"
-              sx={{ fontWeight: 700 }}
+              sx={{ fontWeight: 700, fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
             />
           </Tooltip>
         </Stack>
       </Stack>
 
-      <Grid container spacing={2}>
+      {/* Grid responsif + padding adaptif */}
+      <Grid
+        container
+        spacing={2}
+        sx={{
+          "& .MuiGrid-item": {
+            p: { xs: 1, md: 2 },
+          },
+        }}
+      >
         <Grid item xs={12} md={4}>
           <TambahKosong
             onSaved={(s) => {
@@ -132,14 +190,32 @@ function TambahKosong({ onSaved }) {
   };
 
   return (
-    <Card>
+    <Card sx={CARD_SX}>
       <CardHeader
-        title={<Typography variant="h6" fontWeight={600}>Tambah Stok Kosong</Typography>}
-        sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+        title={
+          <Typography variant="h6" fontWeight={600} sx={{ fontSize: { xs: "1.1rem", md: "1.25rem" } }}>
+            Tambah Stok Kosong
+          </Typography>
+        }
+        sx={{
+          pb: 2,
+          borderBottom: 1,
+          borderColor: "divider",
+          p: { xs: 2, md: 3 },
+          "& .MuiCardHeader-content": { overflow: "hidden" },
+        }}
       />
       <CardContent>
         {err && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
+          <Alert
+            severity="error"
+            sx={{
+              mb: 2,
+              fontSize: { xs: "0.8rem", md: "0.875rem" },
+              "& .MuiAlert-message": { overflow: "hidden" },
+            }}
+            onClose={() => setErr("")}
+          >
             {err}
           </Alert>
         )}
@@ -148,7 +224,7 @@ function TambahKosong({ onSaved }) {
           <Stack spacing={2}>
             <TextField
               {...FIELD_PROPS}
-              sx={FIELD_SX}
+              sx={FIELD_SX_MOBILE}
               label="Jumlah"
               type="number"
               inputProps={{ min: 1, inputMode: "numeric", pattern: "[0-9]*" }}
@@ -160,19 +236,19 @@ function TambahKosong({ onSaved }) {
 
             <TextField
               {...FIELD_PROPS}
-              sx={FIELD_SX}
+              sx={FIELD_SX_MOBILE}
               label="Tanggal"
               type="date"
               value={form.date}
               onChange={(e) => setForm({ ...form, date: e.target.value })}
-              inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+              inputProps={{ min: MIN_DATE, max: maxAllowedDate(), placeholder: "DD-MM-YYYY" }}
               disabled={loading}
               InputLabelProps={{ shrink: true }}
             />
 
             <TextField
               {...FIELD_PROPS}
-              sx={FIELD_SX}
+              sx={FIELD_SX_MOBILE}
               label="Catatan (opsional)"
               multiline
               minRows={2}
@@ -182,13 +258,18 @@ function TambahKosong({ onSaved }) {
               placeholder="mis: titip pelanggan"
             />
 
-            <Stack direction="row" spacing={2} justifyContent="flex-end">
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={2}
+              justifyContent="flex-end"
+              sx={{ width: "100%" }}
+            >
               <Button
                 variant="outlined"
                 type="button"
                 onClick={() => setForm({ qty: "", date: todayStr(), note: "" })}
                 disabled={loading}
-                sx={{ textTransform: "none", minWidth: 100 }}
+                sx={{ textTransform: "none", minWidth: { xs: "100%", sm: 100 }, order: { xs: 2, sm: 1 } }}
               >
                 Reset
               </Button>
@@ -196,7 +277,7 @@ function TambahKosong({ onSaved }) {
                 variant="contained"
                 type="submit"
                 disabled={loading}
-                sx={{ textTransform: "none", minWidth: 100 }}
+                sx={{ textTransform: "none", minWidth: { xs: "100%", sm: 100 }, order: { xs: 1, sm: 2 } }}
               >
                 {loading ? "Menyimpan…" : "Simpan"}
               </Button>
@@ -244,14 +325,32 @@ function RestokIsi({ onSaved }) {
   };
 
   return (
-    <Card>
+    <Card sx={CARD_SX}>
       <CardHeader
-        title={<Typography variant="h6" fontWeight={600}>Restok Isi (Tukar Kosong)</Typography>}
-        sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+        title={
+          <Typography variant="h6" fontWeight={600} sx={{ fontSize: { xs: "1.1rem", md: "1.25rem" } }}>
+            Restok Isi (Tukar Kosong)
+          </Typography>
+        }
+        sx={{
+          pb: 2,
+          borderBottom: 1,
+          borderColor: "divider",
+          p: { xs: 2, md: 3 },
+          "& .MuiCardHeader-content": { overflow: "hidden" },
+        }}
       />
       <CardContent>
         {err && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
+          <Alert
+            severity="error"
+            sx={{
+              mb: 2,
+              fontSize: { xs: "0.8rem", md: "0.875rem" },
+              "& .MuiAlert-message": { overflow: "hidden" },
+            }}
+            onClose={() => setErr("")}
+          >
             {err}
           </Alert>
         )}
@@ -260,7 +359,7 @@ function RestokIsi({ onSaved }) {
           <Stack spacing={2}>
             <TextField
               {...FIELD_PROPS}
-              sx={FIELD_SX}
+              sx={FIELD_SX_MOBILE}
               label="Jumlah"
               type="number"
               inputProps={{ min: 1, inputMode: "numeric", pattern: "[0-9]*" }}
@@ -272,19 +371,19 @@ function RestokIsi({ onSaved }) {
 
             <TextField
               {...FIELD_PROPS}
-              sx={FIELD_SX}
+              sx={FIELD_SX_MOBILE}
               label="Tanggal"
               type="date"
               value={form.date}
               onChange={(e) => setForm({ ...form, date: e.target.value })}
-              inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+              inputProps={{ min: MIN_DATE, max: maxAllowedDate(), placeholder: "DD-MM-YYYY" }}
               disabled={loading}
               InputLabelProps={{ shrink: true }}
             />
 
             <TextField
               {...FIELD_PROPS}
-              sx={FIELD_SX}
+              sx={FIELD_SX_MOBILE}
               label="Catatan (opsional)"
               multiline
               minRows={2}
@@ -294,13 +393,18 @@ function RestokIsi({ onSaved }) {
               placeholder="mis: tukar kosong di agen"
             />
 
-            <Stack direction="row" spacing={2} justifyContent="flex-end">
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={2}
+              justifyContent="flex-end"
+              sx={{ width: "100%" }}
+            >
               <Button
                 variant="outlined"
                 type="button"
                 onClick={() => setForm({ qty: "", date: todayStr(), note: "" })}
                 disabled={loading}
-                sx={{ textTransform: "none", minWidth: 100 }}
+                sx={{ textTransform: "none", minWidth: { xs: "100%", sm: 100 }, order: { xs: 2, sm: 1 } }}
               >
                 Reset
               </Button>
@@ -308,7 +412,7 @@ function RestokIsi({ onSaved }) {
                 variant="contained"
                 type="submit"
                 disabled={loading}
-                sx={{ textTransform: "none", minWidth: 100 }}
+                sx={{ textTransform: "none", minWidth: { xs: "100%", sm: 100 }, order: { xs: 1, sm: 2 } }}
               >
                 {loading ? "Menyimpan…" : "Simpan"}
               </Button>
@@ -354,9 +458,7 @@ function PenyesuaianStok({ onSaved }) {
       });
       toast?.show?.({
         type: "success",
-        message: `Penyesuaian ${form.code} ${
-          delta > 0 ? `+${qtyNum}` : `-${qtyNum}`
-        } tersimpan.`,
+        message: `Penyesuaian ${form.code} ${delta > 0 ? `+${qtyNum}` : `-${qtyNum}`} tersimpan.`,
       });
       setForm({ code: "KOSONG", dir: "OUT", qty: "", date: todayStr(), reason: "" });
       onSaved?.(snap);
@@ -370,21 +472,39 @@ function PenyesuaianStok({ onSaved }) {
   };
 
   return (
-    <Card>
+    <Card sx={CARD_SX}>
       <CardHeader
-        title={<Typography variant="h6" fontWeight={600}>Penyesuaian Stok (Koreksi)</Typography>}
-        sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+        title={
+          <Typography variant="h6" fontWeight={600} sx={{ fontSize: { xs: "1.1rem", md: "1.25rem" } }}>
+            Penyesuaian Stok (Koreksi)
+          </Typography>
+        }
+        sx={{
+          pb: 2,
+          borderBottom: 1,
+          borderColor: "divider",
+          p: { xs: 2, md: 3 },
+          "& .MuiCardHeader-content": { overflow: "hidden" },
+        }}
       />
       <CardContent>
         {err && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
+          <Alert
+            severity="error"
+            sx={{
+              mb: 2,
+              fontSize: { xs: "0.8rem", md: "0.875rem" },
+              "& .MuiAlert-message": { overflow: "hidden" },
+            }}
+            onClose={() => setErr("")}
+          >
             {err}
           </Alert>
         )}
 
         <Box component="form" onSubmit={submit}>
           <Stack spacing={2}>
-            <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
+            <FormControl {...FIELD_PROPS} sx={FIELD_SX_MOBILE}>
               <InputLabel id="jenis-label">Jenis Stok</InputLabel>
               <Select
                 labelId="jenis-label"
@@ -398,7 +518,7 @@ function PenyesuaianStok({ onSaved }) {
               </Select>
             </FormControl>
 
-            <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
+            <FormControl {...FIELD_PROPS} sx={FIELD_SX_MOBILE}>
               <InputLabel id="arah-label">Arah Penyesuaian</InputLabel>
               <Select
                 labelId="arah-label"
@@ -418,7 +538,7 @@ function PenyesuaianStok({ onSaved }) {
 
             <TextField
               {...FIELD_PROPS}
-              sx={FIELD_SX}
+              sx={FIELD_SX_MOBILE}
               label="Jumlah"
               type="number"
               inputProps={{ min: 1, inputMode: "numeric", pattern: "[0-9]*" }}
@@ -430,19 +550,19 @@ function PenyesuaianStok({ onSaved }) {
 
             <TextField
               {...FIELD_PROPS}
-              sx={FIELD_SX}
+              sx={FIELD_SX_MOBILE}
               label="Tanggal"
               type="date"
               value={form.date}
               onChange={(e) => setForm({ ...form, date: e.target.value })}
-              inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+              inputProps={{ min: MIN_DATE, max: maxAllowedDate(), placeholder: "DD-MM-YYYY" }}
               disabled={loading}
               InputLabelProps={{ shrink: true }}
             />
 
             <TextField
               {...FIELD_PROPS}
-              sx={FIELD_SX}
+              sx={FIELD_SX_MOBILE}
               label="Alasan (wajib)"
               multiline
               minRows={2}
@@ -452,7 +572,12 @@ function PenyesuaianStok({ onSaved }) {
               placeholder='mis: "Koreksi stok - kelebihan input" / "Stok hilang/rusak"'
             />
 
-            <Stack direction="row" spacing={2} justifyContent="flex-end">
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={2}
+              justifyContent="flex-end"
+              sx={{ width: "100%" }}
+            >
               <Button
                 variant="outlined"
                 type="button"
@@ -466,7 +591,7 @@ function PenyesuaianStok({ onSaved }) {
                   })
                 }
                 disabled={loading}
-                sx={{ textTransform: "none", minWidth: 100 }}
+                sx={{ textTransform: "none", minWidth: { xs: "100%", sm: 100 }, order: { xs: 2, sm: 1 } }}
               >
                 Reset
               </Button>
@@ -474,7 +599,7 @@ function PenyesuaianStok({ onSaved }) {
                 variant="contained"
                 type="submit"
                 disabled={loading}
-                sx={{ textTransform: "none", minWidth: 100 }}
+                sx={{ textTransform: "none", minWidth: { xs: "100%", sm: 100 }, order: { xs: 1, sm: 2 } }}
               >
                 {loading ? "Menyimpan…" : "Simpan"}
               </Button>
