@@ -42,8 +42,6 @@ const LOW_STOCK_THRESHOLD = 5;
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
 const isoDate = (d) => startOfDay(d).toISOString().slice(0,10);
 const fmtPct = (n) => (n === null || n === undefined || Number.isNaN(Number(n))) ? "–" : `${(Number(n)).toFixed(1)}%`;
-
-// format YYYY-MM-DD dari waktu lokal (untuk label, agar tidak bergeser timezone)
 const fmtLocalYMD = (d) => {
   const x = new Date(d);
   const y = x.getFullYear();
@@ -51,8 +49,6 @@ const fmtLocalYMD = (d) => {
   const dd = String(x.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 };
-
-// Range bulan ini (label lokal 1..akhir bulan, query pakai ISO)
 const getThisMonthRange = () => {
   const now = new Date();
   const s = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -87,31 +83,31 @@ function buildLast7DaysSeries(rows = []) {
 function StatTile({ title, value, subtitle, color = "primary", icon }) {
   return (
     <Card sx={{ height: "100%", display: "flex" }}>
-      <CardContent sx={{ flex: 1, display: "flex", alignItems: "center", py: 1.5 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: "100%" }}>
+      <CardContent sx={{ flex: 1, display: "flex", alignItems: "center", py: 2 }}>
+        <Stack direction="row" spacing={2} alignItems="center" sx={{ width: "100%" }}>
           <Box
-            sx={{
+            sx={(theme) => ({
               width: 42,
               height: 42,
               borderRadius: 2,
               display: "grid",
               placeItems: "center",
-              bgcolor: `${color}.50`,
+              bgcolor: theme.palette[color].light + "20", // 20% opacity
               color: `${color}.main`,
               flexShrink: 0,
-            }}
+            })}
           >
             {icon}
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="subtitle1" color="text.secondary" gutterBottom>
               {title}
             </Typography>
             <Typography variant="h5" fontWeight={800} noWrap>
               {value}
             </Typography>
             <Typography
-              variant="caption"
+              variant="body2"
               color="text.secondary"
               noWrap
               sx={{ display: "block", minHeight: 20 }}
@@ -130,14 +126,14 @@ function StockProgress({ isi, kosong }) {
   const pctKosong = Math.round((kosong / total) * 100);
   const pctIsi = 100 - pctKosong;
   return (
-    <Stack spacing={1}>
+    <Stack spacing={2}>
       <LinearProgress
         variant="determinate"
         value={pctIsi}
         sx={{ height: 10, borderRadius: 5, "& .MuiLinearProgress-bar": { borderRadius: 5 } }}
         color="success"
       />
-      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+      <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
         <Chip size="small" label={`Isi: ${pctIsi}%`} color="success" variant="outlined" />
         <Chip size="small" label={`Kosong: ${pctKosong}%`} color="error" variant="outlined" />
       </Stack>
@@ -160,21 +156,21 @@ function MiniBarChartLabeled({ data = [] }) {
   };
 
   return (
-    <Box sx={{ px: 1, py: 1 }}>
+    <Box sx={{ px: 1, py: 2 }}>
       <Box
         sx={{
           display: "grid",
           gridTemplateColumns: `repeat(${Math.max(data.length, 1)}, 1fr)`,
           alignItems: "end",
-          gap: 1.5,
+          gap: 2,
           height: 160,
         }}
       >
         {data.map((d, i) => {
           const h = Math.max(8, Math.round((Number(d.qty || 0) / max) * 100));
           return (
-            <Stack key={i} alignItems="center" spacing={0.5}>
-              <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.1 }}>
+            <Stack key={i} alignItems="center" spacing={0.75}>
+              <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.1 }}>
                 {d.qty}
               </Typography>
               <Box
@@ -189,14 +185,14 @@ function MiniBarChartLabeled({ data = [] }) {
                   "&:hover": { opacity: 1, transform: "translateY(-2px)" },
                 }}
               />
-              <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", lineHeight: 1.1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", lineHeight: 1.1 }}>
                 {labelOf(d.date)}
               </Typography>
             </Stack>
           );
         })}
         {!data.length && (
-          <Typography variant="body2" color="text.secondary" sx={{ gridColumn: "1 / -1", textAlign: "center" }}>
+          <Typography variant="subtitle1" color="text.secondary" sx={{ gridColumn: "1 / -1", textAlign: "center" }}>
             Belum ada data penjualan
           </Typography>
         )}
@@ -480,15 +476,15 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
   const total = isi + kosong;
 
   return (
-    <Stack spacing={1.5}>
+    <Stack spacing={2}>
       {/* Header */}
-      <Stack direction="row" alignItems="baseline" justifyContent="space-between" flexWrap="wrap" sx={{ gap: 1 }}>
+      <Stack direction="row" alignItems="baseline" justifyContent="space-between" flexWrap="wrap" sx={{ gap: 2 }}>
         <Box>
-          <Typography variant="h5" fontWeight={800}>
+          <Typography variant="h4" fontWeight={600} gutterBottom>
             Dashboard
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Ringkasan stok & penjualan.
+          <Typography variant="subtitle1" color="text.secondary">
+            Ringkasan stok & penjualan
           </Typography>
         </Box>
         <Chip label={`Total Tabung: ${total}`} variant="outlined" color="default" sx={{ fontWeight: 700 }} />
@@ -497,11 +493,11 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       {err && <Alert severity="error" variant="outlined">{err}</Alert>}
 
       {/* Ringkasan Stok & Penjualan */}
-      <Grid container spacing={1.5} alignItems="stretch">
+      <Grid container spacing={2} alignItems="stretch">
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Stok Isi"
-            value={loading ? <Skeleton width={60} /> : isi}
+            value={loading ? <Skeleton variant="text" width={60} sx={{ fontSize: "2rem" }} /> : isi}
             subtitle={isi <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Siap jual"}
             color="success"
             icon={<Inventory2Icon />}
@@ -510,7 +506,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Stok Kosong"
-            value={loading ? <Skeleton width={60} /> : kosong}
+            value={loading ? <Skeleton variant="text" width={60} sx={{ fontSize: "2rem" }} /> : kosong}
             subtitle={kosong <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Tabung kembali"}
             color="error"
             icon={<Inventory2Icon />}
@@ -519,8 +515,8 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Penjualan Hari Ini"
-            value={loading ? <Skeleton width={60} /> : today.qty}
-            subtitle={loading ? <Skeleton width={100} /> : fmtIDR(today.money)}
+            value={loading ? <Skeleton variant="text" width={60} sx={{ fontSize: "2rem" }} /> : today.qty}
+            subtitle={loading ? <Skeleton variant="text" width={100} sx={{ fontSize: "1rem" }} /> : fmtIDR(today.money)}
             color="info"
             icon={<ShoppingCartIcon />}
           />
@@ -528,7 +524,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Piutang"
-            value={loading ? <Skeleton width={100} /> : fmtIDR(piutang)}
+            value={loading ? <Skeleton variant="text" width={100} sx={{ fontSize: "2rem" }} /> : fmtIDR(piutang)}
             subtitle="Belum lunas"
             color="warning"
             icon={<ReceiptLongIcon />}
@@ -538,26 +534,33 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 
       {/* Kondisi Stok */}
       <Card>
-        <CardHeader title="Kondisi Stok (Isi vs Kosong)" />
+        <CardHeader
+          title={<Typography variant="h6" fontWeight={600}>Kondisi Stok</Typography>}
+          subheader="Perbandingan stok isi vs kosong"
+          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+        />
         <CardContent>
-          {loading ? <Skeleton height={24} /> : <StockProgress isi={isi} kosong={kosong} />}
+          {loading ? <Skeleton variant="text" height={24} sx={{ fontSize: "1.25rem" }} /> : <StockProgress isi={isi} kosong={kosong} />}
         </CardContent>
       </Card>
 
       {/* Ringkasan Keuangan + Total Terjual */}
-      <Grid container spacing={1.5}>
+      <Grid container spacing={2}>
         <Grid item xs={12} md={6} lg={5}>
           <Card>
-            <CardHeader title="Ringkasan Keuangan" />
+            <CardHeader
+              title={<Typography variant="h6" fontWeight={600}>Ringkasan Keuangan</Typography>}
+              sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+            />
             <CardContent>
               {loading ? (
-                <Stack spacing={1}>
-                  <Skeleton height={24} />
-                  <Skeleton height={24} />
-                  <Skeleton height={24} />
+                <Stack spacing={2}>
+                  <Skeleton variant="text" height={24} sx={{ fontSize: "1.25rem" }} />
+                  <Skeleton variant="text" height={24} sx={{ fontSize: "1.25rem" }} />
+                  <Skeleton variant="text" height={24} sx={{ fontSize: "1.25rem" }} />
                 </Stack>
               ) : (
-                <Stack spacing={1}>
+                <Stack spacing={2}>
                   <RowKV k="Omzet (dibayar)" v={fmtIDR(sum.omzet)} />
                   <RowKV k="HPP" v={`− ${fmtIDR(sum.omzet - sum.laba)}`} />
                   <RowKV k="Laba" v={fmtIDR(sum.laba)} vSx={{ color: "success.main", fontWeight: 700 }} />
@@ -569,29 +572,33 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 
         <Grid item xs={12} md={6} lg={7}>
           <Card>
+            <CardHeader
+              title={<Typography variant="h6" fontWeight={600}>Total Terjual (riwayat)</Typography>}
+              sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+            />
             <CardContent>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Box
-                  sx={{
+                  sx={(theme) => ({
                     width: 42,
                     height: 42,
                     borderRadius: 2,
                     display: "grid",
                     placeItems: "center",
-                    bgcolor: "info.50",
+                    bgcolor: theme.palette.info.light + "20",
                     color: "info.main",
-                  }}
+                  })}
                 >
                   <TrendingUpIcon />
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="subtitle1" color="text.secondary" gutterBottom>
                     Total Terjual (riwayat)
                   </Typography>
                   <Typography variant="h5" fontWeight={800}>
-                    {loading ? <Skeleton width={80} /> : sum.qty}
+                    {loading ? <Skeleton variant="text" width={80} sx={{ fontSize: "2rem" }} /> : sum.qty}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="body2" color="text.secondary">
                     Akumulasi data
                   </Typography>
                 </Box>
@@ -603,21 +610,27 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 
       {/* Penjualan 7 Hari Terakhir */}
       <Card>
-        <CardHeader title="Penjualan 7 Hari Terakhir" />
+        <CardHeader
+          title={<Typography variant="h6" fontWeight={600}>Penjualan 7 Hari Terakhir</Typography>}
+          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+        />
         <CardContent>
-          {loading ? <Skeleton height={120} /> : <MiniBarChartLabeled data={series7} />}
+          {loading ? <Skeleton variant="text" height={120} sx={{ fontSize: "2rem" }} /> : <MiniBarChartLabeled data={series7} />}
         </CardContent>
       </Card>
 
       {/* ====== Analitik Penjualan (BARU) ====== */}
       <Card>
-        <CardHeader title="Analitik Penjualan" />
+        <CardHeader
+          title={<Typography variant="h6" fontWeight={600}>Analitik Penjualan</Typography>}
+          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+        />
         <CardContent>
           {analyticsLoading ? (
-            <Stack spacing={1}>
-              <Skeleton height={28} />
-              <Skeleton height={28} />
-              <Skeleton height={28} />
+            <Stack spacing={2}>
+              <Skeleton variant="text" height={28} sx={{ fontSize: "1.25rem" }} />
+              <Skeleton variant="text" height={28} sx={{ fontSize: "1.25rem" }} />
+              <Skeleton variant="text" height={28} sx={{ fontSize: "1.25rem" }} />
             </Stack>
           ) : (
             <Grid container spacing={2}>
@@ -627,7 +640,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                   Top Customers (bulan ini)
                 </Typography>
                 <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
-                  <Table size="small">
+                  <Table size="medium" sx={{ minWidth: 650 }}>
                     <TableHead>
                       <TableRow>
                         <TableCell>Pelanggan</TableCell>
@@ -639,7 +652,12 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                       {(analytics.topCustomers || []).map((c, i) => (
                         <TableRow key={i} hover>
                           <TableCell sx={{ whiteSpace: "nowrap" }}>
-                            <Button size="small" onClick={() => openCustomerHistory(c.customer_name)}>
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={() => openCustomerHistory(c.customer_name)}
+                              sx={{ textTransform: "none", fontWeight: 500, px: 0 }}
+                            >
                               {c.customer_name}
                             </Button>
                           </TableCell>
@@ -730,17 +748,20 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 
       {/* Transaksi Terbaru */}
       <Card>
-        <CardHeader title="Transaksi Terbaru" />
+        <CardHeader
+          title={<Typography variant="h6" fontWeight={600}>Transaksi Terbaru</Typography>}
+          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+        />
         <CardContent>
           {loading ? (
-            <Stack spacing={1}>
-              <Skeleton height={36} />
-              <Skeleton height={36} />
-              <Skeleton height={36} />
+            <Stack spacing={2}>
+              <Skeleton variant="text" height={36} sx={{ fontSize: "1.5rem" }} />
+              <Skeleton variant="text" height={36} sx={{ fontSize: "1.5rem" }} />
+              <Skeleton variant="text" height={36} sx={{ fontSize: "1.5rem" }} />
             </Stack>
           ) : (
             <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
-              <Table size="small">
+              <Table size="medium" sx={{ minWidth: 650 }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Tanggal</TableCell>
@@ -781,21 +802,21 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       {/* ===== Modal Riwayat Pelanggan ===== */}
       <Dialog open={custModal.open} onClose={closeCustomerHistory} maxWidth="md" fullWidth>
         <DialogTitle>
-          Riwayat Transaksi — {custModal.name || "-"}
-          <Typography variant="caption" display="block" color="text.secondary">
+          <Typography variant="h6" fontWeight={600}>Riwayat Transaksi — {custModal.name || "-"}</Typography>
+          <Typography variant="body2" display="block" color="text.secondary">
             Periode: {custModal.fromLabel} s/d {custModal.toLabel}
           </Typography>
         </DialogTitle>
         <DialogContent dividers>
           {custLoading ? (
-            <Stack spacing={1}>
-              <Skeleton height={28} />
-              <Skeleton height={28} />
-              <Skeleton height={28} />
+            <Stack spacing={2}>
+              <Skeleton variant="text" height={28} sx={{ fontSize: "1.25rem" }} />
+              <Skeleton variant="text" height={28} sx={{ fontSize: "1.25rem" }} />
+              <Skeleton variant="text" height={28} sx={{ fontSize: "1.25rem" }} />
             </Stack>
           ) : (
             <TableContainer component={Paper} sx={{ borderRadius: 1 }}>
-              <Table size="small">
+              <Table size="medium" sx={{ minWidth: 650 }}>
                 <TableHead>
                   <TableRow>
                     <TableCell>Tanggal</TableCell>
@@ -837,7 +858,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
           )}
         </DialogContent>
         <DialogActions sx={{ justifyContent: "space-between", px: 3 }}>
-          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             Total Qty: {custTotalQty}
           </Typography>
           <Button onClick={closeCustomerHistory}>Tutup</Button>
@@ -851,10 +872,10 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 function RowKV({ k, v, vSx }) {
   return (
     <Stack direction="row" justifyContent="space-between" alignItems="center">
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="subtitle1" color="text.secondary">
         {k}
       </Typography>
-      <Typography variant="body2" sx={vSx}>
+      <Typography variant="subtitle1" sx={vSx}>
         {v}
       </Typography>
     </Stack>
