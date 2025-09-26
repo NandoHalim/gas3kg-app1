@@ -22,60 +22,45 @@ import {
   Chip,
   Tooltip,
   CircularProgress,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 
-// 🔧 Standarisasi field (mobile friendly)
-const FIELD_PROPS = { fullWidth: true, variant: "outlined", size: "medium" };
-const FIELD_SX_MOBILE = {
-  mt: 1,
-  "& .MuiOutlinedInput-root": {
-    borderRadius: 1,
-    minHeight: { xs: 48, md: 56 },
-  },
-  "& input": {
-    paddingTop: { xs: 1, md: 1.25 },
-    paddingBottom: { xs: 1, md: 1.25 },
-    fontSize: { xs: "16px", md: "inherit" }, // hindari zoom iOS
-  },
-  "& label": {
-    fontSize: { xs: "0.9rem", md: "1rem" },
-  },
-  "& .MuiSelect-select": {
-    paddingTop: { xs: 1, md: 1.25 },
-    paddingBottom: { xs: 1, md: 1.25 },
-    fontSize: { xs: "16px", md: "inherit" },
-  }
+// 🔧 Custom hook untuk responsive design
+const useResponsive = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
+  
+  return { isMobile, isTablet, isDesktop };
 };
 
-// 🔧 Kartu mobile-friendly
-const CARD_SX = {
-  height: "100%",
-  "& .MuiCardContent-root": {
-    padding: { xs: 2, md: 3 },
-  },
-};
+// 🔧 Standarisasi field (responsive)
+const FIELD_PROPS = { fullWidth: true, variant: "outlined", size: "medium" };
 
 // 🔧 Constants untuk konsistensi
-const MOBILE_CONSTANTS = {
+const RESPONSIVE_CONSTANTS = {
   spacing: {
-    card: { xs: 1.5, md: 2 },
-    stack: { xs: 1.5, md: 2 },
-    grid: { xs: 1.5, md: 2 }
+    mobile: 1.5,
+    tablet: 2,
+    desktop: 3
   },
   typography: {
-    h4: { xs: "1.5rem", sm: "1.75rem", md: "2.125rem" },
-    h6: { xs: "1rem", sm: "1.1rem", md: "1.25rem" },
-    body: { xs: "0.875rem", md: "1rem" }
+    h4: { xs: "1.5rem", sm: "1.75rem", md: "2.125rem", lg: "2.25rem" },
+    h6: { xs: "1rem", sm: "1.1rem", md: "1.25rem", lg: "1.3rem" },
+    body: { xs: "0.875rem", sm: "0.9rem", md: "1rem", lg: "1rem" }
   },
   dimensions: {
-    buttonHeight: { xs: 44, sm: 40 },
-    inputHeight: { xs: 48, md: 56 },
-    chipHeight: { xs: 28, sm: 32 }
+    buttonHeight: { xs: 44, sm: 40, md: 40 },
+    inputHeight: { xs: 48, sm: 48, md: 56 },
+    chipHeight: { xs: 28, sm: 32, md: 32 }
   }
 };
 
 export default function StokView({ stocks = {}, onSaved }) {
   const toast = useToast();
+  const { isMobile, isTablet, isDesktop } = useResponsive();
   const [snap, setSnap] = useState({
     ISI: Number(stocks.ISI || 0),
     KOSONG: Number(stocks.KOSONG || 0),
@@ -85,107 +70,138 @@ export default function StokView({ stocks = {}, onSaved }) {
     setSnap({ ISI: Number(stocks.ISI || 0), KOSONG: Number(stocks.KOSONG || 0) });
   }, [stocks]);
 
+  const getSpacing = () => {
+    if (isMobile) return RESPONSIVE_CONSTANTS.spacing.mobile;
+    if (isTablet) return RESPONSIVE_CONSTANTS.spacing.tablet;
+    return RESPONSIVE_CONSTANTS.spacing.desktop;
+  };
+
+  const getGridColumns = () => {
+    if (isMobile) return 12; // 1 kolom di mobile
+    if (isTablet) return 6;  // 2 kolom di tablet
+    return 4;                // 3 kolom di desktop
+  };
+
   return (
     <Stack
-      spacing={MOBILE_CONSTANTS.spacing.stack}
+      spacing={getSpacing()}
       sx={{
-        pb: { xs: 2, md: 2 },
+        p: { xs: 2, sm: 2, md: 3, lg: 4 },
         minHeight: "100vh",
-        overflowY: "auto",
-        "&::-webkit-scrollbar": { width: "6px" },
-        "&::-webkit-scrollbar-thumb": {
-          backgroundColor: "divider",
-          borderRadius: "3px",
-        },
+        backgroundColor: "background.default",
+        maxWidth: { lg: "1400px", xl: "1600px" },
+        margin: "0 auto",
+        width: "100%",
       }}
     >
-      {/* Header responsif */}
+      {/* Header yang dioptimalkan untuk desktop */}
       <Stack
-        direction={{ xs: "column", sm: "row" }}
-        alignItems={{ xs: "stretch", sm: "center" }}
-        spacing={1}
-        sx={{ mb: { xs: 1, sm: 2 } }}
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        spacing={2}
+        sx={{ 
+          mb: { xs: 2, md: 3 },
+          flexWrap: { xs: "wrap", sm: "nowrap" }
+        }}
       >
-        <Typography
-          variant="h4"
-          fontWeight={600}
-          sx={{ 
-            fontSize: MOBILE_CONSTANTS.typography.h4,
-            textAlign: { xs: "center", sm: "left" }
-          }}
-        >
-          Stok
-        </Typography>
+        <Box>
+          <Typography
+            variant="h4"
+            fontWeight={700}
+            sx={{ 
+              fontSize: RESPONSIVE_CONSTANTS.typography.h4,
+              color: "primary.main",
+              mb: 0.5
+            }}
+          >
+            Manajemen Stok
+          </Typography>
+          <Typography
+            variant="body1"
+            color="text.secondary"
+            sx={{ fontSize: RESPONSIVE_CONSTANTS.typography.body }}
+          >
+            Kelola stok tabung LPG dengan mudah
+          </Typography>
+        </Box>
 
         <Stack
           direction="row"
-          spacing={1}
+          spacing={2}
           sx={{
-            ml: { sm: "auto" },
-            justifyContent: { xs: "center", sm: "flex-end" },
+            flexShrink: 0,
+            mt: { xs: 2, sm: 0 }
           }}
         >
-          <Tooltip title="Stok ISI">
+          <Tooltip title="Stok Tabung Isi">
             <Chip
-              label={`ISI: ${snap.ISI}`}
+              label={`ISI: ${snap.ISI} tabung`}
               color="success"
-              variant="outlined"
-              size="small"
+              variant="filled"
               sx={{ 
                 fontWeight: 700, 
-                fontSize: { xs: "0.75rem", sm: "0.875rem" },
-                height: MOBILE_CONSTANTS.dimensions.chipHeight
+                fontSize: { xs: "0.75rem", sm: "0.875rem", md: "0.9rem" },
+                height: RESPONSIVE_CONSTANTS.dimensions.chipHeight,
+                minWidth: { xs: "auto", md: 120 }
               }}
             />
           </Tooltip>
-          <Tooltip title="Stok KOSONG">
+          <Tooltip title="Stok Tabung Kosong">
             <Chip
-              label={`KOSONG: ${snap.KOSONG}`}
+              label={`KOSONG: ${snap.KOSONG} tabung`}
               color="primary"
-              variant="outlined"
-              size="small"
+              variant="filled"
               sx={{ 
                 fontWeight: 700, 
-                fontSize: { xs: "0.75rem", sm: "0.875rem" },
-                height: MOBILE_CONSTANTS.dimensions.chipHeight
+                fontSize: { xs: "0.75rem", sm: "0.875rem", md: "0.9rem" },
+                height: RESPONSIVE_CONSTANTS.dimensions.chipHeight,
+                minWidth: { xs: "auto", md: 140 }
               }}
             />
           </Tooltip>
         </Stack>
       </Stack>
 
-      {/* Grid responsif */}
+      {/* Grid layout yang dioptimalkan untuk desktop */}
       <Grid
         container
-        spacing={MOBILE_CONSTANTS.spacing.grid}
+        spacing={3}
         sx={{
-          "& .MuiGrid-item": {
-            padding: { xs: "8px", md: "16px" },
-          },
+          '& .MuiGrid-item': {
+            display: 'flex',
+            flexDirection: 'column'
+          }
         }}
       >
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={12} md={6} lg={4}>
           <TambahKosong
             onSaved={(s) => {
               setSnap(s);
               onSaved?.(s);
             }}
+            isMobile={isMobile}
+            isTablet={isTablet}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={12} md={6} lg={4}>
           <RestokIsi
             onSaved={(s) => {
               setSnap(s);
               onSaved?.(s);
             }}
+            isMobile={isMobile}
+            isTablet={isTablet}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={4}>
+        <Grid item xs={12} md={6} lg={4}>
           <PenyesuaianStok
             onSaved={(s) => {
               setSnap(s);
               onSaved?.(s);
             }}
+            isMobile={isMobile}
+            isTablet={isTablet}
           />
         </Grid>
       </Grid>
@@ -193,8 +209,68 @@ export default function StokView({ stocks = {}, onSaved }) {
   );
 }
 
+/* ========== Komponen Kartu yang Dioptimalkan ========== */
+function StokCard({ title, subtitle, children, isMobile, isTablet }) {
+  return (
+    <Card 
+      sx={{ 
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        borderRadius: 2,
+        boxShadow: isMobile ? 1 : 3,
+        transition: "all 0.3s ease",
+        '&:hover': {
+          boxShadow: isMobile ? 2 : 6,
+          transform: isMobile ? 'none' : 'translateY(-2px)'
+        },
+        minHeight: isMobile ? 400 : 450
+      }}
+    >
+      <CardHeader
+        title={
+          <Typography 
+            variant="h6" 
+            fontWeight={600} 
+            sx={{ 
+              fontSize: isMobile ? "1.1rem" : "1.25rem",
+              color: "primary.dark"
+            }}
+          >
+            {title}
+          </Typography>
+        }
+        subheader={
+          <Typography 
+            variant="body2" 
+            color="text.secondary"
+            sx={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}
+          >
+            {subtitle}
+          </Typography>
+        }
+        sx={{
+          pb: 2,
+          borderBottom: 1,
+          borderColor: "divider",
+          padding: isMobile ? "16px 16px 12px" : "20px 24px 16px",
+          backgroundColor: "background.paper"
+        }}
+      />
+      <CardContent sx={{ 
+        flex: 1, 
+        padding: isMobile ? "16px" : "24px",
+        display: "flex",
+        flexDirection: "column"
+      }}>
+        {children}
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ========== Tambah Stok KOSONG ========== */
-function TambahKosong({ onSaved }) {
+function TambahKosong({ onSaved, isMobile, isTablet }) {
   const toast = useToast();
   const [form, setForm] = useState({ qty: "", date: todayStr(), note: "" });
   const [loading, setLoading] = useState(false);
@@ -203,7 +279,7 @@ function TambahKosong({ onSaved }) {
   const submit = async (e) => {
     e.preventDefault();
     const qtyNum = Number(form.qty) || 0;
-    if (qtyNum <= 0) return setErr("Jumlah harus > 0");
+    if (qtyNum <= 0) return setErr("Jumlah harus lebih dari 0");
 
     try {
       setErr("");
@@ -213,11 +289,11 @@ function TambahKosong({ onSaved }) {
         date: form.date,
         note: form.note,
       });
-      toast?.show?.({ type: "success", message: `Stok KOSONG +${qtyNum}` });
+      toast?.show?.({ type: "success", message: `Stok KOSONG berhasil ditambah +${qtyNum}` });
       setForm({ qty: "", date: todayStr(), note: "" });
       onSaved?.(snap);
     } catch (e2) {
-      const msg = e2.message || "Gagal tambah KOSONG";
+      const msg = e2.message || "Gagal menambah stok KOSONG";
       setErr(msg);
       toast?.show?.({ type: "error", message: msg });
     } finally {
@@ -225,107 +301,105 @@ function TambahKosong({ onSaved }) {
     }
   };
 
+  const fieldSx = {
+    mt: 1,
+    "& .MuiOutlinedInput-root": {
+      borderRadius: 1,
+      minHeight: isMobile ? 48 : 56,
+    },
+    "& input": {
+      paddingTop: isMobile ? 1 : 1.25,
+      paddingBottom: isMobile ? 1 : 1.25,
+      fontSize: isMobile ? "16px" : "inherit",
+    },
+    "& label": {
+      fontSize: isMobile ? "0.9rem" : "1rem",
+    }
+  };
+
   return (
-    <Card sx={CARD_SX}>
-      <CardHeader
-        title={
-          <Typography variant="h6" fontWeight={600} sx={{ 
-            fontSize: MOBILE_CONSTANTS.typography.h6,
-            lineHeight: 1.2
-          }}>
-            Tambah Stok Kosong
-          </Typography>
-        }
-        sx={{
-          pb: { xs: 1.5, md: 2 },
-          borderBottom: 1,
-          borderColor: "divider",
-          padding: { xs: "16px", sm: "20px", md: "24px" },
-          "& .MuiCardHeader-content": { overflow: "hidden" },
-        }}
-      />
-      <CardContent>
-        {err && (
-          <Alert
-            severity="error"
-            sx={{
-              mb: 2,
-              fontSize: { xs: "0.8rem", md: "0.875rem" },
-              py: { xs: 1, md: 1.5 },
-              "& .MuiAlert-message": { 
-                overflow: "hidden",
-                padding: { xs: "4px 0", md: "0" } 
-              },
+    <StokCard 
+      title="Tambah Stok Kosong" 
+      subtitle="Tambahkan tabung kosong ke inventory"
+      isMobile={isMobile}
+      isTablet={isTablet}
+    >
+      {err && (
+        <Alert
+          severity="error"
+          sx={{
+            mb: 2,
+            fontSize: isMobile ? "0.8rem" : "0.875rem",
+            '& .MuiAlert-message': { overflow: "hidden" },
+          }}
+          onClose={() => setErr("")}
+        >
+          {err}
+        </Alert>
+      )}
+
+      <Box component="form" onSubmit={submit} sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <Stack spacing={isMobile ? 2 : 2.5} sx={{ flex: 1 }}>
+          <TextField
+            {...FIELD_PROPS}
+            sx={fieldSx}
+            label="Jumlah Tabung"
+            type="number"
+            inputProps={{ 
+              min: 1, 
+              inputMode: "numeric", 
+              pattern: "[0-9]*",
             }}
-            onClose={() => setErr("")}
-          >
-            {err}
-          </Alert>
-        )}
+            value={form.qty}
+            onChange={(e) => setForm({ ...form, qty: e.target.value })}
+            disabled={loading}
+            placeholder="Contoh: 10"
+          />
 
-        <Box component="form" onSubmit={submit}>
-          <Stack spacing={MOBILE_CONSTANTS.spacing.stack}>
-            <TextField
-              {...FIELD_PROPS}
-              sx={FIELD_SX_MOBILE}
-              label="Jumlah"
-              type="number"
-              inputProps={{ 
-                min: 1, 
-                inputMode: "numeric", 
-                pattern: "[0-9]*",
-                placeholder: "0"
-              }}
-              value={form.qty}
-              onChange={(e) => setForm({ ...form, qty: e.target.value })}
-              disabled={loading}
-              placeholder="Masukkan jumlah tabung"
-            />
+          <TextField
+            {...FIELD_PROPS}
+            sx={fieldSx}
+            label="Tanggal Transaksi"
+            type="date"
+            value={form.date}
+            onChange={(e) => setForm({ ...form, date: e.target.value })}
+            inputProps={{ 
+              min: MIN_DATE, 
+              max: maxAllowedDate(),
+            }}
+            disabled={loading}
+            InputLabelProps={{ shrink: true }}
+          />
 
-            <TextField
-              {...FIELD_PROPS}
-              sx={FIELD_SX_MOBILE}
-              label="Tanggal"
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
-              inputProps={{ 
-                min: MIN_DATE, 
-                max: maxAllowedDate(), 
-                placeholder: "DD-MM-YYYY" 
-              }}
-              disabled={loading}
-              InputLabelProps={{ shrink: true }}
-            />
+          <TextField
+            {...FIELD_PROPS}
+            sx={fieldSx}
+            label="Catatan (opsional)"
+            multiline
+            minRows={isMobile ? 2 : 3}
+            value={form.note}
+            onChange={(e) => setForm({ ...form, note: e.target.value })}
+            disabled={loading}
+            placeholder="Misal: titip pelanggan, pembelian baru, dll."
+          />
 
-            <TextField
-              {...FIELD_PROPS}
-              sx={FIELD_SX_MOBILE}
-              label="Catatan (opsional)"
-              multiline
-              minRows={2}
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-              disabled={loading}
-              placeholder="mis: titip pelanggan"
-            />
-
+          <Box sx={{ mt: "auto", pt: 2 }}>
             <Stack
-              direction={{ xs: "column-reverse", sm: "row" }}
-              spacing={1.5}
+              direction={isMobile ? "column-reverse" : "row"}
+              spacing={isMobile ? 1.5 : 2}
               justifyContent="flex-end"
-              sx={{ width: "100%", mt: 1 }}
             >
               <Button
                 variant="outlined"
                 type="button"
                 onClick={() => setForm({ qty: "", date: todayStr(), note: "" })}
                 disabled={loading}
+                size={isMobile ? "medium" : "large"}
                 sx={{ 
                   textTransform: "none", 
-                  minWidth: { xs: "100%", sm: 100 },
-                  minHeight: MOBILE_CONSTANTS.dimensions.buttonHeight,
-                  py: { xs: 1, sm: 0.5 }
+                  minWidth: isMobile ? "100%" : 120,
+                  minHeight: isMobile ? 44 : 48,
+                  fontWeight: 600
                 }}
               >
                 Reset
@@ -334,26 +408,27 @@ function TambahKosong({ onSaved }) {
                 variant="contained"
                 type="submit"
                 disabled={loading}
-                startIcon={loading ? <CircularProgress size={16} /> : null}
+                startIcon={loading ? <CircularProgress size={20} /> : null}
+                size={isMobile ? "medium" : "large"}
                 sx={{ 
                   textTransform: "none", 
-                  minWidth: { xs: "100%", sm: 100 },
-                  minHeight: MOBILE_CONSTANTS.dimensions.buttonHeight,
-                  py: { xs: 1, sm: 0.5 }
+                  minWidth: isMobile ? "100%" : 120,
+                  minHeight: isMobile ? 44 : 48,
+                  fontWeight: 600
                 }}
               >
-                {loading ? "Menyimpan…" : "Simpan"}
+                {loading ? "Menyimpan..." : "Simpan"}
               </Button>
             </Stack>
-          </Stack>
-        </Box>
-      </CardContent>
-    </Card>
+          </Box>
+        </Stack>
+      </Box>
+    </StokCard>
   );
 }
 
 /* ========== Restok ISI (Tukar KOSONG) ========== */
-function RestokIsi({ onSaved }) {
+function RestokIsi({ onSaved, isMobile, isTablet }) {
   const toast = useToast();
   const [form, setForm] = useState({ qty: "", date: todayStr(), note: "" });
   const [loading, setLoading] = useState(false);
@@ -362,7 +437,7 @@ function RestokIsi({ onSaved }) {
   const submit = async (e) => {
     e.preventDefault();
     const qtyNum = Number(form.qty) || 0;
-    if (qtyNum <= 0) return setErr("Jumlah harus > 0");
+    if (qtyNum <= 0) return setErr("Jumlah harus lebih dari 0");
 
     try {
       setErr("");
@@ -374,7 +449,7 @@ function RestokIsi({ onSaved }) {
       });
       toast?.show?.({
         type: "success",
-        message: `Stok ISI +${qtyNum} (tukar kosong)`,
+        message: `Stok ISI berhasil ditambah +${qtyNum} (tukar kosong)`,
       });
       setForm({ qty: "", date: todayStr(), note: "" });
       onSaved?.(snap);
@@ -387,107 +462,105 @@ function RestokIsi({ onSaved }) {
     }
   };
 
+  const fieldSx = {
+    mt: 1,
+    "& .MuiOutlinedInput-root": {
+      borderRadius: 1,
+      minHeight: isMobile ? 48 : 56,
+    },
+    "& input": {
+      paddingTop: isMobile ? 1 : 1.25,
+      paddingBottom: isMobile ? 1 : 1.25,
+      fontSize: isMobile ? "16px" : "inherit",
+    },
+    "& label": {
+      fontSize: isMobile ? "0.9rem" : "1rem",
+    }
+  };
+
   return (
-    <Card sx={CARD_SX}>
-      <CardHeader
-        title={
-          <Typography variant="h6" fontWeight={600} sx={{ 
-            fontSize: MOBILE_CONSTANTS.typography.h6,
-            lineHeight: 1.2
-          }}>
-            Restok Isi (Tukar Kosong)
-          </Typography>
-        }
-        sx={{
-          pb: { xs: 1.5, md: 2 },
-          borderBottom: 1,
-          borderColor: "divider",
-          padding: { xs: "16px", sm: "20px", md: "24px" },
-          "& .MuiCardHeader-content": { overflow: "hidden" },
-        }}
-      />
-      <CardContent>
-        {err && (
-          <Alert
-            severity="error"
-            sx={{
-              mb: 2,
-              fontSize: { xs: "0.8rem", md: "0.875rem" },
-              py: { xs: 1, md: 1.5 },
-              "& .MuiAlert-message": { 
-                overflow: "hidden",
-                padding: { xs: "4px 0", md: "0" } 
-              },
+    <StokCard 
+      title="Restok Isi (Tukar Kosong)" 
+      subtitle="Tukar tabung kosong dengan tabung isi"
+      isMobile={isMobile}
+      isTablet={isTablet}
+    >
+      {err && (
+        <Alert
+          severity="error"
+          sx={{
+            mb: 2,
+            fontSize: isMobile ? "0.8rem" : "0.875rem",
+            '& .MuiAlert-message': { overflow: "hidden" },
+          }}
+          onClose={() => setErr("")}
+        >
+          {err}
+        </Alert>
+      )}
+
+      <Box component="form" onSubmit={submit} sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <Stack spacing={isMobile ? 2 : 2.5} sx={{ flex: 1 }}>
+          <TextField
+            {...FIELD_PROPS}
+            sx={fieldSx}
+            label="Jumlah Tabung"
+            type="number"
+            inputProps={{ 
+              min: 1, 
+              inputMode: "numeric", 
+              pattern: "[0-9]*",
             }}
-            onClose={() => setErr("")}
-          >
-            {err}
-          </Alert>
-        )}
+            value={form.qty}
+            onChange={(e) => setForm({ ...form, qty: e.target.value })}
+            disabled={loading}
+            placeholder="Contoh: 10"
+          />
 
-        <Box component="form" onSubmit={submit}>
-          <Stack spacing={MOBILE_CONSTANTS.spacing.stack}>
-            <TextField
-              {...FIELD_PROPS}
-              sx={FIELD_SX_MOBILE}
-              label="Jumlah"
-              type="number"
-              inputProps={{ 
-                min: 1, 
-                inputMode: "numeric", 
-                pattern: "[0-9]*",
-                placeholder: "0"
-              }}
-              value={form.qty}
-              onChange={(e) => setForm({ ...form, qty: e.target.value })}
-              disabled={loading}
-              placeholder="Masukkan jumlah tabung"
-            />
+          <TextField
+            {...FIELD_PROPS}
+            sx={fieldSx}
+            label="Tanggal Transaksi"
+            type="date"
+            value={form.date}
+            onChange={(e) => setForm({ ...form, date: e.target.value })}
+            inputProps={{ 
+              min: MIN_DATE, 
+              max: maxAllowedDate(),
+            }}
+            disabled={loading}
+            InputLabelProps={{ shrink: true }}
+          />
 
-            <TextField
-              {...FIELD_PROPS}
-              sx={FIELD_SX_MOBILE}
-              label="Tanggal"
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
-              inputProps={{ 
-                min: MIN_DATE, 
-                max: maxAllowedDate(), 
-                placeholder: "DD-MM-YYYY" 
-              }}
-              disabled={loading}
-              InputLabelProps={{ shrink: true }}
-            />
+          <TextField
+            {...FIELD_PROPS}
+            sx={fieldSx}
+            label="Catatan (opsional)"
+            multiline
+            minRows={isMobile ? 2 : 3}
+            value={form.note}
+            onChange={(e) => setForm({ ...form, note: e.target.value })}
+            disabled={loading}
+            placeholder="Misal: tukar kosong di agen, pengisian rutin, dll."
+          />
 
-            <TextField
-              {...FIELD_PROPS}
-              sx={FIELD_SX_MOBILE}
-              label="Catatan (opsional)"
-              multiline
-              minRows={2}
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-              disabled={loading}
-              placeholder="mis: tukar kosong di agen"
-            />
-
+          <Box sx={{ mt: "auto", pt: 2 }}>
             <Stack
-              direction={{ xs: "column-reverse", sm: "row" }}
-              spacing={1.5}
+              direction={isMobile ? "column-reverse" : "row"}
+              spacing={isMobile ? 1.5 : 2}
               justifyContent="flex-end"
-              sx={{ width: "100%", mt: 1 }}
             >
               <Button
                 variant="outlined"
                 type="button"
                 onClick={() => setForm({ qty: "", date: todayStr(), note: "" })}
                 disabled={loading}
+                size={isMobile ? "medium" : "large"}
                 sx={{ 
                   textTransform: "none", 
-                  minWidth: { xs: "100%", sm: 100 },
-                  minHeight: MOBILE_CONSTANTS.dimensions.buttonHeight,
-                  py: { xs: 1, sm: 0.5 }
+                  minWidth: isMobile ? "100%" : 120,
+                  minHeight: isMobile ? 44 : 48,
+                  fontWeight: 600
                 }}
               >
                 Reset
@@ -496,26 +569,27 @@ function RestokIsi({ onSaved }) {
                 variant="contained"
                 type="submit"
                 disabled={loading}
-                startIcon={loading ? <CircularProgress size={16} /> : null}
+                startIcon={loading ? <CircularProgress size={20} /> : null}
+                size={isMobile ? "medium" : "large"}
                 sx={{ 
                   textTransform: "none", 
-                  minWidth: { xs: "100%", sm: 100 },
-                  minHeight: MOBILE_CONSTANTS.dimensions.buttonHeight,
-                  py: { xs: 1, sm: 0.5 }
+                  minWidth: isMobile ? "100%" : 120,
+                  minHeight: isMobile ? 44 : 48,
+                  fontWeight: 600
                 }}
               >
-                {loading ? "Menyimpan…" : "Simpan"}
+                {loading ? "Menyimpan..." : "Simpan"}
               </Button>
             </Stack>
-          </Stack>
-        </Box>
-      </CardContent>
-    </Card>
+          </Box>
+        </Stack>
+      </Box>
+    </StokCard>
   );
 }
 
 /* ========== Penyesuaian Stok (Koreksi) ========== */
-function PenyesuaianStok({ onSaved }) {
+function PenyesuaianStok({ onSaved, isMobile, isTablet }) {
   const toast = useToast();
   const [form, setForm] = useState({
     code: "KOSONG",
@@ -530,7 +604,7 @@ function PenyesuaianStok({ onSaved }) {
   const submit = async (e) => {
     e.preventDefault();
     const qtyNum = Number(form.qty) || 0;
-    if (qtyNum <= 0) return setErr("Jumlah harus > 0");
+    if (qtyNum <= 0) return setErr("Jumlah harus lebih dari 0");
     if (!form.reason.trim()) return setErr("Alasan wajib diisi");
     if (form.code === "ISI" && form.dir === "IN")
       return setErr("Tidak boleh menambah stok ISI via penyesuaian. Gunakan 'Restok Isi'.");
@@ -548,12 +622,12 @@ function PenyesuaianStok({ onSaved }) {
       });
       toast?.show?.({
         type: "success",
-        message: `Penyesuaian ${form.code} ${delta > 0 ? `+${qtyNum}` : `-${qtyNum}`} tersimpan.`,
+        message: `Penyesuaian stok ${form.code} ${delta > 0 ? `+${qtyNum}` : `-${qtyNum}`} berhasil disimpan`,
       });
       setForm({ code: "KOSONG", dir: "OUT", qty: "", date: todayStr(), reason: "" });
       onSaved?.(snap);
     } catch (e2) {
-      const msg = e2.message || "Gagal penyesuaian stok";
+      const msg = e2.message || "Gagal melakukan penyesuaian stok";
       setErr(msg);
       toast?.show?.({ type: "error", message: msg });
     } finally {
@@ -561,160 +635,137 @@ function PenyesuaianStok({ onSaved }) {
     }
   };
 
+  const fieldSx = {
+    mt: 1,
+    "& .MuiOutlinedInput-root": {
+      borderRadius: 1,
+      minHeight: isMobile ? 48 : 56,
+    },
+    "& input": {
+      paddingTop: isMobile ? 1 : 1.25,
+      paddingBottom: isMobile ? 1 : 1.25,
+      fontSize: isMobile ? "16px" : "inherit",
+    },
+    "& label": {
+      fontSize: isMobile ? "0.9rem" : "1rem",
+    },
+    "& .MuiSelect-select": {
+      paddingTop: isMobile ? 1 : 1.25,
+      paddingBottom: isMobile ? 1 : 1.25,
+    }
+  };
+
   return (
-    <Card sx={CARD_SX}>
-      <CardHeader
-        title={
-          <Typography variant="h6" fontWeight={600} sx={{ 
-            fontSize: MOBILE_CONSTANTS.typography.h6,
-            lineHeight: 1.2
-          }}>
-            Penyesuaian Stok (Koreksi)
-          </Typography>
-        }
-        sx={{
-          pb: { xs: 1.5, md: 2 },
-          borderBottom: 1,
-          borderColor: "divider",
-          padding: { xs: "16px", sm: "20px", md: "24px" },
-          "& .MuiCardHeader-content": { overflow: "hidden" },
-        }}
-      />
-      <CardContent>
-        {err && (
-          <Alert
-            severity="error"
-            sx={{
-              mb: 2,
-              fontSize: { xs: "0.8rem", md: "0.875rem" },
-              py: { xs: 1, md: 1.5 },
-              "& .MuiAlert-message": { 
-                overflow: "hidden",
-                padding: { xs: "4px 0", md: "0" } 
-              },
+    <StokCard 
+      title="Penyesuaian Stok (Koreksi)" 
+      subtitle="Koreksi stok untuk penyesuaian inventory"
+      isMobile={isMobile}
+      isTablet={isTablet}
+    >
+      {err && (
+        <Alert
+          severity="error"
+          sx={{
+            mb: 2,
+            fontSize: isMobile ? "0.8rem" : "0.875rem",
+            '& .MuiAlert-message': { overflow: "hidden" },
+          }}
+          onClose={() => setErr("")}
+        >
+          {err}
+        </Alert>
+      )}
+
+      <Box component="form" onSubmit={submit} sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <Stack spacing={isMobile ? 2 : 2.5} sx={{ flex: 1 }}>
+          <FormControl {...FIELD_PROPS} sx={fieldSx}>
+            <InputLabel id="jenis-label">Jenis Stok</InputLabel>
+            <Select
+              labelId="jenis-label"
+              label="Jenis Stok"
+              value={form.code}
+              onChange={(e) => setForm({ ...form, code: e.target.value })}
+              disabled={loading}
+            >
+              <MenuItem value="ISI">ISI</MenuItem>
+              <MenuItem value="KOSONG">KOSONG</MenuItem>
+            </Select>
+          </FormControl>
+
+          <FormControl {...FIELD_PROPS} sx={fieldSx}>
+            <InputLabel id="arah-label">Arah Penyesuaian</InputLabel>
+            <Select
+              labelId="arah-label"
+              label="Arah Penyesuaian"
+              value={form.dir}
+              onChange={(e) => setForm({ ...form, dir: e.target.value })}
+              disabled={loading}
+            >
+              <MenuItem value="IN">Masuk (+)</MenuItem>
+              <MenuItem value="OUT">Keluar (−)</MenuItem>
+            </Select>
+          </FormControl>
+
+          <Typography 
+            variant="body2" 
+            color="text.secondary" 
+            sx={{ 
+              fontSize: isMobile ? "0.8rem" : "0.875rem",
+              fontStyle: "italic",
+              mt: -1
             }}
-            onClose={() => setErr("")}
           >
-            {err}
-          </Alert>
-        )}
+            *Tambah stok ISI tidak diperbolehkan di sini — gunakan menu "Restok Isi"
+          </Typography>
 
-        <Box component="form" onSubmit={submit}>
-          <Stack spacing={MOBILE_CONSTANTS.spacing.stack}>
-            <FormControl {...FIELD_PROPS} sx={FIELD_SX_MOBILE}>
-              <InputLabel 
-                id="jenis-label"
-                sx={{ fontSize: { xs: "0.9rem", md: "1rem" } }}
-              >
-                Jenis Stok
-              </InputLabel>
-              <Select
-                labelId="jenis-label"
-                label="Jenis Stok"
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
-                disabled={loading}
-                MenuProps={{
-                  PaperProps: {
-                    sx: {
-                      maxHeight: { xs: 200, md: 300 },
-                      "& .MuiMenuItem-root": {
-                        fontSize: { xs: "0.9rem", md: "1rem" },
-                        minHeight: { xs: 44, md: 48 }
-                      }
-                    }
-                  }
-                }}
-              >
-                <MenuItem value="ISI">ISI</MenuItem>
-                <MenuItem value="KOSONG">KOSONG</MenuItem>
-              </Select>
-            </FormControl>
+          <TextField
+            {...FIELD_PROPS}
+            sx={fieldSx}
+            label="Jumlah Penyesuaian"
+            type="number"
+            inputProps={{ 
+              min: 1, 
+              inputMode: "numeric", 
+              pattern: "[0-9]*",
+            }}
+            value={form.qty}
+            onChange={(e) => setForm({ ...form, qty: e.target.value })}
+            disabled={loading}
+            placeholder="Contoh: 2"
+          />
 
-            <FormControl {...FIELD_PROPS} sx={FIELD_SX_MOBILE}>
-              <InputLabel 
-                id="arah-label"
-                sx={{ fontSize: { xs: "0.9rem", md: "1rem" } }}
-              >
-                Arah Penyesuaian
-              </InputLabel>
-              <Select
-                labelId="arah-label"
-                label="Arah Penyesuaian"
-                value={form.dir}
-                onChange={(e) => setForm({ ...form, dir: e.target.value })}
-                disabled={loading}
-                MenuProps={{
-                  PaperProps: {
-                    sx: {
-                      maxHeight: { xs: 200, md: 300 },
-                      "& .MuiMenuItem-root": {
-                        fontSize: { xs: "0.9rem", md: "1rem" },
-                        minHeight: { xs: 44, md: 48 }
-                      }
-                    }
-                  }
-                }}
-              >
-                <MenuItem value="IN">Masuk (+)</MenuItem>
-                <MenuItem value="OUT">Keluar (−)</MenuItem>
-              </Select>
-            </FormControl>
+          <TextField
+            {...FIELD_PROPS}
+            sx={fieldSx}
+            label="Tanggal Penyesuaian"
+            type="date"
+            value={form.date}
+            onChange={(e) => setForm({ ...form, date: e.target.value })}
+            inputProps={{ 
+              min: MIN_DATE, 
+              max: maxAllowedDate(),
+            }}
+            disabled={loading}
+            InputLabelProps={{ shrink: true }}
+          />
 
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: "0.8rem", md: "0.875rem" } }}>
-              *Tambah ISI tidak diperbolehkan di sini — gunakan Restok Isi.
-            </Typography>
+          <TextField
+            {...FIELD_PROPS}
+            sx={fieldSx}
+            label="Alasan Penyesuaian (wajib)"
+            multiline
+            minRows={isMobile ? 2 : 3}
+            value={form.reason}
+            onChange={(e) => setForm({ ...form, reason: e.target.value })}
+            disabled={loading}
+            placeholder='Contoh: "Koreksi stok - kelebihan input", "Stok hilang/rusak", dll.'
+          />
 
-            <TextField
-              {...FIELD_PROPS}
-              sx={FIELD_SX_MOBILE}
-              label="Jumlah"
-              type="number"
-              inputProps={{ 
-                min: 1, 
-                inputMode: "numeric", 
-                pattern: "[0-9]*",
-                placeholder: "0"
-              }}
-              value={form.qty}
-              onChange={(e) => setForm({ ...form, qty: e.target.value })}
-              disabled={loading}
-              placeholder="Masukkan jumlah penyesuaian"
-            />
-
-            <TextField
-              {...FIELD_PROPS}
-              sx={FIELD_SX_MOBILE}
-              label="Tanggal"
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
-              inputProps={{ 
-                min: MIN_DATE, 
-                max: maxAllowedDate(), 
-                placeholder: "DD-MM-YYYY" 
-              }}
-              disabled={loading}
-              InputLabelProps={{ shrink: true }}
-            />
-
-            <TextField
-              {...FIELD_PROPS}
-              sx={FIELD_SX_MOBILE}
-              label="Alasan (wajib)"
-              multiline
-              minRows={2}
-              value={form.reason}
-              onChange={(e) => setForm({ ...form, reason: e.target.value })}
-              disabled={loading}
-              placeholder='mis: "Koreksi stok - kelebihan input" / "Stok hilang/rusak"'
-            />
-
+          <Box sx={{ mt: "auto", pt: 2 }}>
             <Stack
-              direction={{ xs: "column-reverse", sm: "row" }}
-              spacing={1.5}
+              direction={isMobile ? "column-reverse" : "row"}
+              spacing={isMobile ? 1.5 : 2}
               justifyContent="flex-end"
-              sx={{ width: "100%", mt: 1 }}
             >
               <Button
                 variant="outlined"
@@ -729,11 +780,12 @@ function PenyesuaianStok({ onSaved }) {
                   })
                 }
                 disabled={loading}
+                size={isMobile ? "medium" : "large"}
                 sx={{ 
                   textTransform: "none", 
-                  minWidth: { xs: "100%", sm: 100 },
-                  minHeight: MOBILE_CONSTANTS.dimensions.buttonHeight,
-                  py: { xs: 1, sm: 0.5 }
+                  minWidth: isMobile ? "100%" : 120,
+                  minHeight: isMobile ? 44 : 48,
+                  fontWeight: 600
                 }}
               >
                 Reset
@@ -742,20 +794,21 @@ function PenyesuaianStok({ onSaved }) {
                 variant="contained"
                 type="submit"
                 disabled={loading}
-                startIcon={loading ? <CircularProgress size={16} /> : null}
+                startIcon={loading ? <CircularProgress size={20} /> : null}
+                size={isMobile ? "medium" : "large"}
                 sx={{ 
                   textTransform: "none", 
-                  minWidth: { xs: "100%", sm: 100 },
-                  minHeight: MOBILE_CONSTANTS.dimensions.buttonHeight,
-                  py: { xs: 1, sm: 0.5 }
+                  minWidth: isMobile ? "100%" : 120,
+                  minHeight: isMobile ? 44 : 48,
+                  fontWeight: 600
                 }}
               >
-                {loading ? "Menyimpan…" : "Simpan"}
+                {loading ? "Menyimpan..." : "Simpan"}
               </Button>
             </Stack>
-          </Stack>
-        </Box>
-      </CardContent>
-    </Card>
+          </Box>
+        </Stack>
+      </Box>
+    </StokCard>
   );
 }
