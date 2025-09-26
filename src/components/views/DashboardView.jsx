@@ -1,6 +1,4 @@
-// src/views/Dashboard/DashboardView.jsx
 import React, { useEffect, useRef, useState } from "react";
-import { COLORS } from "../../utils/constants.js";
 import { fmtIDR, todayStr } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
 import { supabase } from "../../lib/supabase.js";
@@ -30,6 +28,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Divider,
 } from "@mui/material";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
@@ -38,25 +37,10 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 
 const LOW_STOCK_THRESHOLD = 5;
 
-/* ====== Helpers tanggal & label ====== */
+/* ====== Helpers untuk rolling 7 hari ====== */
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
 const isoDate = (d) => startOfDay(d).toISOString().slice(0,10);
-const fmtPct = (n) => (n === null || n === undefined || Number.isNaN(Number(n))) ? "–" : `${(Number(n)).toFixed(1)}%`;
-const fmtLocalYMD = (d) => {
-  const x = new Date(d);
-  const y = x.getFullYear();
-  const m = String(x.getMonth() + 1).padStart(2, "0");
-  const dd = String(x.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-};
-const getThisMonthRange = () => {
-  const now = new Date();
-  const s = new Date(now.getFullYear(), now.getMonth(), 1);
-  s.setHours(0, 0, 0, 0);
-  const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  e.setHours(23, 59, 59, 999);
-  return { from: s.toISOString(), to: e.toISOString(), fromLabel: fmtLocalYMD(s), toLabel: fmtLocalYMD(e) };
-};
+const fmtPct = (n) => (n === null || n === undefined) ? "–" : `${(Number(n)).toFixed(1)}%`;
 
 function buildLast7DaysSeries(rows = []) {
   const buckets = new Map();
@@ -86,24 +70,24 @@ function StatTile({ title, value, subtitle, color = "primary", icon }) {
       <CardContent sx={{ flex: 1, display: "flex", alignItems: "center", py: 2 }}>
         <Stack direction="row" spacing={2} alignItems="center" sx={{ width: "100%" }}>
           <Box
-            sx={(theme) => ({
+            sx={(t) => ({
               width: 42,
               height: 42,
               borderRadius: 2,
               display: "grid",
               placeItems: "center",
-              bgcolor: theme.palette[color].light + "20", // 20% opacity
-              color: `${color}.main`,
+              bgcolor: `${t.palette[color]?.light}20`, // 20% opacity
+              color: t.palette[color]?.main,
               flexShrink: 0,
             })}
           >
             {icon}
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="subtitle1" color="text.secondary" gutterBottom>
+            <Typography variant="subtitle1" color="text.secondary">
               {title}
             </Typography>
-            <Typography variant="h5" fontWeight={800} noWrap>
+            <Typography variant="h4" fontWeight={600} noWrap>
               {value}
             </Typography>
             <Typography
@@ -169,8 +153,8 @@ function MiniBarChartLabeled({ data = [] }) {
         {data.map((d, i) => {
           const h = Math.max(8, Math.round((Number(d.qty || 0) / max) * 100));
           return (
-            <Stack key={i} alignItems="center" spacing={0.75}>
-              <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.1 }}>
+            <Stack key={i} alignItems="center" spacing={0.5}>
+              <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.1 }}>
                 {d.qty}
               </Typography>
               <Box
@@ -185,19 +169,33 @@ function MiniBarChartLabeled({ data = [] }) {
                   "&:hover": { opacity: 1, transform: "translateY(-2px)" },
                 }}
               />
-              <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", lineHeight: 1.1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", lineHeight: 1.1 }}>
                 {labelOf(d.date)}
               </Typography>
             </Stack>
           );
         })}
         {!data.length && (
-          <Typography variant="subtitle1" color="text.secondary" sx={{ gridColumn: "1 / -1", textAlign: "center" }}>
+          <Typography variant="body2" color="text.secondary" sx={{ gridColumn: "1 / -1", textAlign: "center" }}>
             Belum ada data penjualan
           </Typography>
         )}
       </Box>
     </Box>
+  );
+}
+
+/* ====== Empty state row helper ====== */
+function EmptyStateRow({ colSpan = 5, message = "Tidak ada data", hint }) {
+  return (
+    <TableRow>
+      <TableCell colSpan={colSpan} align="center" sx={{ py: 4 }}>
+        <Box sx={{ color: "text.secondary" }}>
+          <Typography variant="body2" gutterBottom>📊 {message}</Typography>
+          {hint ? <Typography variant="caption">{hint}</Typography> : null}
+        </Box>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -228,11 +226,11 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
   });
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
-  // --- STATE MODAL TOP CUSTOMER ---
-  const [custModal, setCustModal] = useState({ open: false, name: "", from: "", to: "", fromLabel: "", toLabel: "" });
-  const [custRows, setCustRows] = useState([]);
-  const [custTotalQty, setCustTotalQty] = useState(0);
-  const [custLoading, setCustLoading] = useState(false);
+  // Customer history modal
+  const [histOpen, setHistOpen] = useState(false);
+  const [histTitle, setHistTitle] = useState("");
+  const [histRows, setHistRows] = useState([]);
+  const [histTotalQty, setHistTotalQty] = useState(0);
 
   const busyRef = useRef(false);
   const idleTimer = useRef(null);
@@ -353,9 +351,10 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         from.setHours(0,0,0,0);
         const to = new Date();
 
-        const rows = await (DataService.loadSalesByDateRange
-          ? DataService.loadSalesByDateRange(from.toISOString(), to.toISOString())
-          : DataService.loadSales(800)).catch(() => []);
+        const rows = await DataService.loadSalesByDateRange?.(
+          from.toISOString(),
+          to.toISOString()
+        ).catch(() => []);
 
         if (!alive) return;
         const last7 = buildLast7DaysSeries(rows || []);
@@ -381,12 +380,11 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         if (!alive) return;
 
         const wk = comps?.weekly || null;
-        const mo = comps?.monthly || null;
-        const yy = comps?.yoy || null;
-
         const weeklyGrowthPct = wk && wk.last_week_qty
           ? ((Number(wk.this_week_qty || 0) - Number(wk.last_week_qty || 0)) / Number(wk.last_week_qty)) * 100
           : null;
+
+        const mo = comps?.monthly || null;
         const monthlyGrowthQty = mo && mo.last_month_qty
           ? ((Number(mo.this_month_qty || 0) - Number(mo.last_month_qty || 0)) / Number(mo.last_month_qty)) * 100
           : null;
@@ -397,6 +395,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
           ? ((Number(mo.this_month_laba || 0) - Number(mo.last_month_laba || 0)) / Number(mo.last_month_laba)) * 100
           : null;
 
+        const yy = comps?.yoy || null;
         const yoyGrowthQty = yy && yy.last_year_qty
           ? ((Number(yy.this_year_qty || 0) - Number(yy.last_year_qty || 0)) / Number(yy.last_year_qty)) * 100
           : null;
@@ -433,59 +432,39 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     return () => { alive = false; };
   }, []); // load sekali saat mount
 
-  // ---- Modal handlers ----
-  const openCustomerHistory = async (name) => {
-    const { from, to, fromLabel, toLabel } = getThisMonthRange();
-    setCustModal({ open: true, name, from, to, fromLabel, toLabel });
-    setCustLoading(true);
-    try {
-      let rows = [];
-      if (DataService.getCustomerSalesByRange) {
-        rows = await DataService.getCustomerSalesByRange({ from, to, customer: name });
-      } else if (DataService.getSalesByDateRange) {
-        const all = await DataService.getSalesByDateRange({ from, to, onlyPaid: false });
-        rows = (all || []).filter(
-          (r) => String(r.customer || "").toUpperCase() === String(name || "").toUpperCase()
-        );
-      } else {
-        const all = await DataService.loadSales(800);
-        rows = (all || []).filter((r) => {
-          const t = new Date(r.created_at);
-          return (
-            t >= new Date(from) &&
-            t <= new Date(to) &&
-            String(r.customer || "").toUpperCase() === String(name || "").toUpperCase()
-          );
-        });
-      }
-      setCustRows(rows);
-      setCustTotalQty(rows.reduce((a, r) => a + Number(r.qty || 0), 0));
-    } catch (e) {
-      console.warn("[cust history]", e?.message || e);
-      setCustRows([]);
-      setCustTotalQty(0);
-    } finally {
-      setCustLoading(false);
-    }
-  };
-  const closeCustomerHistory = () => setCustModal((s) => ({ ...s, open: false }));
-
   // ---- derived
   const isi = Number(stocks?.ISI || 0);
   const kosong = Number(stocks?.KOSONG || 0);
   const total = isi + kosong;
+
+  // ===== Customer history modal ops
+  const openCustomerHistory = async (name) => {
+    try {
+      const r = DataService.getPeriodRange?.("this_month");
+      const from = r?.from;
+      const to = r?.to;
+      const { rows, totalQty } = await DataService.getCustomerHistory?.({ customer: name, from, to });
+      setHistTitle(name);
+      setHistRows(rows || []);
+      setHistTotalQty(Number(totalQty || 0));
+      setHistOpen(true);
+    } catch (e) {
+      setHistTitle(name);
+      setHistRows([]);
+      setHistTotalQty(0);
+      setHistOpen(true);
+      console.warn("[history]", e?.message || e);
+    }
+  };
+  const closeCustomerHistory = () => setHistOpen(false);
 
   return (
     <Stack spacing={2}>
       {/* Header */}
       <Stack direction="row" alignItems="baseline" justifyContent="space-between" flexWrap="wrap" sx={{ gap: 2 }}>
         <Box>
-          <Typography variant="h4" fontWeight={600} gutterBottom>
-            Dashboard
-          </Typography>
-          <Typography variant="subtitle1" color="text.secondary">
-            Ringkasan stok & penjualan
-          </Typography>
+          <Typography variant="h4" fontWeight={600}>Dashboard</Typography>
+          <Typography variant="subtitle1" color="text.secondary">Ringkasan stok & penjualan</Typography>
         </Box>
         <Chip label={`Total Tabung: ${total}`} variant="outlined" color="default" sx={{ fontWeight: 700 }} />
       </Stack>
@@ -516,7 +495,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
           <StatTile
             title="Penjualan Hari Ini"
             value={loading ? <Skeleton variant="text" width={60} sx={{ fontSize: "2rem" }} /> : today.qty}
-            subtitle={loading ? <Skeleton variant="text" width={100} sx={{ fontSize: "1rem" }} /> : fmtIDR(today.money)}
+            subtitle={loading ? <Skeleton variant="text" width={100} /> : fmtIDR(today.money)}
             color="info"
             icon={<ShoppingCartIcon />}
           />
@@ -537,10 +516,11 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         <CardHeader
           title={<Typography variant="h6" fontWeight={600}>Kondisi Stok</Typography>}
           subheader="Perbandingan stok isi vs kosong"
-          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+          sx={{ pb: 2 }}
         />
-        <CardContent>
-          {loading ? <Skeleton variant="text" height={24} sx={{ fontSize: "1.25rem" }} /> : <StockProgress isi={isi} kosong={kosong} />}
+        <Divider />
+        <CardContent sx={{ pt: 2 }}>
+          {loading ? <Skeleton height={24} /> : <StockProgress isi={isi} kosong={kosong} />}
         </CardContent>
       </Card>
 
@@ -550,14 +530,15 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
           <Card>
             <CardHeader
               title={<Typography variant="h6" fontWeight={600}>Ringkasan Keuangan</Typography>}
-              sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+              sx={{ pb: 2 }}
             />
-            <CardContent>
+            <Divider />
+            <CardContent sx={{ pt: 2 }}>
               {loading ? (
                 <Stack spacing={2}>
-                  <Skeleton variant="text" height={24} sx={{ fontSize: "1.25rem" }} />
-                  <Skeleton variant="text" height={24} sx={{ fontSize: "1.25rem" }} />
-                  <Skeleton variant="text" height={24} sx={{ fontSize: "1.25rem" }} />
+                  <Skeleton height={24} />
+                  <Skeleton height={24} />
+                  <Skeleton height={24} />
                 </Stack>
               ) : (
                 <Stack spacing={2}>
@@ -573,35 +554,29 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         <Grid item xs={12} md={6} lg={7}>
           <Card>
             <CardHeader
-              title={<Typography variant="h6" fontWeight={600}>Total Terjual (riwayat)</Typography>}
-              sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+              title={<Typography variant="h6" fontWeight={600}>Total Terjual</Typography>}
+              subheader="Akumulasi data"
+              sx={{ pb: 2 }}
             />
-            <CardContent>
+            <Divider />
+            <CardContent sx={{ pt: 2 }}>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Box
-                  sx={(theme) => ({
+                  sx={{
                     width: 42,
                     height: 42,
                     borderRadius: 2,
                     display: "grid",
                     placeItems: "center",
-                    bgcolor: theme.palette.info.light + "20",
+                    bgcolor: (t) => `${t.palette.info.light}20`,
                     color: "info.main",
-                  })}
+                  }}
                 >
                   <TrendingUpIcon />
                 </Box>
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-                    Total Terjual (riwayat)
-                  </Typography>
-                  <Typography variant="h5" fontWeight={800}>
-                    {loading ? <Skeleton variant="text" width={80} sx={{ fontSize: "2rem" }} /> : sum.qty}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Akumulasi data
-                  </Typography>
-                </Box>
+                <Typography variant="h4" fontWeight={600}>
+                  {loading ? <Skeleton variant="text" width={80} sx={{ fontSize: "2rem" }} /> : sum.qty}
+                </Typography>
               </Stack>
             </CardContent>
           </Card>
@@ -612,10 +587,11 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       <Card>
         <CardHeader
           title={<Typography variant="h6" fontWeight={600}>Penjualan 7 Hari Terakhir</Typography>}
-          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+          sx={{ pb: 2 }}
         />
-        <CardContent>
-          {loading ? <Skeleton variant="text" height={120} sx={{ fontSize: "2rem" }} /> : <MiniBarChartLabeled data={series7} />}
+        <Divider />
+        <CardContent sx={{ pt: 2 }}>
+          {loading ? <Skeleton height={120} /> : <MiniBarChartLabeled data={series7} />}
         </CardContent>
       </Card>
 
@@ -623,14 +599,15 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       <Card>
         <CardHeader
           title={<Typography variant="h6" fontWeight={600}>Analitik Penjualan</Typography>}
-          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+          sx={{ pb: 2 }}
         />
-        <CardContent>
+        <Divider />
+        <CardContent sx={{ pt: 2 }}>
           {analyticsLoading ? (
             <Stack spacing={2}>
-              <Skeleton variant="text" height={28} sx={{ fontSize: "1.25rem" }} />
-              <Skeleton variant="text" height={28} sx={{ fontSize: "1.25rem" }} />
-              <Skeleton variant="text" height={28} sx={{ fontSize: "1.25rem" }} />
+              <Skeleton height={28} />
+              <Skeleton height={28} />
+              <Skeleton height={28} />
             </Stack>
           ) : (
             <Grid container spacing={2}>
@@ -646,31 +623,29 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                         <TableCell>Pelanggan</TableCell>
                         <TableCell align="right">Transaksi</TableCell>
                         <TableCell align="right">Total</TableCell>
+                        <TableCell align="right">Aksi</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {(analytics.topCustomers || []).map((c, i) => (
                         <TableRow key={i} hover>
-                          <TableCell sx={{ whiteSpace: "nowrap" }}>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>{c.customer_name}</TableCell>
+                          <TableCell align="right">{c.total_transaksi}</TableCell>
+                          <TableCell align="right">{fmtIDR(c.total_value)}</TableCell>
+                          <TableCell align="right">
                             <Button
                               size="small"
                               variant="text"
                               onClick={() => openCustomerHistory(c.customer_name)}
                               sx={{ textTransform: "none", fontWeight: 500, px: 0 }}
                             >
-                              {c.customer_name}
+                              Lihat riwayat
                             </Button>
                           </TableCell>
-                          <TableCell align="right">{c.total_transaksi}</TableCell>
-                          <TableCell align="right">{fmtIDR(c.total_value)}</TableCell>
                         </TableRow>
                       ))}
                       {!analytics.topCustomers?.length && (
-                        <TableRow>
-                          <TableCell colSpan={3} align="center" sx={{ color: "text.secondary" }}>
-                            Belum ada data
-                          </TableCell>
-                        </TableRow>
+                        <EmptyStateRow colSpan={4} message="Belum ada data" hint="Data akan muncul setelah ada transaksi pada bulan ini" />
                       )}
                     </TableBody>
                   </Table>
@@ -750,15 +725,24 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       <Card>
         <CardHeader
           title={<Typography variant="h6" fontWeight={600}>Transaksi Terbaru</Typography>}
-          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+          sx={{ pb: 2 }}
         />
-        <CardContent>
+        <Divider />
+        <CardContent sx={{ pt: 2 }}>
           {loading ? (
-            <Stack spacing={2}>
-              <Skeleton variant="text" height={36} sx={{ fontSize: "1.5rem" }} />
-              <Skeleton variant="text" height={36} sx={{ fontSize: "1.5rem" }} />
-              <Skeleton variant="text" height={36} sx={{ fontSize: "1.5rem" }} />
-            </Stack>
+            <Table size="medium" sx={{ minWidth: 650 }}>
+              <TableBody>
+                {[...Array(5)].map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton variant="text" /></TableCell>
+                    <TableCell><Skeleton variant="text" /></TableCell>
+                    <TableCell><Skeleton variant="text" /></TableCell>
+                    <TableCell><Skeleton variant="text" /></TableCell>
+                    <TableCell><Skeleton variant="text" /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           ) : (
             <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
               <Table size="medium" sx={{ minWidth: 650 }}>
@@ -786,11 +770,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                     </TableRow>
                   ))}
                   {!recent.length && (
-                    <TableRow>
-                      <TableCell colSpan={5} sx={{ color: "text.secondary" }}>
-                        Belum ada transaksi
-                      </TableCell>
-                    </TableRow>
+                    <EmptyStateRow message="Belum ada transaksi" hint="Transaksi terbaru akan tampil di sini" />
                   )}
                 </TableBody>
               </Table>
@@ -799,69 +779,52 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         </CardContent>
       </Card>
 
-      {/* ===== Modal Riwayat Pelanggan ===== */}
-      <Dialog open={custModal.open} onClose={closeCustomerHistory} maxWidth="md" fullWidth>
+      {/* ===== Modal: Riwayat Customer ===== */}
+      <Dialog fullWidth maxWidth="sm" open={histOpen} onClose={closeCustomerHistory}>
         <DialogTitle>
-          <Typography variant="h6" fontWeight={600}>Riwayat Transaksi — {custModal.name || "-"}</Typography>
-          <Typography variant="body2" display="block" color="text.secondary">
-            Periode: {custModal.fromLabel} s/d {custModal.toLabel}
-          </Typography>
+          <Typography variant="h6" fontWeight={600}>Riwayat Transaksi — {histTitle || "-"}</Typography>
         </DialogTitle>
         <DialogContent dividers>
-          {custLoading ? (
-            <Stack spacing={2}>
-              <Skeleton variant="text" height={28} sx={{ fontSize: "1.25rem" }} />
-              <Skeleton variant="text" height={28} sx={{ fontSize: "1.25rem" }} />
-              <Skeleton variant="text" height={28} sx={{ fontSize: "1.25rem" }} />
-            </Stack>
-          ) : (
-            <TableContainer component={Paper} sx={{ borderRadius: 1 }}>
-              <Table size="medium" sx={{ minWidth: 650 }}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Tanggal</TableCell>
-                    <TableCell align="right">Qty</TableCell>
-                    <TableCell align="right">Total</TableCell>
-                    <TableCell>Metode</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {custRows.map((x) => (
-                    <TableRow key={x.id}>
-                      <TableCell sx={{ whiteSpace: "nowrap" }}>{String(x.created_at || "").slice(0,10)}</TableCell>
-                      <TableCell align="right">{x.qty}</TableCell>
-                      <TableCell align="right">{fmtIDR(x.total || (Number(x.qty||0)*Number(x.price||0)))}</TableCell>
-                      <TableCell>
-                        {String(x.method || "").toUpperCase() === "HUTANG" ? (
-                          <Chip
-                            size="small"
-                            variant="outlined"
-                            color={String(x.status || "").toUpperCase() === "LUNAS" ? "success" : "error"}
-                            label={`HUTANG • ${String(x.status || "").toUpperCase() === "LUNAS" ? "Lunas" : "Belum"}`}
-                          />
-                        ) : (
-                          <Chip size="small" variant="outlined" label="TUNAI" />
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {!custRows.length && (
-                    <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ color: "text.secondary" }}>
-                        Tidak ada transaksi pada periode ini
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <Table size="medium" sx={{ minWidth: 650 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell>Tanggal</TableCell>
+                <TableCell align="right">Qty</TableCell>
+                <TableCell align="right">Total</TableCell>
+                <TableCell>Metode</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {(histRows || []).map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{String(r.created_at || "").slice(0,10)}</TableCell>
+                  <TableCell align="right">{r.qty}</TableCell>
+                  <TableCell align="right">{fmtIDR(r.total || (Number(r.qty||0)*Number(r.price||0)))}</TableCell>
+                  <TableCell>
+                    {String(r.method).toUpperCase() === "HUTANG" ? (
+                      <Chip
+                        size="small"
+                        label="HUTANG"
+                        color={String(r.status).toUpperCase() === "LUNAS" ? "success" : "error"}
+                        variant="outlined"
+                      />
+                    ) : r.method}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!histRows?.length && (
+                <EmptyStateRow colSpan={4} message="Tidak ada transaksi" />
+              )}
+            </TableBody>
+          </Table>
+          <Box sx={{ pt: 2 }}>
+            <Typography variant="subtitle1" fontWeight={600}>Total Qty: {histTotalQty}</Typography>
+          </Box>
         </DialogContent>
-        <DialogActions sx={{ justifyContent: "space-between", px: 3 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-            Total Qty: {custTotalQty}
-          </Typography>
-          <Button onClick={closeCustomerHistory}>Tutup</Button>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button variant="outlined" onClick={closeCustomerHistory} sx={{ textTransform: "none" }}>
+            Tutup
+          </Button>
         </DialogActions>
       </Dialog>
     </Stack>
@@ -872,12 +835,8 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 function RowKV({ k, v, vSx }) {
   return (
     <Stack direction="row" justifyContent="space-between" alignItems="center">
-      <Typography variant="subtitle1" color="text.secondary">
-        {k}
-      </Typography>
-      <Typography variant="subtitle1" sx={vSx}>
-        {v}
-      </Typography>
+      <Typography variant="subtitle1" color="text.secondary">{k}</Typography>
+      <Typography variant="subtitle1" sx={vSx}>{v}</Typography>
     </Stack>
   );
 }
