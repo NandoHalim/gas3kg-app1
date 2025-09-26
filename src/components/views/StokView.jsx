@@ -23,11 +23,11 @@ import {
   Tooltip,
 } from "@mui/material";
 
-// 🔧 Standarisasi field: lebar penuh + tinggi seragam
+// 🔧 Standarisasi field: lebar penuh + tinggi seragam (disesuaikan ke theme)
 const FIELD_PROPS = { fullWidth: true, variant: "outlined", size: "medium" };
 const FIELD_SX = {
   mt: 1,
-  "& .MuiOutlinedInput-root": { borderRadius: 2, minHeight: 48 },
+  "& .MuiOutlinedInput-root": { borderRadius: 1, minHeight: 56 },
   "& input": { paddingTop: 1.25, paddingBottom: 1.25 }, // jaga tinggi di iOS
 };
 
@@ -45,8 +45,8 @@ export default function StokView({ stocks = {}, onSaved }) {
   return (
     <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
       {/* Header */}
-      <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
-        <Typography variant="h5" fontWeight={700}>
+      <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+        <Typography variant="h4" fontWeight={600}>
           Stok
         </Typography>
         <Stack direction="row" spacing={1} sx={{ ml: "auto" }}>
@@ -133,7 +133,10 @@ function TambahKosong({ onSaved }) {
 
   return (
     <Card>
-      <CardHeader title="Tambah Stok Kosong" />
+      <CardHeader
+        title={<Typography variant="h6" fontWeight={600}>Tambah Stok Kosong</Typography>}
+        sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+      />
       <CardContent>
         {err && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
@@ -142,7 +145,7 @@ function TambahKosong({ onSaved }) {
         )}
 
         <Box component="form" onSubmit={submit}>
-          <Stack spacing={1.5}>
+          <Stack spacing={2}>
             <TextField
               {...FIELD_PROPS}
               sx={FIELD_SX}
@@ -179,16 +182,22 @@ function TambahKosong({ onSaved }) {
               placeholder="mis: titip pelanggan"
             />
 
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
+            <Stack direction="row" spacing={2} justifyContent="flex-end">
               <Button
                 variant="outlined"
                 type="button"
                 onClick={() => setForm({ qty: "", date: todayStr(), note: "" })}
                 disabled={loading}
+                sx={{ textTransform: "none", minWidth: 100 }}
               >
                 Reset
               </Button>
-              <Button variant="contained" type="submit" disabled={loading}>
+              <Button
+                variant="contained"
+                type="submit"
+                disabled={loading}
+                sx={{ textTransform: "none", minWidth: 100 }}
+              >
                 {loading ? "Menyimpan…" : "Simpan"}
               </Button>
             </Stack>
@@ -236,7 +245,10 @@ function RestokIsi({ onSaved }) {
 
   return (
     <Card>
-      <CardHeader title="Restok Isi (Tukar Kosong)" />
+      <CardHeader
+        title={<Typography variant="h6" fontWeight={600}>Restok Isi (Tukar Kosong)</Typography>}
+        sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+      />
       <CardContent>
         {err && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
@@ -245,7 +257,7 @@ function RestokIsi({ onSaved }) {
         )}
 
         <Box component="form" onSubmit={submit}>
-          <Stack spacing={1.5}>
+          <Stack spacing={2}>
             <TextField
               {...FIELD_PROPS}
               sx={FIELD_SX}
@@ -282,16 +294,22 @@ function RestokIsi({ onSaved }) {
               placeholder="mis: tukar kosong di agen"
             />
 
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
+            <Stack direction="row" spacing={2} justifyContent="flex-end">
               <Button
                 variant="outlined"
                 type="button"
                 onClick={() => setForm({ qty: "", date: todayStr(), note: "" })}
                 disabled={loading}
+                sx={{ textTransform: "none", minWidth: 100 }}
               >
                 Reset
               </Button>
-              <Button variant="contained" type="submit" disabled={loading}>
+              <Button
+                variant="contained"
+                type="submit"
+                disabled={loading}
+                sx={{ textTransform: "none", minWidth: 100 }}
+              >
                 {loading ? "Menyimpan…" : "Simpan"}
               </Button>
             </Stack>
@@ -353,7 +371,10 @@ function PenyesuaianStok({ onSaved }) {
 
   return (
     <Card>
-      <CardHeader title="Penyesuaian Stok (Koreksi)" />
+      <CardHeader
+        title={<Typography variant="h6" fontWeight={600}>Penyesuaian Stok (Koreksi)</Typography>}
+        sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+      />
       <CardContent>
         {err && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
@@ -362,7 +383,7 @@ function PenyesuaianStok({ onSaved }) {
         )}
 
         <Box component="form" onSubmit={submit}>
-          <Stack spacing={1.5}>
+          <Stack spacing={2}>
             <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
               <InputLabel id="jenis-label">Jenis Stok</InputLabel>
               <Select
@@ -391,7 +412,7 @@ function PenyesuaianStok({ onSaved }) {
               </Select>
             </FormControl>
 
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="body2" color="text.secondary">
               *Tambah ISI tidak diperbolehkan di sini — gunakan Restok Isi.
             </Typography>
 
@@ -431,7 +452,7 @@ function PenyesuaianStok({ onSaved }) {
               placeholder='mis: "Koreksi stok - kelebihan input" / "Stok hilang/rusak"'
             />
 
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
+            <Stack direction="row" spacing={2} justifyContent="flex-end">
               <Button
                 variant="outlined"
                 type="button"
@@ -445,10 +466,16 @@ function PenyesuaianStok({ onSaved }) {
                   })
                 }
                 disabled={loading}
+                sx={{ textTransform: "none", minWidth: 100 }}
               >
                 Reset
               </Button>
-              <Button variant="contained" type="submit" disabled={loading}>
+              <Button
+                variant="contained"
+                type="submit"
+                disabled={loading}
+                sx={{ textTransform: "none", minWidth: 100 }}
+              >
                 {loading ? "Menyimpan…" : "Simpan"}
               </Button>
             </Stack>
