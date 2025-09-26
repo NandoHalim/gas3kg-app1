@@ -28,20 +28,65 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Divider,
+  CircularProgress,
 } from "@mui/material";
+
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import ReportProblemOutlined from "@mui/icons-material/ReportProblemOutlined";
+import InsightsOutlined from "@mui/icons-material/InsightsOutlined";
+import VisibilityOutlined from "@mui/icons-material/VisibilityOutlined";
+import SaveOutlined from "@mui/icons-material/SaveOutlined";
 
 const LOW_STOCK_THRESHOLD = 5;
 
-/* ====== Helpers untuk rolling 7 hari ====== */
+/* =========================
+   Reusable styles & helpers
+   ========================= */
+const btnLinkSx = { textTransform: "none", fontWeight: 500, px: 0, minWidth: 100 };
+const btnDialogSx = { textTransform: "none", minWidth: 120 };
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
 const isoDate = (d) => startOfDay(d).toISOString().slice(0,10);
 const fmtPct = (n) => (n === null || n === undefined) ? "–" : `${(Number(n)).toFixed(1)}%`;
 
+/* Error banner + Empty state */
+function ErrorBanner({ message, detail }) {
+  return (
+    <Alert
+      severity="error"
+      icon={<ReportProblemOutlined />}
+      variant="outlined"
+      sx={{ borderRadius: 2 }}
+    >
+      <Typography variant="subtitle1" fontWeight={600}>Terjadi kesalahan</Typography>
+      <Typography variant="body2" sx={{ mt: 0.5 }}>{message}</Typography>
+      {detail ? (
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+          {detail}
+        </Typography>
+      ) : null}
+    </Alert>
+  );
+}
+function EmptyStateRow({ colSpan = 5, message = "Tidak ada data", hint }) {
+  return (
+    <TableRow>
+      <TableCell colSpan={colSpan} align="center" sx={{ py: 4 }}>
+        <Box sx={{ color: "text.secondary" }}>
+          <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+            <InsightsOutlined fontSize="small" />
+            <Typography variant="body2" fontWeight={600}>📊 {message}</Typography>
+          </Box>
+          {hint ? <Typography variant="caption">{hint}</Typography> : null}
+        </Box>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/* ====== Helpers untuk rolling 7 hari ====== */
 function buildLast7DaysSeries(rows = []) {
   const buckets = new Map();
   rows.forEach(r => {
@@ -70,33 +115,41 @@ function StatTile({ title, value, subtitle, color = "primary", icon }) {
       <CardContent sx={{ flex: 1, display: "flex", alignItems: "center", py: 2 }}>
         <Stack direction="row" spacing={2} alignItems="center" sx={{ width: "100%" }}>
           <Box
-            sx={(t) => ({
+            sx={(theme) => ({
               width: 42,
               height: 42,
               borderRadius: 2,
               display: "grid",
               placeItems: "center",
-              bgcolor: `${t.palette[color]?.light}20`, // 20% opacity
-              color: t.palette[color]?.main,
+              bgcolor: (theme.palette[color]?.light || theme.palette.primary.light) + "20", // 20% opacity
+              color: `${color}.main`,
               flexShrink: 0,
             })}
           >
             {icon}
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="subtitle1" color="text.secondary">
-              {title}
-            </Typography>
-            <Typography variant="h4" fontWeight={600} noWrap>
+            <Typography
+              variant="h6"
+              fontWeight={600}
+              noWrap
+              sx={{ typography: { xs: "h6", sm: "h6" } }}
+            >
               {value}
+            </Typography>
+            <Typography
+              color="text.secondary"
+              sx={{ typography: { xs: "body2", sm: "subtitle1" }, display: "block", minHeight: 20 }}
+              noWrap
+            >
+              {subtitle || ""}
             </Typography>
             <Typography
               variant="body2"
               color="text.secondary"
-              noWrap
-              sx={{ display: "block", minHeight: 20 }}
+              sx={{ display: { xs: "none", sm: "block" } }}
             >
-              {subtitle || ""}
+              {title}
             </Typography>
           </Box>
         </Stack>
@@ -110,14 +163,14 @@ function StockProgress({ isi, kosong }) {
   const pctKosong = Math.round((kosong / total) * 100);
   const pctIsi = 100 - pctKosong;
   return (
-    <Stack spacing={2}>
+    <Stack spacing={1}>
       <LinearProgress
         variant="determinate"
         value={pctIsi}
         sx={{ height: 10, borderRadius: 5, "& .MuiLinearProgress-bar": { borderRadius: 5 } }}
         color="success"
       />
-      <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
         <Chip size="small" label={`Isi: ${pctIsi}%`} color="success" variant="outlined" />
         <Chip size="small" label={`Kosong: ${pctKosong}%`} color="error" variant="outlined" />
       </Stack>
@@ -140,13 +193,13 @@ function MiniBarChartLabeled({ data = [] }) {
   };
 
   return (
-    <Box sx={{ px: 1, py: 2 }}>
+    <Box sx={{ px: 1, py: 1 }}>
       <Box
         sx={{
           display: "grid",
           gridTemplateColumns: `repeat(${Math.max(data.length, 1)}, 1fr)`,
           alignItems: "end",
-          gap: 2,
+          gap: 1.5,
           height: 160,
         }}
       >
@@ -185,39 +238,21 @@ function MiniBarChartLabeled({ data = [] }) {
   );
 }
 
-/* ====== Empty state row helper ====== */
-function EmptyStateRow({ colSpan = 5, message = "Tidak ada data", hint }) {
-  return (
-    <TableRow>
-      <TableCell colSpan={colSpan} align="center" sx={{ py: 4 }}>
-        <Box sx={{ color: "text.secondary" }}>
-          <Typography variant="body2" gutterBottom>📊 {message}</Typography>
-          {hint ? <Typography variant="caption">{hint}</Typography> : null}
-        </Box>
-      </TableCell>
-    </TableRow>
-  );
-}
-
 /* ====== Main View ====== */
 export default function DashboardView({ stocks: stocksFromApp = {} }) {
-  // --- Settings (untuk HPP) ---
   const { settings } = useSettings();
   const hppSetting = Number(settings?.hpp || 0);
 
-  // --- STATE UTAMA ---
   const [stocks, setStocks] = useState(stocksFromApp);
   const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
   const [recent, setRecent] = useState([]);
-
   const [sum, setSum] = useState({ qty: 0, omzet: 0, laba: 0 });
   const [today, setToday] = useState({ qty: 0, money: 0 });
-
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // --- STATE ANALITIK (baru) ---
+  // ANALITIK (RPC)
   const [analytics, setAnalytics] = useState({
     topCustomers: [],
     weekly: null,
@@ -226,10 +261,11 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
   });
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
-  // Customer history modal
-  const [histOpen, setHistOpen] = useState(false);
-  const [histTitle, setHistTitle] = useState("");
+  // Modal Top Customer
+  const [openHist, setOpenHist] = useState(false);
+  const [histName, setHistName] = useState("");
   const [histRows, setHistRows] = useState([]);
+  const [histLoading, setHistLoading] = useState(false);
   const [histTotalQty, setHistTotalQty] = useState(0);
 
   const busyRef = useRef(false);
@@ -245,7 +281,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         if (!alive) return;
 
         setStocks(snap.stocks || { ISI: 0, KOSONG: 0 });
-        setSeries7(snap.sevenDays || []); // fallback awal
+        setSeries7(snap.sevenDays || []);
         setPiutang(snap.receivables || 0);
         setRecent(snap.recentSales || []);
         setLoading(false);
@@ -341,7 +377,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     };
   }, []);
 
-  // 4) Tambahan: Hitung ulang 7 hari terakhir realtime
+  // 4) Recompute 7 hari rolling (realtime)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -366,7 +402,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     return () => { alive = false; };
   }, [recent, today.qty, stocks]);
 
-  // 5) Muat ANALITIK via RPC-only (Top Customers + Weekly + Monthly + YoY)
+  // 5) Analytics via RPC-only (Top, Weekly, Monthly, YoY)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -379,6 +415,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 
         if (!alive) return;
 
+        // Hitung growth dari aggregate
         const wk = comps?.weekly || null;
         const weeklyGrowthPct = wk && wk.last_week_qty
           ? ((Number(wk.this_week_qty || 0) - Number(wk.last_week_qty || 0)) / Number(wk.last_week_qty)) * 100
@@ -430,46 +467,69 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     })();
 
     return () => { alive = false; };
-  }, []); // load sekali saat mount
+  }, []);
+
+  // Modal handler: riwayat pelanggan (periode: bulan ini, mulai tgl 1)
+  const openCustomerHistory = async (name) => {
+    setHistName(name);
+    setOpenHist(true);
+    setHistLoading(true);
+    try {
+      const now = new Date();
+      const s = new Date(now.getFullYear(), now.getMonth(), 1); // selalu tgl 1
+      s.setHours(0,0,0,0);
+      const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      e.setHours(23,59,59,999);
+
+      // gunakan getSalesHistory dengan query nama pelanggan (kompatibel view/tabel)
+      const rows = await DataService.getSalesHistory({
+        from: s.toISOString(),
+        to: e.toISOString(),
+        q: name,      // cari di customer/invoice
+        limit: 500,
+      });
+
+      const filtered = (rows || []).filter(r => (r.customer || "").toLowerCase().includes((name || "").toLowerCase()));
+      setHistRows(filtered);
+      const totalQty = filtered.reduce((a,b)=> a + Number(b.qty || 0), 0);
+      setHistTotalQty(totalQty);
+    } catch (e) {
+      setHistRows([]);
+      setHistTotalQty(0);
+    } finally {
+      setHistLoading(false);
+    }
+  };
+  const closeCustomerHistory = () => setOpenHist(false);
 
   // ---- derived
   const isi = Number(stocks?.ISI || 0);
   const kosong = Number(stocks?.KOSONG || 0);
   const total = isi + kosong;
 
-  // ===== Customer history modal ops
-  const openCustomerHistory = async (name) => {
-    try {
-      const r = DataService.getPeriodRange?.("this_month");
-      const from = r?.from;
-      const to = r?.to;
-      const { rows, totalQty } = await DataService.getCustomerHistory?.({ customer: name, from, to });
-      setHistTitle(name);
-      setHistRows(rows || []);
-      setHistTotalQty(Number(totalQty || 0));
-      setHistOpen(true);
-    } catch (e) {
-      setHistTitle(name);
-      setHistRows([]);
-      setHistTotalQty(0);
-      setHistOpen(true);
-      console.warn("[history]", e?.message || e);
-    }
-  };
-  const closeCustomerHistory = () => setHistOpen(false);
-
   return (
     <Stack spacing={2}>
       {/* Header */}
       <Stack direction="row" alignItems="baseline" justifyContent="space-between" flexWrap="wrap" sx={{ gap: 2 }}>
         <Box>
-          <Typography variant="h4" fontWeight={600}>Dashboard</Typography>
-          <Typography variant="subtitle1" color="text.secondary">Ringkasan stok & penjualan</Typography>
+          <Typography
+            variant="h4"
+            fontWeight={600}
+            sx={{ typography: { xs: "h5", sm: "h4" } }}
+          >
+            Dashboard
+          </Typography>
+          <Typography
+            color="text.secondary"
+            sx={{ typography: { xs: "body2", sm: "subtitle1" } }}
+          >
+            Ringkasan stok & penjualan
+          </Typography>
         </Box>
         <Chip label={`Total Tabung: ${total}`} variant="outlined" color="default" sx={{ fontWeight: 700 }} />
       </Stack>
 
-      {err && <Alert severity="error" variant="outlined">{err}</Alert>}
+      {err && <ErrorBanner message={err} />}
 
       {/* Ringkasan Stok & Penjualan */}
       <Grid container spacing={2} alignItems="stretch">
@@ -516,10 +576,9 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         <CardHeader
           title={<Typography variant="h6" fontWeight={600}>Kondisi Stok</Typography>}
           subheader="Perbandingan stok isi vs kosong"
-          sx={{ pb: 2 }}
+          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
         />
-        <Divider />
-        <CardContent sx={{ pt: 2 }}>
+        <CardContent>
           {loading ? <Skeleton height={24} /> : <StockProgress isi={isi} kosong={kosong} />}
         </CardContent>
       </Card>
@@ -530,18 +589,17 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
           <Card>
             <CardHeader
               title={<Typography variant="h6" fontWeight={600}>Ringkasan Keuangan</Typography>}
-              sx={{ pb: 2 }}
+              sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
             />
-            <Divider />
-            <CardContent sx={{ pt: 2 }}>
+            <CardContent>
               {loading ? (
-                <Stack spacing={2}>
+                <Stack spacing={1}>
                   <Skeleton height={24} />
                   <Skeleton height={24} />
                   <Skeleton height={24} />
                 </Stack>
               ) : (
-                <Stack spacing={2}>
+                <Stack spacing={1}>
                   <RowKV k="Omzet (dibayar)" v={fmtIDR(sum.omzet)} />
                   <RowKV k="HPP" v={`− ${fmtIDR(sum.omzet - sum.laba)}`} />
                   <RowKV k="Laba" v={fmtIDR(sum.laba)} vSx={{ color: "success.main", fontWeight: 700 }} />
@@ -555,11 +613,9 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
           <Card>
             <CardHeader
               title={<Typography variant="h6" fontWeight={600}>Total Terjual</Typography>}
-              subheader="Akumulasi data"
-              sx={{ pb: 2 }}
+              sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
             />
-            <Divider />
-            <CardContent sx={{ pt: 2 }}>
+            <CardContent>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Box
                   sx={{
@@ -568,15 +624,24 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                     borderRadius: 2,
                     display: "grid",
                     placeItems: "center",
-                    bgcolor: (t) => `${t.palette.info.light}20`,
+                    bgcolor: "info.50",
                     color: "info.main",
                   }}
                 >
                   <TrendingUpIcon />
                 </Box>
-                <Typography variant="h4" fontWeight={600}>
-                  {loading ? <Skeleton variant="text" width={80} sx={{ fontSize: "2rem" }} /> : sum.qty}
-                </Typography>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography color="text.secondary" sx={{ typography: { xs: "body2", sm: "subtitle1" } }}>
+                    Total Terjual (riwayat)
+                  </Typography>
+                  <Typography
+                    noWrap
+                    sx={{ fontWeight: 600, fontSize: "clamp(1.25rem, 2.5vw, 1.75rem)" }}
+                  >
+                    {loading ? <Skeleton variant="text" width={80} sx={{ fontSize: "2rem" }} /> : sum.qty}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">Akumulasi data</Typography>
+                </Box>
               </Stack>
             </CardContent>
           </Card>
@@ -587,10 +652,9 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       <Card>
         <CardHeader
           title={<Typography variant="h6" fontWeight={600}>Penjualan 7 Hari Terakhir</Typography>}
-          sx={{ pb: 2 }}
+          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
         />
-        <Divider />
-        <CardContent sx={{ pt: 2 }}>
+        <CardContent>
           {loading ? <Skeleton height={120} /> : <MiniBarChartLabeled data={series7} />}
         </CardContent>
       </Card>
@@ -599,12 +663,11 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       <Card>
         <CardHeader
           title={<Typography variant="h6" fontWeight={600}>Analitik Penjualan</Typography>}
-          sx={{ pb: 2 }}
+          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
         />
-        <Divider />
-        <CardContent sx={{ pt: 2 }}>
+        <CardContent>
           {analyticsLoading ? (
-            <Stack spacing={2}>
+            <Stack spacing={1}>
               <Skeleton height={28} />
               <Skeleton height={28} />
               <Skeleton height={28} />
@@ -623,29 +686,28 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                         <TableCell>Pelanggan</TableCell>
                         <TableCell align="right">Transaksi</TableCell>
                         <TableCell align="right">Total</TableCell>
-                        <TableCell align="right">Aksi</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {(analytics.topCustomers || []).map((c, i) => (
                         <TableRow key={i} hover>
-                          <TableCell sx={{ whiteSpace: "nowrap" }}>{c.customer_name}</TableCell>
-                          <TableCell align="right">{c.total_transaksi}</TableCell>
-                          <TableCell align="right">{fmtIDR(c.total_value)}</TableCell>
-                          <TableCell align="right">
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>
                             <Button
                               size="small"
                               variant="text"
+                              startIcon={<VisibilityOutlined fontSize="small" />}
+                              sx={btnLinkSx}
                               onClick={() => openCustomerHistory(c.customer_name)}
-                              sx={{ textTransform: "none", fontWeight: 500, px: 0 }}
                             >
-                              Lihat riwayat
+                              {c.customer_name}
                             </Button>
                           </TableCell>
+                          <TableCell align="right">{c.total_transaksi}</TableCell>
+                          <TableCell align="right">{fmtIDR(c.total_value)}</TableCell>
                         </TableRow>
                       ))}
                       {!analytics.topCustomers?.length && (
-                        <EmptyStateRow colSpan={4} message="Belum ada data" hint="Data akan muncul setelah ada transaksi pada bulan ini" />
+                        <EmptyStateRow colSpan={3} message="Belum ada data" hint="Data pelanggan akan muncul setelah ada transaksi bulan ini." />
                       )}
                     </TableBody>
                   </Table>
@@ -725,24 +787,25 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       <Card>
         <CardHeader
           title={<Typography variant="h6" fontWeight={600}>Transaksi Terbaru</Typography>}
-          sx={{ pb: 2 }}
+          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
         />
-        <Divider />
-        <CardContent sx={{ pt: 2 }}>
+        <CardContent>
           {loading ? (
-            <Table size="medium" sx={{ minWidth: 650 }}>
-              <TableBody>
-                {[...Array(5)].map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton variant="text" /></TableCell>
-                    <TableCell><Skeleton variant="text" /></TableCell>
-                    <TableCell><Skeleton variant="text" /></TableCell>
-                    <TableCell><Skeleton variant="text" /></TableCell>
-                    <TableCell><Skeleton variant="text" /></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
+              <Table size="medium" sx={{ minWidth: 650 }}>
+                <TableBody>
+                  {[...Array(5)].map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton variant="text" /></TableCell>
+                      <TableCell><Skeleton variant="text" /></TableCell>
+                      <TableCell><Skeleton variant="text" /></TableCell>
+                      <TableCell><Skeleton variant="text" /></TableCell>
+                      <TableCell><Skeleton variant="text" /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           ) : (
             <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
               <Table size="medium" sx={{ minWidth: 650 }}>
@@ -770,7 +833,11 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                     </TableRow>
                   ))}
                   {!recent.length && (
-                    <EmptyStateRow message="Belum ada transaksi" hint="Transaksi terbaru akan tampil di sini" />
+                    <EmptyStateRow
+                      colSpan={5}
+                      message="Belum ada transaksi"
+                      hint="Transaksi terbaru akan muncul di sini setelah ada penjualan."
+                    />
                   )}
                 </TableBody>
               </Table>
@@ -779,53 +846,66 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         </CardContent>
       </Card>
 
-      {/* ===== Modal: Riwayat Customer ===== */}
-      <Dialog fullWidth maxWidth="sm" open={histOpen} onClose={closeCustomerHistory}>
-        <DialogTitle>
-          <Typography variant="h6" fontWeight={600}>Riwayat Transaksi — {histTitle || "-"}</Typography>
-        </DialogTitle>
+      {/* Modal: Riwayat Pelanggan */}
+      <Dialog fullWidth maxWidth="md" open={openHist} onClose={closeCustomerHistory}>
+        <DialogTitle>Riwayat Transaksi — {histName}</DialogTitle>
         <DialogContent dividers>
-          <Table size="medium" sx={{ minWidth: 650 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Tanggal</TableCell>
-                <TableCell align="right">Qty</TableCell>
-                <TableCell align="right">Total</TableCell>
-                <TableCell>Metode</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {(histRows || []).map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>{String(r.created_at || "").slice(0,10)}</TableCell>
-                  <TableCell align="right">{r.qty}</TableCell>
-                  <TableCell align="right">{fmtIDR(r.total || (Number(r.qty||0)*Number(r.price||0)))}</TableCell>
-                  <TableCell>
-                    {String(r.method).toUpperCase() === "HUTANG" ? (
-                      <Chip
-                        size="small"
-                        label="HUTANG"
-                        color={String(r.status).toUpperCase() === "LUNAS" ? "success" : "error"}
-                        variant="outlined"
-                      />
-                    ) : r.method}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!histRows?.length && (
-                <EmptyStateRow colSpan={4} message="Tidak ada transaksi" />
-              )}
-            </TableBody>
-          </Table>
-          <Box sx={{ pt: 2 }}>
-            <Typography variant="subtitle1" fontWeight={600}>Total Qty: {histTotalQty}</Typography>
-          </Box>
+          {histLoading ? (
+            <Stack spacing={1}>
+              {[...Array(5)].map((_, i) => <Skeleton key={i} height={28} />)}
+            </Stack>
+          ) : (
+            <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
+              <Table size="medium" sx={{ minWidth: 650 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Tanggal</TableCell>
+                    <TableCell align="right">Qty</TableCell>
+                    <TableCell>Metode</TableCell>
+                    <TableCell align="right">Total</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(histRows || []).map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>{String(r.created_at || "").slice(0,10)}</TableCell>
+                      <TableCell align="right">{r.qty}</TableCell>
+                      <TableCell>
+                        {r.method}
+                        {r.method === "HUTANG" && (
+                          <Chip
+                            size="small"
+                            label={(String(r.status || "").toUpperCase() === "LUNAS") ? "LUNAS" : "BELUM"}
+                            sx={{
+                              ml: 1,
+                              color: (String(r.status || "").toUpperCase() === "LUNAS") ? "success.main" : "error.main",
+                              borderColor: (String(r.status || "").toUpperCase() === "LUNAS") ? "success.main" : "error.main",
+                            }}
+                            variant="outlined"
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell align="right">{fmtIDR((Number(r.qty)||0) * (Number(r.price)||0))}</TableCell>
+                    </TableRow>
+                  ))}
+                  {!histRows?.length && (
+                    <EmptyStateRow colSpan={4} message="Tidak ada riwayat transaksi" />
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button variant="outlined" onClick={closeCustomerHistory} sx={{ textTransform: "none" }}>
-            Tutup
-          </Button>
-        </DialogActions>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 3, py: 1.5 }}>
+          <Typography variant="subtitle1" fontWeight={600}>
+            Total Qty: {histLoading ? "…" : histTotalQty}
+          </Typography>
+          <DialogActions sx={{ px: 0 }}>
+            <Button variant="outlined" sx={btnDialogSx} onClick={closeCustomerHistory}>
+              Tutup
+            </Button>
+          </DialogActions>
+        </Stack>
       </Dialog>
     </Stack>
   );
@@ -835,8 +915,12 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 function RowKV({ k, v, vSx }) {
   return (
     <Stack direction="row" justifyContent="space-between" alignItems="center">
-      <Typography variant="subtitle1" color="text.secondary">{k}</Typography>
-      <Typography variant="subtitle1" sx={vSx}>{v}</Typography>
+      <Typography variant="body2" color="text.secondary">
+        {k}
+      </Typography>
+      <Typography variant="body2" sx={vSx}>
+        {v}
+      </Typography>
     </Stack>
   );
 }
