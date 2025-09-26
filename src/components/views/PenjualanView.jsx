@@ -29,15 +29,17 @@ import {
   IconButton,
   InputAdornment,
   Autocomplete,
+  Chip,
+  Paper,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 
-// standar field agar konsisten tinggi/lebar
+// Standar field agar konsisten tinggi/lebar (MUI standard)
 const FIELD_PROPS = { fullWidth: true, variant: "outlined", size: "medium" };
 const FIELD_SX = {
-  "& .MuiOutlinedInput-root": { borderRadius: 2, minHeight: 48 },
-  "& input": { paddingTop: 1.25, paddingBottom: 1.25 },
+  "& .MuiOutlinedInput-root": { borderRadius: 1, minHeight: 56 },
+  "& input": { paddingTop: 1.5, paddingBottom: 1.5 },
 };
 
 export default function PenjualanView({
@@ -45,9 +47,9 @@ export default function PenjualanView({
   onSaved,
   onCancel,
   customerList = [],
-  defaultPrice = DEFAULT_PRICE, // ⬅️ ambil dari SettingsContext via TransaksiView
+  defaultPrice = DEFAULT_PRICE,          // ← dari SettingsContext via TransaksiView
   hpp = 0,
-  activeMethods = PAYMENT_METHODS, // ⬅️ daftar metode aktif dari Settings
+  activeMethods = PAYMENT_METHODS,       // ← daftar metode aktif dari Settings
 }) {
   const toast = useToast();
 
@@ -105,7 +107,7 @@ export default function PenjualanView({
         method: form.method,
         date: form.date,
         note: "",
-        hpp, // ⬅️ ikut disimpan supaya laba rugi konsisten
+        hpp, // ikut disimpan supaya laba rugi konsisten
       });
       onSaved?.(snap);
       setForm({
@@ -117,9 +119,7 @@ export default function PenjualanView({
       });
       toast?.show?.({
         type: "success",
-        message: `Penjualan tersimpan: ${qtyNum} tabung • Total ${fmtIDR(
-          total
-        )}`,
+        message: `Penjualan tersimpan: ${qtyNum} tabung • Total ${fmtIDR(total)}`,
       });
     } catch (e2) {
       const msg = e2.message || "Gagal menyimpan penjualan";
@@ -131,32 +131,24 @@ export default function PenjualanView({
   };
 
   return (
-    <Stack spacing={1.5}>
+    <Stack spacing={2}>
       {/* Header */}
-      <Stack direction="row" alignItems="center" spacing={1}>
-        <Typography variant="h5" fontWeight={700}>
+      <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
+        <Typography variant="h4" fontWeight={600}>
           Penjualan Baru
         </Typography>
-        <Box
-          sx={{
-            ml: "auto",
-            px: 1.25,
-            py: 0.5,
-            borderRadius: 99,
-            bgcolor: "grey.100",
-            border: "1px solid",
-            borderColor: "grey.300",
-            fontSize: 12,
-          }}
-        >
-          Stok Isi: <b>{stokISI}</b>
-        </Box>
+        <Chip
+          sx={{ ml: "auto" }}
+          label={`Stok Isi: ${stokISI}`}
+          variant="outlined"
+          color={stokISI <= 5 ? "warning" : "success"}
+        />
       </Stack>
 
       <Card>
         <CardHeader
-          titleTypographyProps={{ fontSize: 18, fontWeight: 700 }}
-          title="Form Penjualan"
+          title={<Typography variant="h6" fontWeight={600}>Form Penjualan</Typography>}
+          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
         />
         <CardContent>
           {err && (
@@ -177,9 +169,7 @@ export default function PenjualanView({
                   filterOptions={(options, state) => {
                     const q = (state.inputValue || "").trim().toLowerCase();
                     if (!q) return [];
-                    return options.filter((o) =>
-                      String(o).toLowerCase().includes(q)
-                    );
+                    return options.filter((o) => String(o).toLowerCase().includes(q));
                   }}
                   value={form.customer}
                   onInputChange={(_, newVal) =>
@@ -194,24 +184,16 @@ export default function PenjualanView({
                       placeholder="Contoh: Ayu"
                       value={form.customer}
                       onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          customer: e.target.value,
-                        }))
+                        setForm((prev) => ({ ...prev, customer: e.target.value }))
                       }
                     />
                   )}
                 />
-                {!isValidCustomerName(form.customer || "") &&
-                  form.customer.trim().length > 0 && (
-                    <Typography
-                      variant="caption"
-                      color="error"
-                      sx={{ display: "block", mt: 0.5 }}
-                    >
-                      Nama hanya huruf &amp; spasi
-                    </Typography>
-                  )}
+                {!isValidCustomerName(form.customer || "") && form.customer.trim().length > 0 && (
+                  <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
+                    Nama hanya huruf &amp; spasi
+                  </Typography>
+                )}
               </Grid>
 
               {/* Tanggal */}
@@ -222,9 +204,7 @@ export default function PenjualanView({
                   label="Tanggal"
                   type="date"
                   value={form.date}
-                  onChange={(e) =>
-                    setForm({ ...form, date: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
                   inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
                   InputLabelProps={{ shrink: true }}
                 />
@@ -244,10 +224,7 @@ export default function PenjualanView({
                       qty:
                         e.target.value === ""
                           ? ""
-                          : Math.max(
-                              0,
-                              parseInt(e.target.value, 10) || 0
-                            ),
+                          : Math.max(0, parseInt(e.target.value, 10) || 0),
                     })
                   }
                   inputProps={{ min: 1, max: stokISI, inputMode: "numeric" }}
@@ -277,11 +254,7 @@ export default function PenjualanView({
                       </InputAdornment>
                     ),
                   }}
-                  helperText={
-                    <span>
-                      Stok isi tersedia: <b>{stokISI}</b>
-                    </span>
-                  }
+                  helperText={<span>Stok isi tersedia: <b>{stokISI}</b></span>}
                 />
               </Grid>
 
@@ -293,12 +266,7 @@ export default function PenjualanView({
                     labelId="price-label"
                     label="Harga Satuan"
                     value={form.price}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        price: parseInt(e.target.value, 10),
-                      })
-                    }
+                    onChange={(e) => setForm({ ...form, price: parseInt(e.target.value, 10) })}
                   >
                     {PRICE_OPTIONS.map((p) => (
                       <MenuItem key={p} value={p}>
@@ -317,9 +285,7 @@ export default function PenjualanView({
                     labelId="method-label"
                     label="Metode Pembayaran"
                     value={form.method}
-                    onChange={(e) =>
-                      setForm({ ...form, method: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, method: e.target.value })}
                   >
                     {(activeMethods || PAYMENT_METHODS).map((m) => (
                       <MenuItem key={m} value={m}>
@@ -332,39 +298,24 @@ export default function PenjualanView({
 
               {/* Total */}
               <Grid item xs={12}>
-                <Box
-                  sx={{
-                    p: 2,
-                    bgcolor: "grey.50",
-                    border: "1px solid",
-                    borderColor: "grey.200",
-                    borderRadius: 2,
-                  }}
-                >
-                  <Stack
-                    direction="row"
-                    alignItems="center"
-                    justifyContent="space-between"
-                  >
+                <Paper elevation={1} sx={{ p: 2 }}>
+                  <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Typography fontWeight={600}>Total:</Typography>
-                    <Typography
-                      variant="h6"
-                      color="success.main"
-                      fontWeight={800}
-                    >
+                    <Typography variant="h6" color="success.main" fontWeight={800}>
                       {fmtIDR(total)}
                     </Typography>
                   </Stack>
-                </Box>
+                </Paper>
               </Grid>
 
               {/* Tombol */}
               <Grid item xs={12}>
-                <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+                <Stack direction="row" spacing={2} justifyContent="flex-end">
                   <Button
                     variant="outlined"
                     type="button"
                     onClick={loading ? undefined : onCancel}
+                    sx={{ textTransform: "none", minWidth: 100 }}
                   >
                     Batal
                   </Button>
@@ -372,6 +323,7 @@ export default function PenjualanView({
                     variant="contained"
                     type="submit"
                     disabled={loading || disabledBase}
+                    sx={{ textTransform: "none", minWidth: 100 }}
                   >
                     {loading ? "Menyimpan…" : "Simpan"}
                   </Button>
