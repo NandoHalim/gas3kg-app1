@@ -7,6 +7,28 @@ import {
   PAYMENT_METHODS,
 } from "../utils/constants";
 
+// === Timezone helpers (Asia/Makassar, UTC+08) ===
+const MAKASSAR_OFFSET_MIN = 8 * 60; // +08:00
+function toISOStringWithOffset(date, offsetMin = MAKASSAR_OFFSET_MIN) {
+  const d = new Date(date);
+  // bikin "waktu lokal Makassar" dengan cara geser dari UTC
+  const utc = d.getTime() + d.getTimezoneOffset() * 60000;
+  const local = new Date(utc + offsetMin * 60000);
+  // format ke YYYY-MM-DDTHH:mm:ss.sss+08:00
+  const pad = (n, w = 2) => String(n).padStart(w, "0");
+  const yyyy = local.getFullYear();
+  const mm = pad(local.getMonth() + 1);
+  const dd = pad(local.getDate());
+  const hh = pad(local.getHours());
+  const mi = pad(local.getMinutes());
+  const ss = pad(local.getSeconds());
+  const ms = String(local.getMilliseconds()).padStart(3, "0");
+  const sign = offsetMin >= 0 ? "+" : "-";
+  const oh = pad(Math.floor(Math.abs(offsetMin) / 60));
+  const om = pad(Math.abs(offsetMin) % 60);
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}.${ms}${sign}${oh}:${om}`;
+}
+
 const errMsg = (e, fb) => e?.message || fb;
 
 function rowsToStockObject(rows) {
@@ -132,8 +154,8 @@ export const DataService = {
 
     const isoDate =
       date && String(date).length >= 10
-        ? new Date(date).toISOString()
-        : new Date().toISOString();
+        ? toISOStringWithOffset(new Date(date))
+        : toISOStringWithOffset(new Date());
 
     const tryWithCustomer6 = () =>
       supabase.rpc("stock_sell_with_customer", {
@@ -835,7 +857,7 @@ export const DataService = {
 
 }; // << tutup DataService
 
- // =======================================================
+// =======================================================
 // ===============   SALES ANALYTICS (RPC)  ==============
 // =======================================================
 
@@ -869,7 +891,7 @@ DataService.getPeriodRange = function (type) {
     return d;
   };
 
-  const iso = (d) => d.toISOString();
+  const iso = (d) => toISOStringWithOffset(d);
 
   switch (type) {
     case "this_week": {
@@ -949,8 +971,8 @@ DataService.getWeeklyComparison = async function ({
   weekDate, // string 'YYYY-MM-DD' atau Date
   onlyPaid = false,
 }) {
-  const paramDate =
-    typeof weekDate === "string" ? weekDate : new Date(weekDate).toISOString().slice(0, 10);
+  const d = weekDate ? new Date(weekDate) : new Date();
+  const paramDate = toISOStringWithOffset(d).slice(0, 10);
   const { data, error } = await supabase.rpc("get_sales_weekly_comparison", {
     p_week: paramDate,
     p_only_paid: onlyPaid,
@@ -970,8 +992,8 @@ DataService.getMonthlyComparison = async function ({
   monthDate = new Date(), // tanggal apa saja di bulan target
   onlyPaid = false,
 }) {
-  const paramDate =
-    typeof monthDate === "string" ? monthDate : new Date(monthDate).toISOString().slice(0, 10);
+  const d = typeof monthDate === "string" ? new Date(monthDate) : monthDate;
+  const paramDate = toISOStringWithOffset(d).slice(0, 10);
   const { data, error } = await supabase.rpc("get_sales_monthly_comparison", {
     p_month: paramDate,
     p_only_paid: onlyPaid,
@@ -995,8 +1017,8 @@ DataService.getMonthlyYoY = async function ({
   monthDate = new Date(),
   onlyPaid = false,
 }) {
-  const paramDate =
-    typeof monthDate === "string" ? monthDate : new Date(monthDate).toISOString().slice(0, 10);
+  const d = typeof monthDate === "string" ? new Date(monthDate) : monthDate;
+  const paramDate = toISOStringWithOffset(d).slice(0, 10);
   const { data, error } = await supabase.rpc("get_sales_monthly_yoy", {
     p_month: paramDate,
     p_only_paid: onlyPaid,
@@ -1085,6 +1107,8 @@ DataService.getCustomerSalesByRange = async function ({
   if (error) throw new Error(error.message || "Gagal ambil riwayat pelanggan");
   return data || [];
 };
+
+
 
 /* =========================
    SETTINGS (via Supabase + LS)
@@ -1195,6 +1219,7 @@ DataService.saveSettings = async function (payload) {
   try { window.dispatchEvent(new CustomEvent("settings:updated", { detail: merged })); } catch {}
   return true;
 };
+
 /* =========================
    DASHBOARD SNAPSHOT (FAST)
    ========================= */
