@@ -51,7 +51,6 @@ export default function LoginView() {
   const touchStartRef = useRef(null);
   const emailFieldRef = useRef(null);
 
-  // Animasi
   const cardVariants = {
     hidden: { opacity: 0, y: 30, scale: 0.98 },
     visible: {
@@ -62,10 +61,8 @@ export default function LoginView() {
     },
   };
 
-  // Validasi email
   const validateEmail = (em) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em);
 
-  // Remember me
   useEffect(() => {
     try {
       const saved = localStorage.getItem("rememberEmail");
@@ -76,14 +73,13 @@ export default function LoginView() {
     } catch {}
   }, []);
 
-  // Preload background image (gate render)
+  // Preload background image (tanpa gate render)
   useEffect(() => {
     const img = new Image();
     img.src = "/login-bg.jpg";
     img.onload = () => setBgLoaded(true);
   }, []);
 
-  // Cek dukungan biometric (Credential Management / WebAuthn)
   useEffect(() => {
     const check = async () => {
       try {
@@ -100,7 +96,6 @@ export default function LoginView() {
     check();
   }, []);
 
-  // Auto-focus mobile
   useEffect(() => {
     const timer = setTimeout(() => {
       if (emailFieldRef.current && window.innerWidth < 768) {
@@ -114,7 +109,6 @@ export default function LoginView() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Keyboard-aware (mobile)
   useEffect(() => {
     const handleResize = () => {
       const isMobile = window.innerWidth < 768;
@@ -134,7 +128,6 @@ export default function LoginView() {
     }
   };
 
-  // Submit normal (form)
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -189,7 +182,6 @@ export default function LoginView() {
     }
   };
 
-  // Submit programatik (untuk biometric)
   const handleSubmitProgrammatically = async (em, pw) => {
     if (loading) return;
     if (!validateEmail(em || "")) {
@@ -213,7 +205,6 @@ export default function LoginView() {
     }
   };
 
-  // Biometric login (credential password retrieval; bukan passkey murni)
   const handleBiometricLogin = async () => {
     try {
       if (!("credentials" in navigator)) {
@@ -238,7 +229,6 @@ export default function LoginView() {
     }
   };
 
-  // Gesture untuk show/hide password
   const onTouchStart = (e) => {
     touchStartRef.current = e.touches?.[0]?.clientX ?? null;
   };
@@ -257,26 +247,7 @@ export default function LoginView() {
     touchStartRef.current = null;
   };
 
-  // === Gate render: jika gambar belum siap, jangan render apa pun (tanpa gradient) ===
-  if (!bgLoaded) {
-    return (
-      <Box
-        sx={{
-          minHeight: "100dvh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {/* Bisa kosongkan total jika mau tanpa apa pun:
-            return null;
-           Di sini pakai spinner kecil agar user paham sedang memuat. */}
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  // Background murni foto (tanpa gradient, tanpa overlay)
+  // ⬇️ Tidak ada gradient. Saat bg belum loaded, tidak tampil background apa pun (tetap render form).
   const rootBg = useMemo(
     () => ({
       minHeight: "100dvh",
@@ -284,12 +255,12 @@ export default function LoginView() {
       alignItems: "center",
       justifyContent: "center",
       p: { xs: 1, sm: 2, md: 3 },
-      backgroundImage: "url('/login-bg.jpg')",
+      backgroundImage: bgLoaded ? "url('/login-bg.jpg')" : "none",
       backgroundSize: "cover",
       backgroundPosition: "center",
       backgroundAttachment: { xs: "scroll", sm: "fixed" },
     }),
-    []
+    [bgLoaded]
   );
 
   return (
@@ -332,9 +303,7 @@ export default function LoginView() {
             sx={{
               fontSize: { xs: "1.5rem", sm: "2rem" },
               mb: { xs: 1, sm: 2 },
-              background: {
-                sm: "linear-gradient(45deg, #1976d2, #42a5f5)",
-              },
+              background: { sm: "linear-gradient(45deg, #1976d2, #42a5f5)" },
               backgroundClip: { sm: "text" },
               WebkitBackgroundClip: { sm: "text" },
               color: { xs: "inherit", sm: "transparent" },
