@@ -617,7 +617,7 @@ export default function LoginView() {
                   }}
                 />
               }
-              label="Ingat saya" {/* Fixed typo dari "Inpat" */}
+              label="Ingat saya" 
               sx={{ 
                 m: 0,
                 "& .MuiFormControlLabel-label": {
