@@ -180,13 +180,20 @@ export default function LoginView() {
   alignItems: "center",
   justifyContent: "center",
   p: { xs: 1, sm: 2, md: 3 },
+
+  // ↓ Pakai gradient transparan di atas foto
   backgroundImage: bgLoaded
-    ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%), url('/login-bg.jpg')"
+    ? "linear-gradient(135deg, rgba(102,126,234,.55), rgba(118,75,162,.55)), url('/login-bg.jpg')"
     : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+
   backgroundSize: "cover",
   backgroundPosition: "center",
-  backgroundAttachment: "fixed",
+  // ↓ iOS suka bermasalah dengan fixed; buat responsif
+  backgroundAttachment: { xs: "scroll", sm: "fixed" },
+  // ↓ Biar warna gradient ‘menyatu’ dengan foto (opsional, tapi cakep)
+  backgroundBlendMode: "overlay",
 }), [bgLoaded]);
+
 
 
   return (
