@@ -54,9 +54,8 @@ export default function LoginView() {
   const touchStartRef = useRef(null);
   const emailFieldRef = useRef(null);
 
-  // Enhanced animation variants dengan lebih smooth
   const cardVariants = {
-    hidden: { opacity: 0, y: 40, scale: 0.96 },
+    hidden: { opacity: 0, y: 30, scale: 0.98 },
     visible: {
       opacity: 1,
       y: 0,
@@ -65,16 +64,14 @@ export default function LoginView() {
         type: "spring", 
         damping: 25, 
         stiffness: 300,
-        duration: 0.6
       },
     },
   };
 
   const validateEmail = (em) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em);
 
-  // App initialization dengan simulated loading
   useEffect(() => {
-    const timer = setTimeout(() => setIsAppReady(true), 800);
+    const timer = setTimeout(() => setIsAppReady(true), 600);
     return () => clearTimeout(timer);
   }, []);
 
@@ -88,15 +85,10 @@ export default function LoginView() {
     } catch {}
   }, []);
 
-  // Enhanced background preload dengan gradient fallback
   useEffect(() => {
     const img = new Image();
     img.src = "/login-bg.jpg";
-    img.onload = () => {
-      setBgLoaded(true);
-      // Add subtle fade-in effect untuk background
-      document.body.style.transition = "background-image 0.8s ease-in-out";
-    };
+    img.onload = () => setBgLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -124,11 +116,10 @@ export default function LoginView() {
           emailFieldRef.current.focus();
         }
       }
-    }, 500); // Increased delay untuk better UX
+    }, 400);
     return () => clearTimeout(timer);
   }, []);
 
-  // Enhanced keyboard detection dengan threshold
   useEffect(() => {
     const handleResize = () => {
       const isMobile = window.innerWidth < 768;
@@ -151,55 +142,8 @@ export default function LoginView() {
     if (toast?.show && typeof toast.show === "function") {
       toast.show({ type, title, message });
     } else {
-      // Enhanced fallback notification
-      showEnhancedNotification(message, type);
+      alert(`${title ? title + ": " : ""}${message}`);
     }
-  };
-
-  const showEnhancedNotification = (message, type) => {
-    const notification = document.createElement("div");
-    const bgColor = type === "error" ? "#f44336" : 
-                   type === "success" ? "#4caf50" : 
-                   type === "warning" ? "#ff9800" : "#2196f3";
-    
-    notification.style.cssText = `
-      position: fixed;
-      top: 24px;
-      left: 50%;
-      transform: translateX(-50%) translateY(-20px);
-      background: ${bgColor};
-      color: white;
-      padding: 14px 24px;
-      border-radius: 12px;
-      z-index: 10000;
-      font-size: 14px;
-      font-weight: 500;
-      max-width: 85%;
-      text-align: center;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-      backdrop-filter: blur(10px);
-      opacity: 0;
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      border: 1px solid rgba(255,255,255,0.1);
-    `;
-    
-    notification.textContent = message;
-    document.body.appendChild(notification);
-
-    // Animate in
-    requestAnimationFrame(() => {
-      notification.style.transform = "translateX(-50%) translateY(0)";
-      notification.style.opacity = "1";
-    });
-
-    setTimeout(() => {
-      // Animate out
-      notification.style.transform = "translateX(-50%) translateY(-20px)";
-      notification.style.opacity = "0";
-      setTimeout(() => {
-        try { document.body.removeChild(notification); } catch {}
-      }, 400);
-    }, 3200);
   };
 
   const handleSubmit = async (e) => {
@@ -269,7 +213,6 @@ export default function LoginView() {
       await signInEmailPassword(em, pw);
       setAttemptCount(0);
       
-      // FIX: Handle remember me untuk biometric login
       if (remember) localStorage.setItem("rememberEmail", em);
       else localStorage.removeItem("rememberEmail");
       
@@ -308,7 +251,6 @@ export default function LoginView() {
     }
   };
 
-  // Enhanced touch gestures dengan visual feedback
   const onTouchStart = (e) => {
     touchStartRef.current = e.touches?.[0]?.clientX ?? null;
   };
@@ -323,39 +265,34 @@ export default function LoginView() {
       const show = diff > 0;
       setShowPass(show);
       setGestureFeedback(show ? "show" : "hide");
-      
-      // Enhanced feedback dengan longer duration
-      setTimeout(() => setGestureFeedback(null), 600);
+      setTimeout(() => setGestureFeedback(null), 500);
     }
     touchStartRef.current = null;
   };
 
-  // Enhanced background styling dengan layered design - DARKER OVERLAY
+  // BACKGROUND LEBIH TERANG dan CARD LEBIH KECIL
   const rootBg = useMemo(() => ({
     minHeight: "100dvh",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    p: { xs: 1, sm: 2, md: 3 },
+    p: { xs: 2, sm: 3 },
     
-    // DARKER OVERLAY untuk better contrast
-    backgroundColor: "#2d3748", // Darker base fallback color
+    // Background lebih terang dan jelas
+    backgroundColor: "#667eea",
     backgroundImage: bgLoaded 
-      ? "linear-gradient(135deg, rgba(45, 55, 72, 0.9) 0%, rgba(74, 85, 104, 0.9) 100%), url('/login-bg.jpg')"
-      : "linear-gradient(135deg, #2d3748 0%, #4a5568 100%)",
+      ? "linear-gradient(135deg, rgba(102, 126, 234, 0.6) 0%, rgba(118, 75, 162, 0.6) 100%), url('/login-bg.jpg')"
+      : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundAttachment: { xs: "scroll", sm: "fixed" },
     backgroundBlendMode: "overlay",
-    transition: "all 0.8s ease-in-out",
+    transition: "all 0.6s ease-in-out",
     
-    // Smooth loading state
     opacity: isAppReady ? 1 : 0,
-    transform: isAppReady ? "scale(1)" : "scale(1.02)",
   }), [bgLoaded, isAppReady]);
 
-  // Loading skeleton sebelum app ready
   if (!isAppReady) {
     return (
       <Box sx={{ 
@@ -363,21 +300,15 @@ export default function LoginView() {
         display: "flex", 
         alignItems: "center", 
         justifyContent: "center",
-        background: "linear-gradient(135deg, #2d3748 0%, #4a5568 100%)"
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
       }}>
-        <CircularProgress 
-          size={60} 
-          sx={{ 
-            color: "white",
-            opacity: 0.8
-          }} 
-        />
+        <CircularProgress size={50} sx={{ color: "white" }} />
       </Box>
     );
   }
 
   return (
-    <Fade in={isAppReady} timeout={800}>
+    <Fade in={isAppReady} timeout={600}>
       <Box sx={rootBg}>
         <MotionCard
           variants={cardVariants}
@@ -385,31 +316,18 @@ export default function LoginView() {
           animate="visible"
           sx={{
             width: "100%",
-            maxWidth: { xs: "95%", sm: 400, md: 420 },
-            borderRadius: { xs: 3, sm: 4 },
+            maxWidth: { xs: "90%", sm: 380, md: 400 }, // Card lebih kecil
+            borderRadius: 2.5,
             mx: "auto",
-            mb: isKeyboardVisible ? "80px" : 0,
-            transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+            mb: isKeyboardVisible ? "60px" : 0,
+            transition: "all 0.3s ease",
             boxShadow: {
-              xs: "0 25px 50px rgba(0,0,0,0.35)",
-              sm: "0 40px 80px rgba(0,0,0,0.25), 0 20px 40px rgba(0,0,0,0.2)",
+              xs: "0 8px 32px rgba(0,0,0,0.15)",
+              sm: "0 12px 48px rgba(0,0,0,0.12)",
             },
-            backdropFilter: { xs: "blur(12px)", sm: "blur(16px)" },
-            backgroundColor: { 
-              xs: "rgba(255,255,255,0.98)", 
-              sm: "rgba(255,255,255,0.98)" 
-            },
-            border: { 
-              xs: "2px solid rgba(255,255,255,0.6)", 
-              sm: "2px solid rgba(255,255,255,0.7)" 
-            },
-            // Enhanced hover effect
-            "&:hover": {
-              boxShadow: {
-                xs: "0 30px 60px rgba(0,0,0,0.4)",
-                sm: "0 50px 100px rgba(0,0,0,0.3), 0 25px 50px rgba(0,0,0,0.25)",
-              },
-            },
+            backdropFilter: "blur(8px)",
+            backgroundColor: "rgba(255,255,255,0.96)", // Lebih solid
+            border: "1px solid rgba(255,255,255,0.3)",
           }}
         >
           <CardContent
@@ -419,43 +337,39 @@ export default function LoginView() {
             sx={{
               display: "flex",
               flexDirection: "column",
-              gap: 3, // Increased gap untuk better spacing
-              p: { xs: 3, sm: 4 },
+              gap: 2.5, // Gap lebih compact
+              p: { xs: 2.5, sm: 3 }, // Padding lebih kecil
             }}
           >
-            {/* Enhanced Header dengan LARGER FONT dan better hierarchy */}
-            <Box sx={{ textAlign: "center", mb: 2 }}>
+            {/* Header yang lebih compact */}
+            <Box sx={{ textAlign: "center", mb: 1 }}>
               <Typography
-                variant="h3"
-                fontWeight={900} // Increased weight
+                variant="h4"
+                fontWeight={700}
                 sx={{
-                  fontSize: { xs: "2.2rem", sm: "2.75rem" }, // Larger fonts
+                  fontSize: { xs: "1.75rem", sm: "2rem" }, // Ukuran lebih reasonable
                   background: "linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)",
                   backgroundClip: "text",
                   WebkitBackgroundClip: "text",
                   color: "transparent",
-                  letterSpacing: "-0.8px", // Tighter letter spacing
-                  mb: 1,
-                  textShadow: "0 2px 4px rgba(0,0,0,0.1)", // Added text shadow
+                  mb: 0.5,
                 }}
               >
                 🔐 Login
               </Typography>
               <Typography
-                variant="h6"
+                variant="body1"
                 color="text.secondary"
                 sx={{ 
-                  fontSize: { xs: "1.1rem", sm: "1.2rem" }, // Larger subtitle
-                  fontWeight: 500,
-                  opacity: 0.9,
-                  letterSpacing: "-0.2px",
+                  fontSize: "0.95rem",
+                  opacity: 0.8
                 }}
               >
                 Selamat datang kembali
               </Typography>
             </Box>
 
-            {/* Enhanced Email Field dengan BETTER VISIBILITY */}
+            {/* Form fields yang lebih compact */}
             <TextField
               id="email-field"
               label="Email"
@@ -469,41 +383,26 @@ export default function LoginView() {
               fullWidth
               sx={{
                 "& .MuiOutlinedInput-root": {
-                  borderRadius: 3,
-                  backgroundColor: "rgba(255,255,255,0.95)",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                  borderRadius: 2,
+                  transition: "all 0.2s ease",
                   "&:hover": { 
-                    transform: "translateY(-2px)",
-                    backgroundColor: "rgba(255,255,255,1)",
-                    boxShadow: "0 6px 20px rgba(25, 118, 210, 0.15)",
-                  },
-                  "&.Mui-focused": {
-                    transform: "translateY(-2px)",
-                    boxShadow: "0 8px 25px rgba(25, 118, 210, 0.25)",
-                    backgroundColor: "rgba(255,255,255,1)",
+                    boxShadow: "0 2px 8px rgba(25, 118, 210, 0.1)",
                   },
                 },
                 "& .MuiInputBase-input": { 
-                  fontSize: { xs: "17px", sm: "18px" }, // Larger input text
-                  padding: { xs: "16px 18px", sm: "18px 20px" }, // Larger padding
-                  fontWeight: 500,
-                },
-                "& .MuiInputLabel-root": {
-                  fontSize: { xs: "16px", sm: "17px" }, // Larger label
-                  fontWeight: 600,
+                  fontSize: "15px",
+                  padding: "14px 16px",
                 },
               }}
               InputProps={{
                 startAdornment: (
-                  <InputAdornment position="start" sx={{ mr: 1.5 }}>
-                    <Email fontSize="medium" sx={{ opacity: 0.8 }} /> {/* Larger icon */}
+                  <InputAdornment position="start" sx={{ mr: 1 }}>
+                    <Email fontSize="small" sx={{ opacity: 0.7 }} />
                   </InputAdornment>
                 ),
               }}
             />
 
-            {/* Enhanced Password Field dengan BETTER VISIBILITY */}
             <TextField
               label="Password"
               type={showPass ? "text" : "password"}
@@ -516,40 +415,21 @@ export default function LoginView() {
               onTouchEnd={onTouchEnd}
               sx={{
                 "& .MuiOutlinedInput-root": {
-                  borderRadius: 3,
-                  backgroundColor: "rgba(255,255,255,0.95)",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                  borderRadius: 2,
+                  transition: "all 0.2s ease",
                   "&:hover": { 
-                    transform: "translateY(-2px)",
-                    backgroundColor: "rgba(255,255,255,1)",
-                    boxShadow: "0 6px 20px rgba(25, 118, 210, 0.15)",
+                    boxShadow: "0 2px 8px rgba(25, 118, 210, 0.1)",
                   },
-                  "&.Mui-focused": {
-                    transform: "translateY(-2px)",
-                    boxShadow: "0 8px 25px rgba(25, 118, 210, 0.25)",
-                    backgroundColor: "rgba(255,255,255,1)",
-                  },
-                  border: gestureFeedback === "show" 
-                    ? "2px solid rgba(25, 118, 210, 0.8)" 
-                    : gestureFeedback === "hide" 
-                    ? "2px solid rgba(0, 0, 0, 0.3)" 
-                    : undefined,
                 },
                 "& .MuiInputBase-input": { 
-                  fontSize: { xs: "17px", sm: "18px" }, // Larger input text
-                  padding: { xs: "16px 18px", sm: "18px 20px" }, // Larger padding
-                  fontWeight: 500,
-                },
-                "& .MuiInputLabel-root": {
-                  fontSize: { xs: "16px", sm: "17px" }, // Larger label
-                  fontWeight: 600,
+                  fontSize: "15px",
+                  padding: "14px 16px",
                 },
               }}
               InputProps={{
                 startAdornment: (
-                  <InputAdornment position="start" sx={{ mr: 1.5 }}>
-                    <Lock fontSize="medium" sx={{ opacity: 0.8 }} /> {/* Larger icon */}
+                  <InputAdornment position="start" sx={{ mr: 1 }}>
+                    <Lock fontSize="small" sx={{ opacity: 0.7 }} />
                   </InputAdornment>
                 ),
                 endAdornment: (
@@ -558,27 +438,15 @@ export default function LoginView() {
                       aria-label="toggle password visibility"
                       onClick={() => setShowPass((s) => !s)}
                       edge="end"
-                      sx={{
-                        padding: { xs: "12px", sm: "14px" }, // Larger touch target
-                        transition: "all 0.2s ease",
-                        "&:hover": { 
-                          backgroundColor: "rgba(25, 118, 210, 0.12)",
-                          transform: "scale(1.15)" 
-                        },
-                        "&:active": { transform: "scale(0.9)" },
-                      }}
+                      sx={{ padding: "8px" }}
                     >
-                      {showPass ? 
-                        <VisibilityOff fontSize="medium" /> : 
-                        <Visibility fontSize="medium" />
-                      }
+                      {showPass ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
                   </InputAdornment>
                 ),
               }}
             />
 
-            {/* Enhanced Error Message */}
             {errorMsg && (
               <Fade in={!!errorMsg}>
                 <Typography 
@@ -587,13 +455,11 @@ export default function LoginView() {
                   sx={{ 
                     display: "flex",
                     alignItems: "center",
-                    gap: 1.5,
-                    p: 2,
-                    borderRadius: 2,
+                    gap: 1,
+                    p: 1,
+                    borderRadius: 1,
                     backgroundColor: "error.light",
-                    fontSize: "15px",
-                    fontWeight: 600,
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                    fontSize: "14px",
                   }}
                 >
                   ⚠️ {errorMsg}
@@ -601,181 +467,104 @@ export default function LoginView() {
               </Fade>
             )}
 
-            {/* Enhanced Remember Me dengan LARGER TEXT */}
             <FormControlLabel
               control={
                 <Checkbox
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  sx={{ 
-                    mr: 2,
-                    "&.Mui-checked": { 
-                      color: "primary.main",
-                      transform: "scale(1.1)",
-                    },
-                    transform: "scale(1.1)",
-                  }}
+                  size="small"
                 />
               }
-              label="Ingat saya" 
+              label="Ingat saya"
               sx={{ 
-                m: 0,
                 "& .MuiFormControlLabel-label": {
-                  fontSize: "16px", // Larger text
-                  fontWeight: 600,
+                  fontSize: "14px",
                 }
               }}
             />
 
-            {/* Enhanced Primary Button dengan MORE PROMINENT STYLING */}
+            {/* Button yang lebih compact tapi tetap prominent */}
             <Button
               type="submit"
               variant="contained"
               fullWidth
               disabled={loading || !email.trim() || !password.trim()}
               sx={{
-                minHeight: "58px", // Taller button
-                py: 2,
-                borderRadius: 3,
-                fontSize: "18px", // Larger text
-                fontWeight: 800, // Bolder text
+                minHeight: "46px",
+                py: 1.25,
+                borderRadius: 2,
+                fontSize: "15px",
+                fontWeight: 600,
                 textTransform: "none",
                 background: "linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)",
-                boxShadow: "0 10px 30px rgba(25, 118, 210, 0.4)",
-                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                position: "relative",
-                overflow: "hidden",
+                boxShadow: "0 4px 12px rgba(25, 118, 210, 0.3)",
+                transition: "all 0.2s ease",
                 "&:hover": {
-                  transform: "translateY(-3px)",
-                  boxShadow: "0 15px 40px rgba(25, 118, 210, 0.5)",
-                  background: "linear-gradient(135deg, #1565c0 0%, #1e88e5 100%)",
+                  transform: "translateY(-1px)",
+                  boxShadow: "0 6px 16px rgba(25, 118, 210, 0.4)",
                 },
                 "&:active": {
                   transform: "translateY(0)",
-                  boxShadow: "0 8px 25px rgba(25, 118, 210, 0.4)",
-                },
-                "&:disabled": {
-                  transform: "none",
-                  boxShadow: "none",
-                  opacity: 0.7,
-                },
-                "&::before": {
-                  content: '""',
-                  position: "absolute",
-                  top: 0,
-                  left: "-100%",
-                  width: "100%",
-                  height: "100%",
-                  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)",
-                  transition: "left 0.6s ease",
-                },
-                "&:hover::before": {
-                  left: "100%",
                 },
               }}
             >
               {loading ? (
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                  <CircularProgress size={24} sx={{ color: "white" }} />
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <CircularProgress size={18} sx={{ color: "white" }} />
                   Memproses...
                 </Box>
               ) : (
-                "MASUK"               )}
+                "Masuk"
+              )}
             </Button>
 
-            {/* Separator untuk Biometric Button */}
             {supportsBiometric && (
-              <>
-                <Box sx={{ 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: 2, 
-                  my: 1 
-                }}>
-                  <Box sx={{ 
-                    flex: 1, 
-                    height: "1px", 
-                    backgroundColor: "divider",
-                    opacity: 0.6
-                  }} />
-                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-                    atau
-                  </Typography>
-                  <Box sx={{ 
-                    flex: 1, 
-                    height: "1px", 
-                    backgroundColor: "divider",
-                    opacity: 0.6
-                  }} />
-                </Box>
-
-                {/* Enhanced Biometric Button */}
-                <Button
-                  variant="outlined"
-                  fullWidth
-                  startIcon={<Fingerprint />}
-                  onClick={handleBiometricLogin}
-                  sx={{
-                    minHeight: "52px", // Taller button
-                    fontSize: "16px", // Larger text
-                    fontWeight: 700, // Bolder text
-                    textTransform: "none",
-                    borderRadius: 3,
-                    border: "2px solid",
-                    borderColor: "primary.main",
-                    color: "primary.main",
-                    transition: "all 0.3s ease",
-                    "&:hover": {
-                      backgroundColor: "primary.main",
-                      color: "white",
-                      transform: "translateY(-2px)",
-                      boxShadow: "0 8px 25px rgba(25, 118, 210, 0.25)",
-                      borderColor: "primary.main",
-                    },
-                  }}
-                >
-                  Login dengan Biometrik
-                </Button>
-              </>
+              <Button
+                variant="outlined"
+                fullWidth
+                startIcon={<Fingerprint />}
+                onClick={handleBiometricLogin}
+                sx={{
+                  minHeight: "42px",
+                  fontSize: "14px",
+                  fontWeight: 500,
+                  textTransform: "none",
+                  borderRadius: 2,
+                  borderColor: "primary.main",
+                  color: "primary.main",
+                }}
+              >
+                Login dengan Biometrik
+              </Button>
             )}
 
-            {/* Enhanced Footer Links dengan better spacing */}
-            <Box sx={{ textAlign: "center", mt: 3 }}>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5, fontSize: "15px" }}>
+            {/* Footer links yang compact */}
+            <Box sx={{ textAlign: "center", mt: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: "14px", mb: 1.5 }}>
                 Belum punya akun?{" "}
                 <Link
                   component="button"
                   type="button"
                   onClick={() => navigate("/register")}
                   sx={{ 
-                    fontWeight: 700,
+                    fontWeight: 600,
                     color: "primary.main",
-                    textDecoration: "none",
-                    fontSize: "15px",
-                    "&:hover": { 
-                      textDecoration: "underline",
-                      color: "primary.dark" 
-                    }
+                    fontSize: "14px",
                   }}
                 >
                   Daftar di sini
                 </Link>
               </Typography>
               
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: "15px" }}>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: "14px" }}>
                 <Link
                   component="button"
                   type="button"
                   onClick={() => navigate("/forgot-password")}
                   sx={{ 
-                    fontWeight: 600,
+                    fontWeight: 500,
                     color: "text.secondary",
-                    textDecoration: "none",
-                    fontSize: "15px",
-                    "&:hover": { 
-                      color: "primary.main",
-                      textDecoration: "underline" 
-                    }
+                    fontSize: "14px",
                   }}
                 >
                   Lupa password?
