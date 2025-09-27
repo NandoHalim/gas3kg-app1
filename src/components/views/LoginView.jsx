@@ -253,25 +253,24 @@ export default function LoginView() {
   };
 
   // Background style
-  const rootBg = useMemo(
-    () => ({
-      minHeight: "100dvh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      p: { xs: 1, sm: 2, md: 3 },
-      backgroundColor: "#667eea",
-      backgroundImage: bgLoaded
-        ? "linear-gradient(135deg, rgba(102,126,234,.55), rgba(118,75,162,.55)), url('/login-bg.jpg')"
-        : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      backgroundSize: "cover",
-      backgroundPosition: "center",
-      backgroundAttachment: { xs: "scroll", sm: "fixed" },
-      backgroundBlendMode: "overlay",
-      transition: "background-image .5s ease-in-out, background-color .3s ease",
-    }),
-    [bgLoaded]
-  );
+  const rootBg = useMemo(() => ({
+  minHeight: "100dvh",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  p: { xs: 1, sm: 2, md: 3 },
+
+  // langsung pakai foto, fallback gradient polos saja
+  backgroundImage: bgLoaded 
+    ? "url('/login-bg.jpg')" 
+    : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  backgroundAttachment: { xs: "scroll", sm: "fixed" },
+
+  transition: "background-image .5s ease-in-out",
+}), [bgLoaded]);
+
 
   return (
     <Box sx={rootBg}>
