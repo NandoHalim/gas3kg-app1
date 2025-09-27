@@ -680,8 +680,7 @@ export default function LoginView() {
                   Memproses...
                 </Box>
               ) : (
-                "MASUK" {/* Uppercase untuk emphasis */}
-              )}
+                "MASUK"               )}
             </Button>
 
             {/* Separator untuk Biometric Button */}
