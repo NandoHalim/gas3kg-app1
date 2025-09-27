@@ -51,7 +51,7 @@ export default function LoginView() {
   const touchStartRef = useRef(null);
   const emailFieldRef = useRef(null);
 
-  // Variants animasi
+  // Animasi
   const cardVariants = {
     hidden: { opacity: 0, y: 30, scale: 0.98 },
     visible: {
@@ -62,9 +62,10 @@ export default function LoginView() {
     },
   };
 
-  // Validasi email sederhana
+  // Validasi email
   const validateEmail = (em) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em);
 
+  // Remember me
   useEffect(() => {
     try {
       const saved = localStorage.getItem("rememberEmail");
@@ -75,14 +76,16 @@ export default function LoginView() {
     } catch {}
   }, []);
 
+  // Preload background image (gate render)
   useEffect(() => {
     const img = new Image();
     img.src = "/login-bg.jpg";
     img.onload = () => setBgLoaded(true);
   }, []);
 
+  // Cek dukungan biometric (Credential Management / WebAuthn)
   useEffect(() => {
-    const checkBiometricSupport = async () => {
+    const check = async () => {
       try {
         if (
           window.PublicKeyCredential &&
@@ -94,9 +97,10 @@ export default function LoginView() {
         }
       } catch {}
     };
-    checkBiometricSupport();
+    check();
   }, []);
 
+  // Auto-focus mobile
   useEffect(() => {
     const timer = setTimeout(() => {
       if (emailFieldRef.current && window.innerWidth < 768) {
@@ -110,6 +114,7 @@ export default function LoginView() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Keyboard-aware (mobile)
   useEffect(() => {
     const handleResize = () => {
       const isMobile = window.innerWidth < 768;
@@ -129,7 +134,7 @@ export default function LoginView() {
     }
   };
 
-  // Submit normal (dari form)
+  // Submit normal (form)
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -184,7 +189,7 @@ export default function LoginView() {
     }
   };
 
-  // Submit khusus biometric
+  // Submit programatik (untuk biometric)
   const handleSubmitProgrammatically = async (em, pw) => {
     if (loading) return;
     if (!validateEmail(em || "")) {
@@ -197,7 +202,6 @@ export default function LoginView() {
     try {
       await signInEmailPassword(em, pw);
       setAttemptCount(0);
-
       safeToast("success", "Selamat datang kembali 👋", "Login Sukses");
       navigate("/", { replace: true });
     } catch (err) {
@@ -209,6 +213,7 @@ export default function LoginView() {
     }
   };
 
+  // Biometric login (credential password retrieval; bukan passkey murni)
   const handleBiometricLogin = async () => {
     try {
       if (!("credentials" in navigator)) {
@@ -233,7 +238,7 @@ export default function LoginView() {
     }
   };
 
-  // Gesture
+  // Gesture untuk show/hide password
   const onTouchStart = (e) => {
     touchStartRef.current = e.touches?.[0]?.clientX ?? null;
   };
@@ -252,25 +257,40 @@ export default function LoginView() {
     touchStartRef.current = null;
   };
 
-  // Background style
-  const rootBg = useMemo(() => ({
-  minHeight: "100dvh",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  p: { xs: 1, sm: 2, md: 3 },
+  // === Gate render: jika gambar belum siap, jangan render apa pun (tanpa gradient) ===
+  if (!bgLoaded) {
+    return (
+      <Box
+        sx={{
+          minHeight: "100dvh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {/* Bisa kosongkan total jika mau tanpa apa pun:
+            return null;
+           Di sini pakai spinner kecil agar user paham sedang memuat. */}
+        <CircularProgress />
+      </Box>
+    );
+  }
 
-  // langsung pakai foto, fallback gradient polos saja
-  backgroundImage: bgLoaded 
-    ? "url('/login-bg.jpg')" 
-    : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-  backgroundSize: "cover",
-  backgroundPosition: "center",
-  backgroundAttachment: { xs: "scroll", sm: "fixed" },
-
-  transition: "background-image .5s ease-in-out",
-}), [bgLoaded]);
-
+  // Background murni foto (tanpa gradient, tanpa overlay)
+  const rootBg = useMemo(
+    () => ({
+      minHeight: "100dvh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      p: { xs: 1, sm: 2, md: 3 },
+      backgroundImage: "url('/login-bg.jpg')",
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundAttachment: { xs: "scroll", sm: "fixed" },
+    }),
+    []
+  );
 
   return (
     <Box sx={rootBg}>
@@ -297,13 +317,13 @@ export default function LoginView() {
         <CardContent
           component="form"
           onSubmit={handleSubmit}
+          noValidate
           sx={{
             display: "flex",
             flexDirection: "column",
             gap: { xs: 2, sm: 3 },
             p: { xs: 2, sm: 3 },
           }}
-          noValidate
         >
           <Typography
             variant="h4"
@@ -389,9 +409,7 @@ export default function LoginView() {
                     edge="end"
                     sx={{
                       padding: { xs: "8px", sm: "12px" },
-                      "&:active": {
-                        backgroundColor: "rgba(0,0,0,0.05)",
-                      },
+                      "&:active": { backgroundColor: "rgba(0,0,0,0.05)" },
                     }}
                   >
                     {showPass ? <VisibilityOff /> : <Visibility />}
