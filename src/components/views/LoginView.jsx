@@ -1,5 +1,5 @@
 // src/components/views/LoginView.jsx
-import React, { useEffect, useMemo, useRef, useState, Suspense } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -18,14 +18,11 @@ import { Visibility, VisibilityOff, Email, Lock, Fingerprint } from "@mui/icons-
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
-// === Konteks aplikasi (tetap sama dengan logika lama) ===
+// === Konteks aplikasi (logika autentikasi lama tetap dipakai) ===
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 
 const MotionCard = motion(Card);
-
-// Lazy component contoh (untuk demo lazy load bundle di mobile)
-const HeavyComponent = React.lazy(() => import(/* webpackChunkName: "heavy-chunk" */ "./_HeavyComponentDemo.jsx"));
 
 export default function LoginView() {
   const { signInEmailPassword } = useAuth();
@@ -147,8 +144,7 @@ export default function LoginView() {
   // Biometric (progressive enhancement – akan fallback jika tidak didukung)
   const handleBiometricLogin = async () => {
     try {
-      // Catatan: Ini hanya contoh sederhana.
-      // Untuk produksi, gunakan WebAuthn/Passkeys dengan server-side verification.
+      // Catatan: Untuk produksi, gunakan WebAuthn/Passkeys dengan verifikasi server.
       if (!("credentials" in navigator)) return;
       const cred = await navigator.credentials.get({ mediation: "optional", password: true });
       if (cred) {
@@ -156,7 +152,6 @@ export default function LoginView() {
         setPassword(cred.password || "");
         // Submit setelah isi field
         const fakeEvent = new Event("submit");
-        // Kirim via handler
         await handleSubmit(fakeEvent);
       }
     } catch {
@@ -410,11 +405,6 @@ export default function LoginView() {
               </Link>
             </Typography>
           </Box>
-
-          {/* Contoh penggunaan lazy component hanya bila diperlukan */}
-          <Suspense fallback={null}>
-            {false && <HeavyComponent />}
-          </Suspense>
         </CardContent>
       </MotionCard>
     </Box>
