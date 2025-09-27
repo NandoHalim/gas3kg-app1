@@ -175,23 +175,19 @@ export default function LoginView() {
 
   // Style memo untuk menghindari re-render mahal di mobile
   const rootBg = useMemo(() => ({
-    minHeight: "100dvh", // dynamic viewport height untuk mobile
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    p: { xs: 1, sm: 2, md: 3 },
-    backgroundImage:
-      bgLoaded
-        ? { xs: "none", sm: "url('/login-bg.jpg')" }
-        : "none",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    backgroundAttachment: { xs: "scroll", sm: "fixed" },
-    background: {
-      xs: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      sm: "none",
-    },
-  }), [bgLoaded]);
+  minHeight: "100dvh",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  p: { xs: 1, sm: 2, md: 3 },
+  backgroundImage: bgLoaded
+    ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%), url('/login-bg.jpg')"
+    : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  backgroundAttachment: "fixed",
+}), [bgLoaded]);
+
 
   return (
     <Box sx={rootBg}>
