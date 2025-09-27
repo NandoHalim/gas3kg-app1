@@ -18,6 +18,7 @@ import {
   VisibilityOff,
   Email,
   Lock,
+  Fingerprint,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -44,6 +45,7 @@ export default function LoginView() {
 
   const [gestureFeedback, setGestureFeedback] = useState(null);
   const [bgLoaded, setBgLoaded] = useState(false);
+  const [supportsBiometric, setSupportsBiometric] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   const touchStartRef = useRef(null);
@@ -61,7 +63,6 @@ export default function LoginView() {
 
   const validateEmail = (em) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em);
 
-  // Prefill dari localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem("rememberEmail");
@@ -72,14 +73,29 @@ export default function LoginView() {
     } catch {}
   }, []);
 
-  // Preload background image
+  // Preload background image (tanpa gate render)
   useEffect(() => {
     const img = new Image();
     img.src = "/login-bg.jpg";
     img.onload = () => setBgLoaded(true);
   }, []);
 
-  // Auto-focus mobile
+  useEffect(() => {
+    const check = async () => {
+      try {
+        if (
+          window.PublicKeyCredential &&
+          (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable?.())
+        ) {
+          setSupportsBiometric(true);
+        } else if ("credentials" in navigator) {
+          setSupportsBiometric(true);
+        }
+      } catch {}
+    };
+    check();
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       if (emailFieldRef.current && window.innerWidth < 768) {
@@ -93,7 +109,6 @@ export default function LoginView() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Keyboard-aware (mobile)
   useEffect(() => {
     const handleResize = () => {
       const isMobile = window.innerWidth < 768;
@@ -167,7 +182,53 @@ export default function LoginView() {
     }
   };
 
-  // Gesture untuk show/hide password
+  const handleSubmitProgrammatically = async (em, pw) => {
+    if (loading) return;
+    if (!validateEmail(em || "")) {
+      setErrorMsg("Format email tidak valid");
+      return;
+    }
+
+    setLoading(true);
+    setErrorMsg("");
+    try {
+      await signInEmailPassword(em, pw);
+      setAttemptCount(0);
+      safeToast("success", "Selamat datang kembali 👋", "Login Sukses");
+      navigate("/", { replace: true });
+    } catch (err) {
+      const msg = err?.message || "Autentikasi biometrik gagal";
+      setErrorMsg(msg);
+      safeToast("error", msg, "Login Gagal");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    try {
+      if (!("credentials" in navigator)) {
+        safeToast("info", "Fitur biometrik tidak didukung", "Info");
+        return;
+      }
+      const cred = await navigator.credentials.get({
+        mediation: "optional",
+        password: true,
+      });
+      if (cred) {
+        const em = cred.id || "";
+        const pw = cred.password || "";
+        setEmail(em);
+        setPassword(pw);
+        await handleSubmitProgrammatically(em, pw);
+      }
+    } catch (error) {
+      if (error?.name !== "NotAllowedError") {
+        safeToast("error", "Autentikasi biometrik gagal", "Error");
+      }
+    }
+  };
+
   const onTouchStart = (e) => {
     touchStartRef.current = e.touches?.[0]?.clientX ?? null;
   };
@@ -186,6 +247,7 @@ export default function LoginView() {
     touchStartRef.current = null;
   };
 
+  // ⬇️ Tidak ada gradient. Saat bg belum loaded, tidak tampil background apa pun (tetap render form).
   const rootBg = useMemo(
     () => ({
       minHeight: "100dvh",
@@ -227,7 +289,6 @@ export default function LoginView() {
           component="form"
           onSubmit={handleSubmit}
           noValidate
-          autoComplete="on"
           sx={{
             display: "flex",
             flexDirection: "column",
@@ -254,12 +315,11 @@ export default function LoginView() {
           <TextField
             id="email-field"
             label="Email"
-            name="username"
-            autoComplete="username"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="email"
             inputMode="email"
             inputRef={emailFieldRef}
             fullWidth
@@ -282,12 +342,11 @@ export default function LoginView() {
 
           <TextField
             label="Password"
-            name="current-password"
-            autoComplete="current-password"
             type={showPass ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            autoComplete="current-password"
             fullWidth
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
@@ -375,6 +434,18 @@ export default function LoginView() {
               "Masuk"
             )}
           </Button>
+
+          {supportsBiometric && (
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={<Fingerprint />}
+              onClick={handleBiometricLogin}
+              sx={{ minHeight: "44px", fontSize: "16px" }}
+            >
+              Login dengan Biometrik
+            </Button>
+          )}
 
           <Box sx={{ textAlign: "center", mt: 2 }}>
             <Typography variant="body2" color="text.secondary">
