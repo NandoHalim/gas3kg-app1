@@ -36,7 +36,30 @@ import {
   DialogActions,
   Alert,
   Divider,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  TableSortLabel,
+  IconButton,
+  CircularProgress,
+  Skeleton,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
+
+// Icons
+import {
+  ExpandMore as ExpandMoreIcon,
+  FirstPage as FirstPageIcon,
+  LastPage as LastPageIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  ReceiptLong as ReceiptLongIcon,
+  Inventory as InventoryIcon,
+  CreditCard as CreditCardIcon,
+  Search as SearchIcon,
+  FilterList as FilterListIcon,
+} from "@mui/icons-material";
 
 /* ============
    XLSX helper
@@ -57,29 +80,167 @@ async function exportXlsx(filename, rows, columns) {
 }
 
 /* =========
-   Utilities
+   Utilities & Constants
    ========= */
+const CARD_STYLES = {
+  borderRadius: 3,
+  boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+  marginBottom: 3
+};
+
+const TABLE_STYLES = {
+  borderRadius: 2,
+  overflow: 'hidden',
+  '& .MuiTableHead-root': {
+    background: 'linear-gradient(45deg, #f8fafc 30%, #f1f5f9 90%)'
+  }
+};
+
 const FIELD_PROPS = { fullWidth: true, size: "medium" };
 const FIELD_SX = {
-  "& .MuiOutlinedInput-root": { borderRadius: 2, minHeight: 48 },
+  "& .MuiOutlinedInput-root": { 
+    borderRadius: 2, 
+    minHeight: 48,
+    transition: 'all 0.2s ease',
+    '&:hover': {
+      boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.1)'
+    }
+  },
   "& input": { paddingTop: 1.25, paddingBottom: 1.25 },
 };
-const zebra = (i) => (i % 2 ? { background: "#fcfcfd" } : undefined);
+
+const zebra = (i) => (i % 2 ? { background: "#fafafa" } : undefined);
+
 const statusStyle = (s) => {
   const v = String(s || "").toUpperCase();
   if (v === "LUNAS") return { bg: "#dcfce7", fg: "#166534", icon: "✅" };
-  if (v === "DIBATALKAN") return { bg: "#e5e7eb", fg: "#374151", icon: "⚫" };
+  if (v === "DIBATALKAN") return { bg: "#f3f4f6", fg: "#374151", icon: "⚫" };
+  if (v === "BELUM") return { bg: "#fef3c7", fg: "#92400e", icon: "⏳" };
   return { bg: "#fee2e2", fg: "#991b1b", icon: "❌" };
 };
+
+/* ===============
+   Custom Components
+   =============== */
+
+// Status Chip Component
+function StatusChip({ status }) {
+  const style = statusStyle(status);
+  
+  return (
+    <Chip
+      label={status || "-"}
+      size="small"
+      sx={{ 
+        bgcolor: style.bg, 
+        color: style.fg, 
+        fontWeight: 600,
+        fontSize: '0.75rem',
+        px: 0.5,
+        minWidth: 80
+      }}
+    />
+  );
+}
+
+// Pagination Component
+function CustomPagination({ page, totalPages, onPageChange, pageSize, onPageSizeChange, loading }) {
+  return (
+    <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-end" flexWrap="wrap">
+      <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
+        Baris per halaman:
+      </Typography>
+      <FormControl size="small" sx={{ minWidth: 80 }}>
+        <Select
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+          disabled={loading}
+        >
+          {[10, 25, 50, 100].map((n) => (
+            <MenuItem key={n} value={n}>{n}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      
+      <Typography variant="body2" sx={{ ml: 1, minWidth: 100, textAlign: 'center' }}>
+        {`Hal. ${page} dari ${totalPages}`}
+      </Typography>
+      
+      <IconButton 
+        disabled={page <= 1 || loading} 
+        onClick={() => onPageChange(1)}
+        size="small"
+        sx={{ mx: 0.5 }}
+      >
+        <FirstPageIcon />
+      </IconButton>
+      <IconButton 
+        disabled={page <= 1 || loading} 
+        onClick={() => onPageChange(page - 1)}
+        size="small"
+        sx={{ mx: 0.5 }}
+      >
+        <ChevronLeftIcon />
+      </IconButton>
+      <IconButton 
+        disabled={page >= totalPages || loading} 
+        onClick={() => onPageChange(page + 1)}
+        size="small"
+        sx={{ mx: 0.5 }}
+      >
+        <ChevronRightIcon />
+      </IconButton>
+      <IconButton 
+        disabled={page >= totalPages || loading} 
+        onClick={() => onPageChange(totalPages)}
+        size="small"
+        sx={{ mx: 0.5 }}
+      >
+        <LastPageIcon />
+      </IconButton>
+    </Stack>
+  );
+}
+
+// Empty State Component
+function EmptyState({ message, description, icon = "📊" }) {
+  return (
+    <TableRow>
+      <TableCell colSpan={8}>
+        <Box textAlign="center" py={6}>
+          <Typography variant="h6" color="text.secondary" gutterBottom sx={{ opacity: 0.7 }}>
+            {icon} {message}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ opacity: 0.6 }}>
+            {description}
+          </Typography>
+        </Box>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+// Detail Row Component
+function Row({ label, value }) {
+  return (
+    <Stack direction="row" justifyContent="space-between" alignItems="center" py={0.5}>
+      <Typography variant="body2" color="text.secondary">{label}</Typography>
+      <Typography variant="body1" fontWeight={600}>{value}</Typography>
+    </Stack>
+  );
+}
 
 /* ==================
    Main Riwayat View
    ================== */
 export default function RiwayatView() {
   const toast = useToast();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
   const [tab, setTab] = useState("trx"); // trx | stok | hutang
 
-  /* ------------------- TRANSaksi ------------------- */
+  /* ------------------- TRANSAKSI ------------------- */
   const [fFrom, setFFrom] = useState("");
   const [fTo, setFTo] = useState("");
   const [fMethod, setFMethod] = useState("ALL");
@@ -144,7 +305,7 @@ export default function RiwayatView() {
 
   useEffect(() => setPageTrx(1), [fFrom, fTo, fMethod, fStatus, q, pageSizeTrx]);
 
-  /* ------------------- STOk ------------------- */
+  /* ------------------- STOK ------------------- */
   const [sFrom, setSFrom] = useState("");
   const [sTo, setSTo] = useState("");
   const [sJenis, setSJenis] = useState("ALL");
@@ -200,7 +361,7 @@ export default function RiwayatView() {
   const totalPagesStok = Math.max(1, Math.ceil(sortedStok.length / pageSizeStok));
   useEffect(() => setPageStok(1), [sFrom, sTo, sJenis, pageSizeStok]);
 
-  /* ------------------- HUtang ------------------- */
+  /* ------------------- HUTANG ------------------- */
   const [hNama, setHNama] = useState("");
   const [hQ, setHQ] = useState("");
   const [debts, setDebts] = useState([]);
@@ -275,229 +436,318 @@ export default function RiwayatView() {
   };
 
   return (
-    <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
-      <Stack direction="row" alignItems="center" spacing={2}>
-        <Typography variant="h5" fontWeight={700}>
+    <Stack spacing={3} sx={{ pb: { xs: 8, md: 2 } }}>
+      {/* Header */}
+      <Stack direction={{ xs: "column", md: "row" }} alignItems="center" spacing={2}>
+        <Typography variant="h4" fontWeight={700} color="primary">
           Riwayat
         </Typography>
-        <Box sx={{ ml: "auto" }} />
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} textColor="primary" indicatorColor="primary">
-          <Tab value="trx" label="Riwayat Transaksi" />
-          <Tab value="stok" label="Riwayat Stok" />
-          <Tab value="hutang" label="Riwayat Hutang" />
+        <Box sx={{ flex: 1 }} />
+        <Tabs 
+          value={tab} 
+          onChange={(_, v) => setTab(v)} 
+          textColor="primary" 
+          indicatorColor="primary"
+          sx={{ 
+            minHeight: 48,
+            '& .MuiTab-root': { 
+              minHeight: 48,
+              fontWeight: 600 
+            }
+          }}
+        >
+          <Tab value="trx" label="Transaksi" icon={<ReceiptLongIcon />} iconPosition="start" />
+          <Tab value="stok" label="Stok" icon={<InventoryIcon />} iconPosition="start" />
+          <Tab value="hutang" label="Hutang" icon={<CreditCardIcon />} iconPosition="start" />
         </Tabs>
       </Stack>
 
       {/* =============== TRANSAKSI =============== */}
       {tab === "trx" && (
         <>
-          <Card>
-            <CardHeader title="Filter Transaksi" />
-            <CardContent>
-              <Grid container spacing={1.5}>
-                <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    {...FIELD_PROPS}
-                    sx={FIELD_SX}
-                    label="Dari Tanggal"
-                    type="date"
-                    value={fFrom}
-                    onChange={(e) => setFFrom(e.target.value)}
-                    inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    {...FIELD_PROPS}
-                    sx={FIELD_SX}
-                    label="Sampai"
-                    type="date"
-                    value={fTo}
-                    onChange={(e) => setFTo(e.target.value)}
-                    inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
-                    <InputLabel id="mtd">Metode Bayar</InputLabel>
-                    <Select labelId="mtd" label="Metode Bayar" value={fMethod} onChange={(e) => setFMethod(e.target.value)}>
-                      <MenuItem value="ALL">Semua</MenuItem>
-                      <MenuItem value="TUNAI">Tunai</MenuItem>
-                      <MenuItem value="HUTANG">Hutang</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
-                    <InputLabel id="sts">Status Bayar</InputLabel>
-                    <Select labelId="sts" label="Status Bayar" value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
-                      <MenuItem value="ALL">Semua</MenuItem>
-                      <MenuItem value="LUNAS">Lunas</MenuItem>
-                      <MenuItem value="BELUM">Belum Lunas</MenuItem>
-                      <MenuItem value="DIBATALKAN">Dibatalkan</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    {...FIELD_PROPS}
-                    sx={FIELD_SX}
-                    label="Pencarian (Invoice/Nama)"
-                    placeholder="INV-001 / Ayu"
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Stack direction="row" spacing={1} justifyContent={{ xs: "stretch", md: "flex-end" }}>
-                    <Button variant="contained" onClick={loadTrx} disabled={trxLoading}>
-                      {trxLoading ? "Memuat…" : "Terapkan"}
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={() => {
-                        setFFrom("");
-                        setFTo("");
-                        setFMethod("ALL");
-                        setFStatus("ALL");
-                        setQ("");
-                        loadTrx();
+          {/* Filter Section */}
+          <Card sx={CARD_STYLES}>
+            <Accordion defaultExpanded sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <FilterListIcon color="primary" />
+                  <Typography fontWeight={600}>Filter & Pencarian</Typography>
+                </Stack>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <TextField
+                      {...FIELD_PROPS}
+                      sx={FIELD_SX}
+                      label="Dari Tanggal"
+                      type="date"
+                      value={fFrom}
+                      onChange={(e) => setFFrom(e.target.value)}
+                      inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <TextField
+                      {...FIELD_PROPS}
+                      sx={FIELD_SX}
+                      label="Sampai"
+                      type="date"
+                      value={fTo}
+                      onChange={(e) => setFTo(e.target.value)}
+                      inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
+                      <InputLabel id="mtd">Metode Bayar</InputLabel>
+                      <Select labelId="mtd" label="Metode Bayar" value={fMethod} onChange={(e) => setFMethod(e.target.value)}>
+                        <MenuItem value="ALL">Semua</MenuItem>
+                        <MenuItem value="TUNAI">Tunai</MenuItem>
+                        <MenuItem value="HUTANG">Hutang</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
+                      <InputLabel id="sts">Status Bayar</InputLabel>
+                      <Select labelId="sts" label="Status Bayar" value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
+                        <MenuItem value="ALL">Semua</MenuItem>
+                        <MenuItem value="LUNAS">Lunas</MenuItem>
+                        <MenuItem value="BELUM">Belum Lunas</MenuItem>
+                        <MenuItem value="DIBATALKAN">Dibatalkan</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      {...FIELD_PROPS}
+                      sx={FIELD_SX}
+                      label="Pencarian (Invoice/Nama)"
+                      placeholder="INV-001 / Ayu"
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      InputProps={{
+                        startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
                       }}
-                      disabled={trxLoading}
-                    >
-                      Reset
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={() =>
-                        exportXlsx("riwayat-transaksi.xlsx", sortedTrx, [
-                          { header: "Tanggal", key: (r) => String(r.created_at || "").slice(0, 19).replace("T", " ") },
-                          { header: "Invoice", key: (r) => r.invoice || r.id },
-                          { header: "Pelanggan", key: "customer" },
-                          { header: "Qty", key: "qty" },
-                          { header: "Harga Satuan", key: "price" },
-                          { header: "Total", key: (r) => r.total ?? (Number(r.qty || 0) * Number(r.price || 0)) },
-                          { header: "Metode", key: "method" },
-                          { header: "Status", key: "status" },
-                          { header: "Catatan", key: "note" },
-                        ])
-                      }
-                    >
-                      📄 Ekspor XLSX
-                    </Button>
-                  </Stack>
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Stack direction="row" spacing={1} justifyContent={{ xs: "stretch", md: "flex-end" }} flexWrap="wrap">
+                      <Button variant="contained" onClick={loadTrx} disabled={trxLoading} startIcon={trxLoading ? <CircularProgress size={16} /> : null}>
+                        {trxLoading ? "Memuat…" : "Terapkan Filter"}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        onClick={() => {
+                          setFFrom("");
+                          setFTo("");
+                          setFMethod("ALL");
+                          setFStatus("ALL");
+                          setQ("");
+                          loadTrx();
+                        }}
+                        disabled={trxLoading}
+                      >
+                        Reset
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        onClick={() =>
+                          exportXlsx("riwayat-transaksi.xlsx", sortedTrx, [
+                            { header: "Tanggal", key: (r) => String(r.created_at || "").slice(0, 19).replace("T", " ") },
+                            { header: "Invoice", key: (r) => r.invoice || r.id },
+                            { header: "Pelanggan", key: "customer" },
+                            { header: "Qty", key: "qty" },
+                            { header: "Harga Satuan", key: "price" },
+                            { header: "Total", key: (r) => r.total ?? (Number(r.qty || 0) * Number(r.price || 0)) },
+                            { header: "Metode", key: "method" },
+                            { header: "Status", key: "status" },
+                            { header: "Catatan", key: "note" },
+                          ])
+                        }
+                      >
+                        📄 Ekspor
+                      </Button>
+                    </Stack>
+                  </Grid>
                 </Grid>
-              </Grid>
-            </CardContent>
+              </AccordionDetails>
+            </Accordion>
           </Card>
 
-          <Card>
+          {/* Data Table */}
+          <Card sx={CARD_STYLES}>
             <CardHeader
-              title={`Riwayat Transaksi ${trxLoading ? "(memuat…)" : ""}`}
-              subheader={`Menampilkan ${pagedTrx.length} dari ${sortedTrx.length} data`}
+              title={
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <ReceiptLongIcon color="primary" />
+                  <Typography variant="h6" fontWeight={600}>
+                    Riwayat Transaksi
+                    {trxLoading && <CircularProgress size={16} sx={{ ml: 1 }} />}
+                  </Typography>
+                </Stack>
+              }
+              subheader={
+                <Typography variant="body2" color="text.secondary">
+                  {`Menampilkan ${pagedTrx.length} dari ${sortedTrx.length} transaksi`}
+                </Typography>
+              }
+              action={
+                <Chip 
+                  label={`Total: ${fmtIDR(trxRows.reduce((sum, r) => sum + (r.total || 0), 0))}`}
+                  color="primary" 
+                  variant="outlined"
+                />
+              }
             />
             <CardContent>
-              {/* controls atas kanan */}
-              <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mb: 1 }}>
-                <FormControl size="small" sx={{ minWidth: 100 }}>
-                  <InputLabel id="rows-trx">Baris/hal</InputLabel>
-                  <Select
-                    labelId="rows-trx"
-                    label="Baris/hal"
-                    value={pageSizeTrx}
-                    onChange={(e) => setPageSizeTrx(Number(e.target.value))}
-                  >
-                    {[10, 25, 50, 100].map((n) => (
-                      <MenuItem key={n} value={n}>
-                        {n}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Button variant="outlined" disabled={pageTrx <= 1} onClick={() => setPageTrx(1)}>
-                  ⏮
-                </Button>
-                <Button
-                  variant="outlined"
-                  disabled={pageTrx <= 1}
-                  onClick={() => setPageTrx((p) => Math.max(1, p - 1))}
-                >
-                  ◀
-                </Button>
-                <Chip label={`Hal. ${pageTrx} / ${totalPagesTrx}`} />
-                <Button
-                  variant="outlined"
-                  disabled={pageTrx >= totalPagesTrx}
-                  onClick={() => setPageTrx((p) => Math.min(totalPagesTrx, p + 1))}
-                >
-                  ▶
-                </Button>
-                <Button variant="outlined" disabled={pageTrx >= totalPagesTrx} onClick={() => setPageTrx(totalPagesTrx)}>
-                  ⏭
-                </Button>
-              </Stack>
+              {/* Pagination Controls */}
+              <CustomPagination
+                page={pageTrx}
+                totalPages={totalPagesTrx}
+                onPageChange={setPageTrx}
+                pageSize={pageSizeTrx}
+                onPageSizeChange={setPageSizeTrx}
+                loading={trxLoading}
+              />
 
-              <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
+              <TableContainer component={Paper} sx={TABLE_STYLES}>
                 <Table size="small">
-                  <TableHead sx={{ position: "sticky", top: 0, bgcolor: "#f1f5f9", zIndex: 1 }}>
+                  <TableHead>
                     <TableRow>
-                      <TableCell onClick={() => setSortTrx("created_at")}><b>Tanggal</b></TableCell>
-                      <TableCell onClick={() => setSortTrx("id")}><b>No. Invoice</b></TableCell>
-                      <TableCell onClick={() => setSortTrx("customer")}><b>Pelanggan</b></TableCell>
-                      <TableCell align="right" onClick={() => setSortTrx("qty")}><b>Qty</b></TableCell>
-                      <TableCell align="right" onClick={() => setSortTrx("total")}><b>Total</b></TableCell>
-                      <TableCell onClick={() => setSortTrx("method")}><b>Metode</b></TableCell>
-                      <TableCell onClick={() => setSortTrx("status")}><b>Status</b></TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortKeyTrx === "created_at"}
+                          direction={sortDirTrx}
+                          onClick={() => setSortTrx("created_at")}
+                        >
+                          <b>📅 Tanggal</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortKeyTrx === "id"}
+                          direction={sortDirTrx}
+                          onClick={() => setSortTrx("id")}
+                        >
+                          <b>No. Invoice</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                        <TableSortLabel
+                          active={sortKeyTrx === "customer"}
+                          direction={sortDirTrx}
+                          onClick={() => setSortTrx("customer")}
+                        >
+                          <b>Pelanggan</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell align="right" sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
+                        <TableSortLabel
+                          active={sortKeyTrx === "qty"}
+                          direction={sortDirTrx}
+                          onClick={() => setSortTrx("qty")}
+                        >
+                          <b>Qty</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell align="right">
+                        <TableSortLabel
+                          active={sortKeyTrx === "total"}
+                          direction={sortDirTrx}
+                          onClick={() => setSortTrx("total")}
+                        >
+                          <b>Total</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                        <TableSortLabel
+                          active={sortKeyTrx === "method"}
+                          direction={sortDirTrx}
+                          onClick={() => setSortTrx("method")}
+                        >
+                          <b>Metode</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <b>Status</b>
+                      </TableCell>
                       <TableCell align="center"><b>Aksi</b></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {!pagedTrx.length && !trxLoading && (
-                      <TableRow>
-                        <TableCell colSpan={8} sx={{ color: "text.secondary" }}>
-                          Tidak ada data
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {pagedTrx.map((r, i) => {
-                      const canVoid = DataService.canVoidOnClient?.(r, 2);
-                      const stat = statusStyle(r.status);
-                      const dim = (r.status || "").toUpperCase() === "DIBATALKAN" ? 0.75 : 1;
-                      return (
-                        <TableRow key={r.id} hover sx={{ ...zebra(i), opacity: dim }}>
-                          <TableCell>{String(r.created_at || "").slice(0, 10)}</TableCell>
-                          <TableCell>{r.invoice || r.id}</TableCell>
-                          <TableCell>{r.customer || "PUBLIC"}</TableCell>
-                          <TableCell align="right">{r.qty}</TableCell>
-                          <TableCell align="right">{fmtIDR(r.total ?? (Number(r.qty || 0) * Number(r.price || 0)))}</TableCell>
-                          <TableCell>{r.method}</TableCell>
-                          <TableCell>
-                            <Chip
-                              label={r.status || "-"}
-                              size="small"
-                              sx={{ bgcolor: stat.bg, color: stat.fg, fontWeight: 600 }}
-                            />
-                          </TableCell>
-                          <TableCell align="center">
-                            <Stack direction="row" spacing={1} justifyContent="center">
-                              <Button size="small" variant="outlined" onClick={() => setDetailSale(r)}>
-                                Detail
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                disabled={!canVoid}
-                                onClick={() => setVoidSale(r)}
-                              >
-                                Void
-                              </Button>
-                            </Stack>
+                    {trxLoading ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <TableRow key={i}>
+                          <TableCell colSpan={8}>
+                            <Skeleton variant="text" height={40} />
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
+                      ))
+                    ) : !pagedTrx.length ? (
+                      <EmptyState 
+                        message="Tidak ada transaksi" 
+                        description="Tidak ada data yang ditemukan dengan filter saat ini"
+                        icon="📊"
+                      />
+                    ) : (
+                      pagedTrx.map((r, i) => {
+                        const canVoid = DataService.canVoidOnClient?.(r, 2);
+                        const dim = (r.status || "").toUpperCase() === "DIBATALKAN" ? 0.75 : 1;
+                        return (
+                          <TableRow 
+                            key={r.id} 
+                            hover 
+                            sx={{ 
+                              ...zebra(i),
+                              opacity: dim,
+                              transition: 'all 0.2s ease',
+                              '&:hover': {
+                                backgroundColor: '#f8fafc',
+                                transform: 'translateY(-1px)'
+                              }
+                            }}
+                          >
+                            <TableCell>{String(r.created_at || "").slice(0, 10)}</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>{r.invoice || r.id}</TableCell>
+                            <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                              {r.customer || "PUBLIC"}
+                            </TableCell>
+                            <TableCell align="right" sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
+                              {r.qty}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>
+                              {fmtIDR(r.total ?? (Number(r.qty || 0) * Number(r.price || 0)))}
+                            </TableCell>
+                            <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                              {r.method}
+                            </TableCell>
+                            <TableCell>
+                              <StatusChip status={r.status} />
+                            </TableCell>
+                            <TableCell align="center">
+                              <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap">
+                                <Button size="small" variant="outlined" onClick={() => setDetailSale(r)}>
+                                  Detail
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  color="error"
+                                  disabled={!canVoid}
+                                  onClick={() => setVoidSale(r)}
+                                >
+                                  Void
+                                </Button>
+                              </Stack>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -509,169 +759,224 @@ export default function RiwayatView() {
       {/* =============== STOK =============== */}
       {tab === "stok" && (
         <>
-          <Card>
-            <CardHeader title="Filter Riwayat Stok" />
-            <CardContent>
-              <Grid container spacing={1.5}>
-                <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    {...FIELD_PROPS}
-                    sx={FIELD_SX}
-                    label="Dari Tanggal"
-                    type="date"
-                    value={sFrom}
-                    onChange={(e) => setSFrom(e.target.value)}
-                    inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
-                    InputLabelProps={{ shrink: true }}
-                  />
+          <Card sx={CARD_STYLES}>
+            <Accordion defaultExpanded sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <FilterListIcon color="primary" />
+                  <Typography fontWeight={600}>Filter Riwayat Stok</Typography>
+                </Stack>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <TextField
+                      {...FIELD_PROPS}
+                      sx={FIELD_SX}
+                      label="Dari Tanggal"
+                      type="date"
+                      value={sFrom}
+                      onChange={(e) => setSFrom(e.target.value)}
+                      inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <TextField
+                      {...FIELD_PROPS}
+                      sx={FIELD_SX}
+                      label="Sampai"
+                      type="date"
+                      value={sTo}
+                      onChange={(e) => setSTo(e.target.value)}
+                      inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
+                      <InputLabel id="jenis">Jenis Stok</InputLabel>
+                      <Select labelId="jenis" label="Jenis Stok" value={sJenis} onChange={(e) => setSJenis(e.target.value)}>
+                        <MenuItem value="ALL">Semua</MenuItem>
+                        <MenuItem value="ISI">Isi</MenuItem>
+                        <MenuItem value="KOSONG">Kosong</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Stack direction="row" spacing={1} justifyContent={{ xs: "stretch", md: "flex-end" }} flexWrap="wrap">
+                      <Button variant="contained" onClick={loadStok} disabled={stokLoading} startIcon={stokLoading ? <CircularProgress size={16} /> : null}>
+                        {stokLoading ? "Memuat…" : "Terapkan Filter"}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        onClick={() => {
+                          setSFrom("");
+                          setSTo("");
+                          setSJenis("ALL");
+                          loadStok();
+                        }}
+                        disabled={stokLoading}
+                      >
+                        Reset
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        onClick={() =>
+                          exportXlsx("riwayat-stok.xlsx", sortedStok, [
+                            { header: "Tanggal", key: "tanggal" },
+                            { header: "Jenis Stok", key: "code" },
+                            { header: "Keterangan", key: "keterangan" },
+                            { header: "Masuk", key: "masuk" },
+                            { header: "Keluar", key: "keluar" },
+                            { header: "Sisa", key: "sisa" },
+                          ])
+                        }
+                      >
+                        📄 Ekspor
+                      </Button>
+                    </Stack>
+                  </Grid>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    {...FIELD_PROPS}
-                    sx={FIELD_SX}
-                    label="Sampai"
-                    type="date"
-                    value={sTo}
-                    onChange={(e) => setSTo(e.target.value)}
-                    inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
-                    <InputLabel id="jenis">Jenis Stok</InputLabel>
-                    <Select labelId="jenis" label="Jenis Stok" value={sJenis} onChange={(e) => setSJenis(e.target.value)}>
-                      <MenuItem value="ALL">Semua</MenuItem>
-                      <MenuItem value="ISI">Isi</MenuItem>
-                      <MenuItem value="KOSONG">Kosong</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Stack direction="row" spacing={1} justifyContent={{ xs: "stretch", md: "flex-end" }}>
-                    <Button variant="contained" onClick={loadStok} disabled={stokLoading}>
-                      {stokLoading ? "Memuat…" : "Terapkan"}
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={() => {
-                        setSFrom("");
-                        setSTo("");
-                        setSJenis("ALL");
-                        loadStok();
-                      }}
-                      disabled={stokLoading}
-                    >
-                      Reset
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={() =>
-                        exportXlsx("riwayat-stok.xlsx", sortedStok, [
-                          { header: "Tanggal", key: "tanggal" },
-                          { header: "Jenis Stok", key: "code" },
-                          { header: "Keterangan", key: "keterangan" },
-                          { header: "Masuk", key: "masuk" },
-                          { header: "Keluar", key: "keluar" },
-                          { header: "Sisa", key: "sisa" },
-                        ])
-                      }
-                    >
-                      📄 Ekspor XLSX
-                    </Button>
-                  </Stack>
-                </Grid>
-              </Grid>
-            </CardContent>
+              </AccordionDetails>
+            </Accordion>
           </Card>
 
-          <Card>
+          <Card sx={CARD_STYLES}>
             <CardHeader
-              title={`Riwayat Stok ${stokLoading ? "(memuat…)" : ""}`}
-              subheader={`Menampilkan ${pagedStok.length} dari ${sortedStok.length} data`}
+              title={
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <InventoryIcon color="primary" />
+                  <Typography variant="h6" fontWeight={600}>
+                    Riwayat Stok
+                    {stokLoading && <CircularProgress size={16} sx={{ ml: 1 }} />}
+                  </Typography>
+                </Stack>
+              }
+              subheader={
+                <Typography variant="body2" color="text.secondary">
+                  {`Menampilkan ${pagedStok.length} dari ${sortedStok.length} data`}
+                </Typography>
+              }
             />
             <CardContent>
-              <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mb: 1 }}>
-                <FormControl size="small" sx={{ minWidth: 100 }}>
-                  <InputLabel id="rows-stok">Baris/hal</InputLabel>
-                  <Select
-                    labelId="rows-stok"
-                    label="Baris/hal"
-                    value={pageSizeStok}
-                    onChange={(e) => setPageSizeStok(Number(e.target.value))}
-                  >
-                    {[10, 25, 50, 100].map((n) => (
-                      <MenuItem key={n} value={n}>
-                        {n}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Button variant="outlined" disabled={pageStok <= 1} onClick={() => setPageStok(1)}>
-                  ⏮
-                </Button>
-                <Button variant="outlined" disabled={pageStok <= 1} onClick={() => setPageStok((p) => Math.max(1, p - 1))}>
-                  ◀
-                </Button>
-                <Chip label={`Hal. ${pageStok} / ${totalPagesStok}`} />
-                <Button
-                  variant="outlined"
-                  disabled={pageStok >= totalPagesStok}
-                  onClick={() => setPageStok((p) => Math.min(totalPagesStok, p + 1))}
-                >
-                  ▶
-                </Button>
-                <Button variant="outlined" disabled={pageStok >= totalPagesStok} onClick={() => setPageStok(totalPagesStok)}>
-                  ⏭
-                </Button>
-              </Stack>
+              <CustomPagination
+                page={pageStok}
+                totalPages={totalPagesStok}
+                onPageChange={setPageStok}
+                pageSize={pageSizeStok}
+                onPageSizeChange={setPageSizeStok}
+                loading={stokLoading}
+              />
 
-              <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
+              <TableContainer component={Paper} sx={TABLE_STYLES}>
                 <Table size="small">
-                  <TableHead sx={{ position: "sticky", top: 0, bgcolor: "#f1f5f9", zIndex: 1 }}>
+                  <TableHead>
                     <TableRow>
-                      <TableCell onClick={() => setSortStok("tanggal")}><b>Tanggal & Waktu</b></TableCell>
-                      <TableCell onClick={() => setSortStok("code")}><b>Jenis Stok</b></TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortKeyStok === "tanggal"}
+                          direction={sortDirStok}
+                          onClick={() => setSortStok("tanggal")}
+                        >
+                          <b>📅 Tanggal & Waktu</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortKeyStok === "code"}
+                          direction={sortDirStok}
+                          onClick={() => setSortStok("code")}
+                        >
+                          <b>Jenis Stok</b>
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell><b>Keterangan</b></TableCell>
-                      <TableCell align="right" onClick={() => setSortStok("masuk")}><b>Masuk</b></TableCell>
-                      <TableCell align="right" onClick={() => setSortStok("keluar")}><b>Keluar</b></TableCell>
-                      <TableCell align="right" onClick={() => setSortStok("sisa")}><b>Stok Akhir</b></TableCell>
+                      <TableCell align="right">
+                        <TableSortLabel
+                          active={sortKeyStok === "masuk"}
+                          direction={sortDirStok}
+                          onClick={() => setSortStok("masuk")}
+                        >
+                          <b>Masuk</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell align="right">
+                        <TableSortLabel
+                          active={sortKeyStok === "keluar"}
+                          direction={sortDirStok}
+                          onClick={() => setSortStok("keluar")}
+                        >
+                          <b>Keluar</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell align="right">
+                        <TableSortLabel
+                          active={sortKeyStok === "sisa"}
+                          direction={sortDirStok}
+                          onClick={() => setSortStok("sisa")}
+                        >
+                          <b>Stok Akhir</b>
+                        </TableSortLabel>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {!pagedStok.length && !stokLoading && (
-                      <TableRow>
-                        <TableCell colSpan={6} sx={{ color: "text.secondary" }}>
-                          Tidak ada data
-                        </TableCell>
-                      </TableRow>
+                    {stokLoading ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <TableRow key={i}>
+                          <TableCell colSpan={6}>
+                            <Skeleton variant="text" height={40} />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : !pagedStok.length ? (
+                      <EmptyState 
+                        message="Tidak ada data stok" 
+                        description="Tidak ada data yang ditemukan dengan filter saat ini"
+                        icon="📦"
+                      />
+                    ) : (
+                      pagedStok.map((r, i) => (
+                        <TableRow key={r.id} hover sx={{ 
+                          ...zebra(i),
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            backgroundColor: '#f8fafc',
+                            transform: 'translateY(-1px)'
+                          }
+                        }}>
+                          <TableCell>{r.tanggal}</TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={r.code}
+                              sx={{
+                                bgcolor: r.code === "ISI" ? "#e0f2fe" : "#fff7ed",
+                                color: r.code === "ISI" ? "#075985" : "#9a3412",
+                                fontWeight: 600,
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>{r.keterangan}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: r.masuk ? 600 : 'normal' }}>
+                            {r.masuk || ""}
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontWeight: r.keluar ? 600 : 'normal' }}>
+                            {r.keluar || ""}
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600 }}>
+                            {(r.sisa ?? "") === "" ? "-" : r.sisa}
+                          </TableCell>
+                        </TableRow>
+                      ))
                     )}
-                    {pagedStok.map((r, i) => (
-                      <TableRow key={r.id} hover sx={zebra(i)}>
-                        <TableCell>{r.tanggal}</TableCell>
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            label={r.code}
-                            sx={{
-                              bgcolor: r.code === "ISI" ? "#e0f2fe" : "#fff7ed",
-                              color: r.code === "ISI" ? "#075985" : "#9a3412",
-                              fontWeight: 600,
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>{r.keterangan}</TableCell>
-                        <TableCell align="right">{r.masuk || ""}</TableCell>
-                        <TableCell align="right">{r.keluar || ""}</TableCell>
-                        <TableCell align="right">{(r.sisa ?? "") === "" ? "-" : r.sisa}</TableCell>
-                      </TableRow>
-                    ))}
                   </TableBody>
                 </Table>
               </TableContainer>
 
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-                *Kolom “Stok Akhir” muncul otomatis bila view <code>stock_logs_with_balance</code> tersedia.
+                *Kolom "Stok Akhir" muncul otomatis bila view <code>stock_logs_with_balance</code> tersedia.
               </Typography>
             </CardContent>
           </Card>
@@ -681,151 +986,215 @@ export default function RiwayatView() {
       {/* =============== HUTANG =============== */}
       {tab === "hutang" && (
         <>
-          <Card>
-            <CardHeader title="Filter Hutang" />
-            <CardContent>
-              <Grid container spacing={1.5}>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    {...FIELD_PROPS}
-                    sx={FIELD_SX}
-                    label="Nama Pelanggan"
-                    placeholder="Cari nama pelanggan"
-                    value={hNama}
-                    onChange={(e) => setHNama(e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    {...FIELD_PROPS}
-                    sx={FIELD_SX}
-                    label="Pencarian (Invoice/Nama)"
-                    placeholder="INV-001 / Ayu"
-                    value={hQ}
-                    onChange={(e) => setHQ(e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <Stack direction="row" spacing={1} justifyContent={{ xs: "stretch", md: "flex-end" }}>
-                    <Button variant="contained" onClick={loadDebts} disabled={debtLoading}>
-                      {debtLoading ? "Memuat…" : "Terapkan"}
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={() => {
-                        setHNama("");
-                        setHQ("");
-                        loadDebts();
+          <Card sx={CARD_STYLES}>
+            <Accordion defaultExpanded sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <FilterListIcon color="primary" />
+                  <Typography fontWeight={600}>Filter Hutang</Typography>
+                </Stack>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      {...FIELD_PROPS}
+                      sx={FIELD_SX}
+                      label="Nama Pelanggan"
+                      placeholder="Cari nama pelanggan"
+                      value={hNama}
+                      onChange={(e) => setHNama(e.target.value)}
+                      InputProps={{
+                        startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
                       }}
-                      disabled={debtLoading}
-                    >
-                      Reset
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={() =>
-                        exportXlsx("riwayat-hutang.xlsx", sortedHut, [
-                          { header: "Tanggal", key: (r) => String(r.created_at || "").slice(0, 10) },
-                          { header: "Invoice", key: (r) => r.invoice || r.id },
-                          { header: "Pelanggan", key: "customer" },
-                          { header: "Qty", key: "qty" },
-                          { header: "Total Hutang", key: "total" },
-                          { header: "Catatan", key: "note" },
-                        ])
-                      }
-                    >
-                      📄 Ekspor XLSX
-                    </Button>
-                  </Stack>
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      {...FIELD_PROPS}
+                      sx={FIELD_SX}
+                      label="Pencarian (Invoice/Nama)"
+                      placeholder="INV-001 / Ayu"
+                      value={hQ}
+                      onChange={(e) => setHQ(e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={4}>
+                    <Stack direction="row" spacing={1} justifyContent={{ xs: "stretch", md: "flex-end" }} flexWrap="wrap">
+                      <Button variant="contained" onClick={loadDebts} disabled={debtLoading} startIcon={debtLoading ? <CircularProgress size={16} /> : null}>
+                        {debtLoading ? "Memuat…" : "Terapkan Filter"}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        onClick={() => {
+                          setHNama("");
+                          setHQ("");
+                          loadDebts();
+                        }}
+                        disabled={debtLoading}
+                      >
+                        Reset
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        onClick={() =>
+                          exportXlsx("riwayat-hutang.xlsx", sortedHut, [
+                            { header: "Tanggal", key: (r) => String(r.created_at || "").slice(0, 10) },
+                            { header: "Invoice", key: (r) => r.invoice || r.id },
+                            { header: "Pelanggan", key: "customer" },
+                            { header: "Qty", key: "qty" },
+                            { header: "Total Hutang", key: "total" },
+                            { header: "Catatan", key: "note" },
+                          ])
+                        }
+                      >
+                        📄 Ekspor
+                      </Button>
+                    </Stack>
+                  </Grid>
                 </Grid>
-              </Grid>
-            </CardContent>
+              </AccordionDetails>
+            </Accordion>
           </Card>
 
-          <Card>
+          <Card sx={CARD_STYLES}>
             <CardHeader
-              title="Riwayat Hutang"
-              subheader={`Total Belum Lunas: ${fmtIDR(totalHutang)} — Menampilkan ${pagedHut.length} dari ${sortedHut.length} data`}
+              title={
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <CreditCardIcon color="primary" />
+                  <Typography variant="h6" fontWeight={600}>
+                    Riwayat Hutang
+                    {debtLoading && <CircularProgress size={16} sx={{ ml: 1 }} />}
+                  </Typography>
+                </Stack>
+              }
+              subheader={
+                <Typography variant="body2" color="text.secondary">
+                  {`Total Belum Lunas: ${fmtIDR(totalHutang)} — Menampilkan ${pagedHut.length} dari ${sortedHut.length} data`}
+                </Typography>
+              }
+              action={
+                <Chip 
+                  label={`Total: ${fmtIDR(totalHutang)}`}
+                  color="primary" 
+                  variant="outlined"
+                />
+              }
             />
             <CardContent>
-              <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mb: 1 }}>
-                <FormControl size="small" sx={{ minWidth: 100 }}>
-                  <InputLabel id="rows-hut">Baris/hal</InputLabel>
-                  <Select
-                    labelId="rows-hut"
-                    label="Baris/hal"
-                    value={pageSizeHut}
-                    onChange={(e) => setPageSizeHut(Number(e.target.value))}
-                  >
-                    {[10, 25, 50, 100].map((n) => (
-                      <MenuItem key={n} value={n}>
-                        {n}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Button variant="outlined" disabled={pageHut <= 1} onClick={() => setPageHut(1)}>
-                  ⏮
-                </Button>
-                <Button variant="outlined" disabled={pageHut <= 1} onClick={() => setPageHut((p) => Math.max(1, p - 1))}>
-                  ◀
-                </Button>
-                <Chip label={`Hal. ${pageHut} / ${totalPagesHut}`} />
-                <Button
-                  variant="outlined"
-                  disabled={pageHut >= totalPagesHut}
-                  onClick={() => setPageHut((p) => Math.min(totalPagesHut, p + 1))}
-                >
-                  ▶
-                </Button>
-                <Button variant="outlined" disabled={pageHut >= totalPagesHut} onClick={() => setPageHut(totalPagesHut)}>
-                  ⏭
-                </Button>
-              </Stack>
+              <CustomPagination
+                page={pageHut}
+                totalPages={totalPagesHut}
+                onPageChange={setPageHut}
+                pageSize={pageSizeHut}
+                onPageSizeChange={setPageSizeHut}
+                loading={debtLoading}
+              />
 
-              <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
+              <TableContainer component={Paper} sx={TABLE_STYLES}>
                 <Table size="small">
-                  <TableHead sx={{ position: "sticky", top: 0, bgcolor: "#f1f5f9", zIndex: 1 }}>
+                  <TableHead>
                     <TableRow>
-                      <TableCell onClick={() => setSortHut("created_at")}><b>Tanggal</b></TableCell>
-                      <TableCell onClick={() => setSortHut("id")}><b>No. Invoice</b></TableCell>
-                      <TableCell onClick={() => setSortHut("customer")}><b>Pelanggan</b></TableCell>
-                      <TableCell align="right" onClick={() => setSortHut("qty")}><b>Qty</b></TableCell>
-                      <TableCell align="right" onClick={() => setSortHut("total")}><b>Total Hutang</b></TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortKeyHut === "created_at"}
+                          direction={sortDirHut}
+                          onClick={() => setSortHut("created_at")}
+                        >
+                          <b>📅 Tanggal</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortKeyHut === "id"}
+                          direction={sortDirHut}
+                          onClick={() => setSortHut("id")}
+                        >
+                          <b>No. Invoice</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortKeyHut === "customer"}
+                          direction={sortDirHut}
+                          onClick={() => setSortHut("customer")}
+                        >
+                          <b>Pelanggan</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                        <TableSortLabel
+                          active={sortKeyHut === "qty"}
+                          direction={sortDirHut}
+                          onClick={() => setSortHut("qty")}
+                        >
+                          <b>Qty</b>
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell align="right">
+                        <TableSortLabel
+                          active={sortKeyHut === "total"}
+                          direction={sortDirHut}
+                          onClick={() => setSortHut("total")}
+                        >
+                          <b>Total Hutang</b>
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell align="center"><b>Aksi</b></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {!pagedHut.length && !debtLoading && (
-                      <TableRow>
-                        <TableCell colSpan={6} sx={{ color: "text.secondary" }}>
-                          Tidak ada hutang
-                        </TableCell>
-                      </TableRow>
+                    {debtLoading ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <TableRow key={i}>
+                          <TableCell colSpan={6}>
+                            <Skeleton variant="text" height={40} />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : !pagedHut.length ? (
+                      <EmptyState 
+                        message="Tidak ada hutang" 
+                        description="Tidak ada data hutang yang ditemukan"
+                        icon="💰"
+                      />
+                    ) : (
+                      pagedHut.map((d, i) => (
+                        <TableRow key={d.id} hover sx={{ 
+                          ...zebra(i),
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            backgroundColor: '#f8fafc',
+                            transform: 'translateY(-1px)'
+                          }
+                        }}>
+                          <TableCell>{String(d.created_at || "").slice(0, 10)}</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{d.invoice || d.id}</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{d.customer}</TableCell>
+                          <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                            {d.qty}
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600, color: 'error.main' }}>
+                            {fmtIDR(d.total)}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="primary"
+                              onClick={() =>
+                                toast?.show?.({
+                                  type: "info",
+                                  message: "Buka menu Transaksi > Bayar Hutang untuk melunasi.",
+                                })
+                              }
+                            >
+                              Bayar
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
                     )}
-                    {pagedHut.map((d, i) => (
-                      <TableRow key={d.id} hover sx={zebra(i)}>
-                        <TableCell>{String(d.created_at || "").slice(0, 10)}</TableCell>
-                        <TableCell>{d.invoice || d.id}</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>{d.customer}</TableCell>
-                        <TableCell align="right">{d.qty}</TableCell>
-                        <TableCell align="right">{fmtIDR(d.total)}</TableCell>
-                        <TableCell align="center">
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() =>
-                              toast?.show?.({
-                                type: "info",
-                                message: "Buka menu Transaksi > Bayar Hutang untuk melunasi.",
-                              })
-                            }
-                          >
-                            Bayar
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -836,21 +1205,28 @@ export default function RiwayatView() {
 
       {/* ======= DIALOG DETAIL ======= */}
       <Dialog open={!!detailSale} onClose={() => setDetailSale(null)} fullWidth maxWidth="sm">
-        <DialogTitle>Detail Transaksi — {detailSale?.invoice || detailSale?.id || ""}</DialogTitle>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <ReceiptLongIcon color="primary" />
+            <span>Detail Transaksi — {detailSale?.invoice || detailSale?.id || ""}</span>
+          </Stack>
+        </DialogTitle>
         <DialogContent dividers>
           {detailSale ? (
-            <Stack spacing={1.5}>
+            <Stack spacing={2}>
               <Row label="Tanggal" value={String(detailSale.created_at || "").slice(0, 16).replace("T", " ")} />
               <Row label="Pelanggan" value={detailSale.customer || "PUBLIC"} />
               <Row label="Qty" value={detailSale.qty} />
               <Row label="Total" value={fmtIDR(detailSale.total || (detailSale.qty || 0) * (detailSale.price || 0))} />
               <Row label="Metode" value={detailSale.method} />
-              <Row label="Status" value={detailSale.status} />
+              <Row label="Status" value={<StatusChip status={detailSale.status} />} />
               {detailSale.note && (
                 <>
                   <Divider />
-                  <Typography variant="subtitle2">Catatan</Typography>
-                  <Typography sx={{ whiteSpace: "pre-wrap" }}>{detailSale.note}</Typography>
+                  <Typography variant="subtitle2" fontWeight={600}>Catatan</Typography>
+                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", p: 1, bgcolor: '#f8fafc', borderRadius: 1 }}>
+                    {detailSale.note}
+                  </Typography>
                 </>
               )}
             </Stack>
@@ -875,16 +1251,18 @@ export default function RiwayatView() {
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Batalkan (Void) — {voidSale?.invoice || voidSale?.id || ""}</DialogTitle>
+        <DialogTitle color="error">
+          ⚠️ Batalkan (Void) — {voidSale?.invoice || voidSale?.id || ""}
+        </DialogTitle>
         <DialogContent dividers>
           <Alert severity="warning" sx={{ mb: 2 }}>
             Pembatalan akan <b>mengembalikan stok</b> & menandai transaksi asli sebagai <b>DIBATALKAN</b>.
           </Alert>
           <FormControl {...FIELD_PROPS}>
-            <InputLabel id="void-reason">Alasan</InputLabel>
+            <InputLabel id="void-reason">Alasan Pembatalan</InputLabel>
             <Select
               labelId="void-reason"
-              label="Alasan"
+              label="Alasan Pembatalan"
               value={voidReason}
               onChange={(e) => setVoidReason(e.target.value)}
             >
@@ -921,16 +1299,6 @@ export default function RiwayatView() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Stack>
-  );
-}
-
-/* kecil: baris label-value */
-function Row({ label, value }) {
-  return (
-    <Stack direction="row" justifyContent="space-between">
-      <Typography color="text.secondary">{label}</Typography>
-      <Typography fontWeight={700}>{value}</Typography>
     </Stack>
   );
 }
