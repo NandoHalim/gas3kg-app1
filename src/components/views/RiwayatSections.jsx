@@ -302,8 +302,7 @@ export default function TransaksiSection({
               label="Dari Tanggal"
               type="date"
               value={filterValues.from}
-              onChange={(e) => onFilterChange?.onFromChange?.(e.target.value)} {/* PERBAHI */}
-              InputLabelProps={{ shrink: true }}
+              onChange={(e) => onFilterChange?.onFromChange?.(e.target.value)}              InputLabelProps={{ shrink: true }}
             />
           </Grid>
           <Grid item xs={12} sm={6} md={4} lg={2}>
