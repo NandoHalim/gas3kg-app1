@@ -365,7 +365,7 @@ export default function StokSection({
               label="Dari Tanggal"
               type="date"
               value={filterValues.from}
-              onChange={(e) => onFilterChange?.onFromChange?.(e.target.value)} {/* PERBAHI */}
+              onChange={(e) => onFilterChange?.onFromChange?.(e.target.value)} 
               inputProps={{ min: "2024-01-01", max: maxAllowedDate() }}
               InputLabelProps={{ shrink: true }}
             />
@@ -377,7 +377,7 @@ export default function StokSection({
               label="Sampai"
               type="date"
               value={filterValues.to}
-              onChange={(e) => onFilterChange?.onToChange?.(e.target.value)} {/* PERBAHI */}
+              onChange={(e) => onFilterChange?.onToChange?.(e.target.value)} 
               inputProps={{ min: "2024-01-01", max: maxAllowedDate() }}
               InputLabelProps={{ shrink: true }}
             />
@@ -389,7 +389,7 @@ export default function StokSection({
                 labelId="jenis-stok"
                 label="Jenis Stok"
                 value={filterValues.jenis}
-                onChange={(e) => onFilterChange?.onJenisChange?.(e.target.value)} {/* PERBAHI */}
+                onChange={(e) => onFilterChange?.onJenisChange?.(e.target.value)} 
               >
                 <MenuItem value="ALL">Semua</MenuItem>
                 <MenuItem value="ISI">Isi</MenuItem>
@@ -464,9 +464,9 @@ export default function StokSection({
           <CustomPagination
             page={pagination.page}
             totalPages={pagination.totalPages}
-            onPageChange={onPaginationChange?.onPageChange} {/* PERBAHI */}
+            onPageChange={onPaginationChange?.onPageChange} 
             pageSize={pagination.pageSize}
-            onPageSizeChange={onPaginationChange?.onPageSizeChange} {/* PERBAHI */}
+            onPageSizeChange={onPaginationChange?.onPageSizeChange} 
             loading={loading}
           />
 
