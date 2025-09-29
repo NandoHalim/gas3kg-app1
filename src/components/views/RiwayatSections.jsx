@@ -323,7 +323,7 @@ export default function TransaksiSection({
                 labelId="method" 
                 label="Metode Bayar" 
                 value={filterValues.method} 
-                onChange={(e) => onFilterChange?.onMethodChange?.(e.target.value)} {/* PERBAHI */}
+                onChange={(e) => onFilterChange?.onMethodChange?.(e.target.value)} 
               >
                 <MenuItem value="ALL">Semua</MenuItem>
                 <MenuItem value="TUNAI">TUNAI</MenuItem>
@@ -338,7 +338,7 @@ export default function TransaksiSection({
                 labelId="status" 
                 label="Status Bayar" 
                 value={filterValues.status} 
-                onChange={(e) => onFilterChange?.onStatusChange?.(e.target.value)} {/* PERBAHI */}
+                onChange={(e) => onFilterChange?.onStatusChange?.(e.target.value)} 
               >
                 <MenuItem value="ALL">Semua</MenuItem>
                 <MenuItem value="LUNAS">LUNAS</MenuItem>
@@ -353,7 +353,7 @@ export default function TransaksiSection({
               label="Kasir"
               placeholder="Nama kasir"
               value={filterValues.cashier}
-              onChange={(e) => onFilterChange?.onCashierChange?.(e.target.value)} {/* PERBAHI */}
+              onChange={(e) => onFilterChange?.onCashierChange?.(e.target.value)} 
             />
           </Grid>
           <Grid item xs={12} sm={6} md={4} lg={2}>
@@ -363,7 +363,7 @@ export default function TransaksiSection({
               label="Pencarian"
               placeholder="Invoice/Nama"
               value={filterValues.query}
-              onChange={(e) => onFilterChange?.onQueryChange?.(e.target.value)} {/* PERBAHI */}
+              onChange={(e) => onFilterChange?.onQueryChange?.(e.target.value)} 
               InputProps={{
                 startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
               }}
@@ -407,9 +407,9 @@ export default function TransaksiSection({
           <CustomPagination
             page={pagination.page}
             totalPages={pagination.totalPages}
-            onPageChange={onPaginationChange?.onPageChange} {/* PERBAHI */}
+            onPageChange={onPaginationChange?.onPageChange} 
             pageSize={pagination.pageSize}
-            onPageSizeChange={onPaginationChange?.onPageSizeChange} {/* PERBAHI */}
+            onPageSizeChange={onPaginationChange?.onPageSizeChange} 
             loading={loading}
           />
 
@@ -533,7 +533,7 @@ export default function TransaksiSection({
                             <Button 
                               size="small" 
                               variant="outlined" 
-                              onClick={() => onDetailOpen?.(r)} {/* PERBAHI */}
+                              onClick={() => onDetailOpen?.(r)} 
                             >
                               Detail
                             </Button>
@@ -542,7 +542,7 @@ export default function TransaksiSection({
                               variant="outlined"
                               color="error"
                               disabled={!canVoid(r)}
-                              onClick={() => onVoidOpen?.(r)} {/* PERBAHI */}
+                              onClick={() => onVoidOpen?.(r)} 
                             >
                               Void
                             </Button>
