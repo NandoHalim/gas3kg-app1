@@ -348,8 +348,7 @@ export default function HutangSection({
                 labelId="status-filter"
                 label="Status Hutang"
                 value={filterValues.status}
-                onChange={(e) => onFilterChange?.onStatusChange?.(e.target.value)} {/* PERBAHI */}
-              >
+                onChange={(e) => onFilterChange?.onStatusChange?.(e.target.value)}              >
                 <MenuItem value="BELUM_LUNAS">Belum Lunas</MenuItem>
                 <MenuItem value="SEMUA">Semua Status</MenuItem>
               </Select>
@@ -402,9 +401,9 @@ export default function HutangSection({
           <CustomPagination
             page={pagination.page}
             totalPages={pagination.totalPages}
-            onPageChange={onPaginationChange?.onPageChange} {/* PERBAHI */}
+            onPageChange={onPaginationChange?.onPageChange} 
             pageSize={pagination.pageSize}
-            onPageSizeChange={onPaginationChange?.onPageSizeChange} {/* PERBAHI */}
+            onPageSizeChange={onPaginationChange?.onPageSizeChange} 
             loading={loading}
           />
 
@@ -512,7 +511,7 @@ export default function HutangSection({
                           <Tooltip title="Ingatkan via WhatsApp">
                             <IconButton
                               color="success"
-                              onClick={() => handleWhatsApp(r.customer, r.total)} {/* PERBAHI */}
+                              onClick={() => handleWhatsApp(r.customer, r.total)} 
                               size="small"
                               sx={{ 
                                 bgcolor: '#25D366', 
