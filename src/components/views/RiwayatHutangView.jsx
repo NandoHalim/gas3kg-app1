@@ -336,8 +336,7 @@ export default function HutangSection({
               label="Pencarian Pelanggan / Invoice"
               placeholder="Nama pelanggan atau nomor invoice"
               value={filterValues.query}
-              onChange={(e) => onFilterChange?.onQueryChange?.(e.target.value)} {/* PERBAHI */}
-              InputProps={{
+              onChange={(e) => onFilterChange?.onQueryChange?.(e.target.value)}               InputProps={{
                 startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
               }}
             />
