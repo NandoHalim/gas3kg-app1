@@ -590,7 +590,7 @@ export default function HutangSection({
           </Button>
           <Button 
             variant="contained" 
-            onClick={handlePay} {/* PERBAHI: panggil handler yang benar */}
+            onClick={handlePay} 
             disabled={payLoading}
             startIcon={payLoading ? <CircularProgress size={16} /> : <PaidIcon />}
             sx={{ minWidth: 120 }}
