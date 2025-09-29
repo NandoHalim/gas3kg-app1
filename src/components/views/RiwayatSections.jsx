@@ -279,11 +279,10 @@ export default function TransaksiSection({
     }, 100);
   };
 
-  // Can void logic - sesuaikan dengan kebutuhan
-  const canVoid = (row) => {
-    // Sesuaikan dengan logic existing Anda
-    return row.status !== "DIBATALKAN" && row.status !== "LUNAS";
-  };
+   // Can void logic - PERBAIKAN: izinkan void untuk semua transaksi kecuali yang sudah DIBATALKAN
+const canVoid = (row) => {
+  return (row.status || "").toUpperCase() !== "DIBATALKAN";
+};
 
   return (
     <>
