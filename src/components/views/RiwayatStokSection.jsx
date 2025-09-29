@@ -403,7 +403,7 @@ export default function StokSection({
               <Select
                 labelId="jenis-mutasi"
                 label="Jenis Mutasi"
-                value={localFilters.mutasi} {/* Local state */}
+                value={localFilters.mutasi} 
                 onChange={(e) => handleLocalFilterChange("mutasi", e.target.value)}
               >
                 <MenuItem value="ALL">Semua</MenuItem>
@@ -418,7 +418,7 @@ export default function StokSection({
               sx={FIELD_SX}
               label="Keterangan / Kata Kunci"
               placeholder="mis: void, penjualan, agen, budi…"
-              value={localFilters.keyword} {/* Local state */}
+              value={localFilters.keyword} 
               onChange={(e) => handleLocalFilterChange("keyword", e.target.value)}
             />
           </Grid>
