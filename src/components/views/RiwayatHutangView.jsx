@@ -1,10 +1,8 @@
 // src/components/views/RiwayatHutangView.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { DataService } from "../../services/DataService.js";
-import { useToast } from "../../context/ToastContext.jsx";
+import React, { useState } from "react";
 import { fmtIDR } from "../../utils/helpers.js";
 
-// MUI Components
+// MUI Components - PERTAHANKAN semua imports
 import {
   Box,
   Stack,
@@ -45,7 +43,7 @@ import {
   useTheme,
 } from "@mui/material";
 
-// Icons
+// Icons - PERTAHANKAN semua icons
 import {
   ExpandMore as ExpandMoreIcon,
   Search as SearchIcon,
@@ -54,11 +52,13 @@ import {
   PriceCheck as PaidIcon,
   FilterList as FilterListIcon,
   CreditCard as CreditCardIcon,
+  FirstPage as FirstPageIcon,
+  LastPage as LastPageIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
 } from "@mui/icons-material";
 
-/* =========
-   Constants & Styles
-   ========= */
+/* ========= Constants & Styles - PERTAHANKAN ========= */
 const CARD_STYLES = {
   borderRadius: 3,
   boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
@@ -87,6 +87,8 @@ const FIELD_SX = {
 };
 
 const zebra = (i) => (i % 2 ? { background: "#fafafa" } : undefined);
+
+/* ========= Komponen Shared - PERTAHANKAN ========= */
 
 // Status Chip Component
 function StatusChip({ status }) {
@@ -198,209 +200,159 @@ function CustomPagination({ page, totalPages, onPageChange, pageSize, onPageSize
   );
 }
 
-export default function RiwayatHutangView() {
-  const toast = useToast();
+// Filter Section Component
+function FilterSection({ title, children, onReload, onReset, loading }) {
+  return (
+    <Card sx={CARD_STYLES}>
+      <Accordion defaultExpanded sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <FilterListIcon color="primary" />
+            <Typography fontWeight={600}>{title}</Typography>
+          </Stack>
+        </AccordionSummary>
+        <AccordionDetails>
+          {children}
+          <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 2 }} flexWrap="wrap">
+            <Button 
+              variant="contained" 
+              onClick={onReload} 
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={16} /> : <ReplayIcon />}
+            >
+              {loading ? "Memuat…" : "Terapkan Filter"}
+            </Button>
+            <Button variant="outlined" onClick={onReset} disabled={loading}>
+              Reset
+            </Button>
+          </Stack>
+        </AccordionDetails>
+      </Accordion>
+    </Card>
+  );
+}
+
+/* ========= KOMPONEN UTAMA - PRESENTATIONAL ========= */
+export default function HutangSection({
+  // Data & State
+  rows = [],
+  totalRows = 0,
+  totalHutang = 0,
+  loading = false,
+  
+  // Filter State
+  filters = {
+    query: "",
+    status: "BELUM_LUNAS"
+  },
+  
+  // Pagination & Sorting
+  pagination = {
+    page: 1,
+    pageSize: 25,
+    totalPages: 1
+  },
+  sorting = {
+    key: "created_at", 
+    direction: "desc"
+  },
+  
+  // Event Handlers
+  onFilterChange = {},
+  onPaginationChange = {},
+  onSortChange,
+  onReload,
+  onExport,
+  onPay,
+  onWhatsApp
+}) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  
-  const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState("BELUM_LUNAS"); // BELUM_LUNAS | SEMUA
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
 
-  // Dialog bayar hutang
+  // Local state untuk dialog bayar hutang
   const [paying, setPaying] = useState(null);
-  const payingTotal = Number(paying?.total || 0);
 
-  // Sorting & Pagination
-  const [sortKey, setSortKey] = useState("created_at");
-  const [sortDir, setSortDir] = useState("desc");
-  const [pageSize, setPageSize] = useState(25);
-  const [page, setPage] = useState(1);
+  // Destructure handlers
+  const {
+    setQuery,
+    setStatus
+  } = onFilterChange;
 
-  const setSort = (f) =>
-    sortKey === f ? setSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setSortKey(f), setSortDir("asc"));
+  const {
+    setPage,
+    setPageSize
+  } = onPaginationChange;
 
-  const load = async () => {
-    try {
-      setLoading(true);
-      const data = await DataService.getDebts({ 
-        query: q, 
-        limit: 300,
-        status: statusFilter === "BELUM_LUNAS" ? "BELUM_LUNAS" : undefined
-      });
-      setRows(data || []);
-    } catch (e) {
-      toast?.show?.({ type: "error", message: e.message || "Gagal memuat hutang" });
-    } finally {
-      setLoading(false);
-    }
+  // Handle sort
+  const handleSort = (field) => {
+    onSortChange?.(field);
   };
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Handle reset filters
+  const handleReset = () => {
+    setQuery?.("");
+    setStatus?.("BELUM_LUNAS");
+    onReload?.();
+  };
 
-  // Filtered and sorted data
-  const filteredRows = useMemo(() => {
-    let data = [...rows];
-    
-    // Apply status filter
-    if (statusFilter === "BELUM_LUNAS") {
-      data = data.filter(r => (r.status || "").toUpperCase() !== "LUNAS");
-    }
-
-    return data;
-  }, [rows, statusFilter]);
-
-  // Sorted data
-  const sortedRows = useMemo(() => {
-    const data = [...filteredRows];
-    const key = sortKey;
-    const dir = sortDir === "asc" ? 1 : -1;
-    
-    data.sort((a, b) => {
-      const va = key === "total" ? Number(a.total) : 
-                 key === "created_at" ? new Date(a.created_at || 0).getTime() : 
-                 a[key];
-      const vb = key === "total" ? Number(b.total) : 
-                 key === "created_at" ? new Date(b.created_at || 0).getTime() : 
-                 b[key];
-      
-      if (["qty", "total", "price"].includes(key)) return (Number(va) - Number(vb)) * dir;
-      if (key === "created_at") return (va - vb) * dir;
-      return String(va || "").localeCompare(String(vb || ""), "id") * dir;
-    });
-    
-    return data;
-  }, [filteredRows, sortKey, sortDir]);
-
-  // Paginated data
-  const pagedData = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return sortedRows.slice(start, start + pageSize);
-  }, [sortedRows, page, pageSize]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
-
-  useEffect(() => setPage(1), [q, statusFilter, pageSize]);
-
-  const totalHutang = useMemo(() => 
-    filteredRows.reduce((sum, r) => sum + (Number(r.total) || 0), 0), 
-    [filteredRows]
-  );
-
-  const onPaid = async () => {
-    if (!paying) return;
-    try {
-      setLoading(true);
-      await DataService.payDebt({
-        sale_id: paying.id,
-        amount: Number(paying.total || 0),
-        note: `pelunasan: ${paying.customer || ""}`,
-      });
-      toast?.show?.({ type: "success", message: "Hutang berhasil dilunasi" });
+  // Handle bayar hutang
+  const handlePay = () => {
+    if (paying) {
+      onPay?.(paying);
       setPaying(null);
-      await load();
-    } catch (e) {
-      toast?.show?.({ type: "error", message: e.message || "Gagal melunasi hutang" });
-    } finally {
-      setLoading(false);
     }
   };
 
-  const waHref = (nama, total) => {
-    const pesan = `Halo ${nama || "Pelanggan"},\n\nTagihan LPG 3kg Anda sebesar ${fmtIDR(
-      total
-    )} sudah jatuh tempo. Mohon konfirmasi pembayaran ya. Terima kasih 🙏`;
-    return `https://wa.me/?text=${encodeURIComponent(pesan)}`;
+  // Handle WhatsApp
+  const handleWhatsApp = (customer, total) => {
+    const waUrl = onWhatsApp?.(customer, total);
+    if (waUrl) {
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   return (
-    <Stack spacing={3}>
-      {/* Header */}
-      <Stack direction={{ xs: "column", md: "row" }} alignItems="center" spacing={2}>
-        <Typography variant="h4" fontWeight={700} color="primary">
-          Riwayat Hutang
-        </Typography>
-        <Box sx={{ flex: 1 }} />
-        <Chip 
-          label={`Total Hutang: ${fmtIDR(totalHutang)}`}
-          color="warning" 
-          variant="filled"
-          sx={{ fontWeight: 600, fontSize: '1rem', px: 2 }}
-        />
-      </Stack>
-
+    <>
       {/* Filter Section */}
-      <Card sx={CARD_STYLES}>
-        <Accordion defaultExpanded sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <FilterListIcon color="primary" />
-              <Typography fontWeight={600}>Filter & Pencarian</Typography>
-            </Stack>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  {...FIELD_PROPS}
-                  sx={FIELD_SX}
-                  label="Pencarian Pelanggan / Catatan"
-                  placeholder="Cari nama pelanggan atau catatan..."
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  InputProps={{
-                    startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
-                  <InputLabel id="status-filter">Status Hutang</InputLabel>
-                  <Select
-                    labelId="status-filter"
-                    label="Status Hutang"
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                  >
-                    <MenuItem value="BELUM_LUNAS">Belum Lunas</MenuItem>
-                    <MenuItem value="SEMUA">Semua Status</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap">
-                  <Button 
-                    variant="contained" 
-                    onClick={load} 
-                    disabled={loading}
-                    startIcon={loading ? <CircularProgress size={16} /> : <ReplayIcon />}
-                  >
-                    {loading ? "Memuat…" : "Terapkan"}
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    onClick={() => {
-                      setQ("");
-                      setStatusFilter("BELUM_LUNAS");
-                      load();
-                    }}
-                    disabled={loading}
-                  >
-                    Reset
-                  </Button>
-                </Stack>
-              </Grid>
-            </Grid>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-              Menampilkan transaksi dengan metode <b>HUTANG</b> & status belum lunas / tidak dibatalkan.
-            </Typography>
-          </AccordionDetails>
-        </Accordion>
-      </Card>
+      <FilterSection
+        title="Filter Hutang"
+        onReload={onReload}
+        onReset={handleReset}
+        loading={loading}
+      >
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={8}>
+            <TextField
+              {...FIELD_PROPS}
+              sx={FIELD_SX}
+              label="Pencarian Pelanggan / Invoice"
+              placeholder="Nama pelanggan atau nomor invoice"
+              value={filters.query}
+              onChange={(e) => setQuery?.(e.target.value)}
+              InputProps={{
+                startAdornment: <SearchIcon sx={{ mr: 1, color: "text.secondary" }} />,
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
+              <InputLabel id="status-filter">Status Hutang</InputLabel>
+              <Select
+                labelId="status-filter"
+                label="Status Hutang"
+                value={filters.status}
+                onChange={(e) => setStatus?.(e.target.value)}
+              >
+                <MenuItem value="BELUM_LUNAS">Belum Lunas</MenuItem>
+                <MenuItem value="SEMUA">Semua Status</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+          Menampilkan transaksi dengan metode <b>HUTANG</b> & status belum lunas / tidak dibatalkan.
+        </Typography>
+      </FilterSection>
 
       {/* Data Table */}
       <Card sx={CARD_STYLES}>
@@ -416,16 +368,24 @@ export default function RiwayatHutangView() {
           }
           subheader={
             <Typography variant="body2" color="text.secondary">
-              {`Menampilkan ${pagedData.length} dari ${sortedRows.length} data hutang`}
+              {`Menampilkan ${rows.length} dari ${totalRows} data hutang`}
             </Typography>
+          }
+          action={
+            <Chip 
+              label={`Total Hutang: ${fmtIDR(totalHutang)}`}
+              color="warning" 
+              variant="filled"
+              sx={{ fontWeight: 600, fontSize: '1rem', px: 2 }}
+            />
           }
         />
         <CardContent>
           <CustomPagination
-            page={page}
-            totalPages={totalPages}
+            page={pagination.page}
+            totalPages={pagination.totalPages}
             onPageChange={setPage}
-            pageSize={pageSize}
+            pageSize={pagination.pageSize}
             onPageSizeChange={setPageSize}
             loading={loading}
           />
@@ -436,45 +396,45 @@ export default function RiwayatHutangView() {
                 <TableRow>
                   <TableCell>
                     <TableSortLabel
-                      active={sortKey === "created_at"}
-                      direction={sortDir}
-                      onClick={() => setSort("created_at")}
+                      active={sorting.key === "created_at"}
+                      direction={sorting.direction}
+                      onClick={() => handleSort("created_at")}
                     >
                       <b>📅 Tanggal</b>
                     </TableSortLabel>
                   </TableCell>
                   <TableCell>
                     <TableSortLabel
-                      active={sortKey === "customer"}
-                      direction={sortDir}
-                      onClick={() => setSort("customer")}
+                      active={sorting.key === "customer"}
+                      direction={sorting.direction}
+                      onClick={() => handleSort("customer")}
                     >
                       <b>Pelanggan</b>
                     </TableSortLabel>
                   </TableCell>
                   <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                     <TableSortLabel
-                      active={sortKey === "qty"}
-                      direction={sortDir}
-                      onClick={() => setSort("qty")}
+                      active={sorting.key === "qty"}
+                      direction={sorting.direction}
+                      onClick={() => handleSort("qty")}
                     >
                       <b>Qty</b>
                     </TableSortLabel>
                   </TableCell>
                   <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                     <TableSortLabel
-                      active={sortKey === "price"}
-                      direction={sortDir}
-                      onClick={() => setSort("price")}
+                      active={sorting.key === "price"}
+                      direction={sorting.direction}
+                      onClick={() => handleSort("price")}
                     >
                       <b>Harga</b>
                     </TableSortLabel>
                   </TableCell>
                   <TableCell align="right">
                     <TableSortLabel
-                      active={sortKey === "total"}
-                      direction={sortDir}
-                      onClick={() => setSort("total")}
+                      active={sorting.key === "total"}
+                      direction={sorting.direction}
+                      onClick={() => handleSort("total")}
                     >
                       <b>Total Hutang</b>
                     </TableSortLabel>
@@ -491,14 +451,14 @@ export default function RiwayatHutangView() {
                       </TableCell>
                     </TableRow>
                   ))
-                ) : !pagedData.length ? (
+                ) : !rows.length ? (
                   <EmptyState 
                     message="Tidak ada hutang" 
                     description="Tidak ada data hutang yang ditemukan dengan filter saat ini"
                     icon="💰"
                   />
                 ) : (
-                  pagedData.map((r, i) => (
+                  rows.map((r, i) => (
                     <TableRow 
                       key={r.id} 
                       hover 
@@ -534,10 +494,7 @@ export default function RiwayatHutangView() {
                           <Tooltip title="Ingatkan via WhatsApp">
                             <IconButton
                               color="success"
-                              component="a"
-                              href={waHref(r.customer, r.total)}
-                              target="_blank"
-                              rel="noreferrer"
+                              onClick={() => handleWhatsApp(r.customer, r.total)}
                               size="small"
                               sx={{ 
                                 bgcolor: '#25D366', 
@@ -552,15 +509,13 @@ export default function RiwayatHutangView() {
                             size="small"
                             variant="contained"
                             startIcon={<PaidIcon />}
-                            onClick={() =>
-                              setPaying({
-                                id: r.id,
-                                customer: r.customer,
-                                total: r.total,
-                                created_at: r.created_at,
-                                invoice: r.invoice || r.id,
-                              })
-                            }
+                            onClick={() => setPaying({
+                              id: r.id,
+                              customer: r.customer,
+                              total: r.total,
+                              created_at: r.created_at,
+                              invoice: r.invoice || r.id,
+                            })}
                             sx={{ minWidth: 100 }}
                           >
                             Bayar
@@ -594,7 +549,7 @@ export default function RiwayatHutangView() {
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 1 }}>
                 <Typography variant="h6">Total Tagihan</Typography>
                 <Typography variant="h5" color="error.main" fontWeight={700}>
-                  {fmtIDR(payingTotal)}
+                  {fmtIDR(paying.total)}
                 </Typography>
               </Stack>
               <Alert severity="info" sx={{ mt: 1 }}>
@@ -614,7 +569,7 @@ export default function RiwayatHutangView() {
           </Button>
           <Button 
             variant="contained" 
-            onClick={onPaid} 
+            onClick={handlePay}
             disabled={loading}
             startIcon={loading ? <CircularProgress size={16} /> : <PaidIcon />}
             sx={{ minWidth: 120 }}
@@ -623,14 +578,6 @@ export default function RiwayatHutangView() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Stack>
+    </>
   );
 }
-
-// Import icons yang diperlukan
-import {
-  FirstPage as FirstPageIcon,
-  LastPage as LastPageIcon,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
-} from "@mui/icons-material";

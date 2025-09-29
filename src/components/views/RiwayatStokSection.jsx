@@ -1,11 +1,8 @@
 // src/components/views/RiwayatStokSection.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { COLORS, MIN_DATE } from "../../utils/constants.js";
-import { maxAllowedDate, fmtIDR } from "../../utils/helpers.js";
-import { DataService } from "../../services/DataService.js";
-import { useToast } from "../../context/ToastContext.jsx";
+import React from "react";
+import { maxAllowedDate } from "../../utils/helpers.js";
 
-// MUI Components
+// MUI Components - PERTAHANKAN semua imports
 import {
   Box,
   Stack,
@@ -35,18 +32,24 @@ import {
   IconButton,
   CircularProgress,
   Skeleton,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
-// Icons
+// Icons - PERTAHANKAN semua icons
 import {
   ExpandMore as ExpandMoreIcon,
   FilterList as FilterListIcon,
   Inventory as InventoryIcon,
+  Search as SearchIcon,
+  Replay as ReplayIcon,
+  FirstPage as FirstPageIcon,
+  LastPage as LastPageIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
 } from "@mui/icons-material";
 
-/* =========
-   Constants & Styles
-   ========= */
+/* ========= Constants & Styles - PERTAHANKAN ========= */
 const CARD_STYLES = {
   borderRadius: 3,
   boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
@@ -76,7 +79,9 @@ const FIELD_SX = {
 
 const zebra = (i) => (i % 2 ? { background: "#fafafa" } : undefined);
 
-// Badge Component dengan Chip MUI
+/* ========= Komponen Shared - PERTAHANKAN ========= */
+
+// Stok Badge Component
 const StokBadge = ({ code }) => {
   const styles = {
     ISI: { bgcolor: "#e0f2fe", color: "#075985", label: "ISI" },
@@ -94,8 +99,7 @@ const StokBadge = ({ code }) => {
         color: style.color,
         fontWeight: 600,
         fontSize: '0.75rem',
-        px: 0.5,
-        minWidth: 80
+        px: 0.5
       }}
     />
   );
@@ -143,7 +147,98 @@ function EmptyState({ message, description, icon = "📦" }) {
   );
 }
 
-// terjemahkan note teknis jadi "manusiawi"
+// Pagination Component
+function CustomPagination({ page, totalPages, onPageChange, pageSize, onPageSizeChange, loading }) {
+  return (
+    <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-end" flexWrap="wrap">
+      <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
+        Baris per halaman:
+      </Typography>
+      <FormControl size="small" sx={{ minWidth: 80 }}>
+        <Select
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+          disabled={loading}
+        >
+          {[10, 25, 50, 100].map((n) => (
+            <MenuItem key={n} value={n}>{n}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      
+      <Typography variant="body2" sx={{ ml: 1, minWidth: 100, textAlign: 'center' }}>
+        {`Hal. ${page} dari ${totalPages}`}
+      </Typography>
+      
+      <IconButton 
+        disabled={page <= 1 || loading} 
+        onClick={() => onPageChange(1)}
+        size="small"
+        sx={{ mx: 0.5 }}
+      >
+        <FirstPageIcon />
+      </IconButton>
+      <IconButton 
+        disabled={page <= 1 || loading} 
+        onClick={() => onPageChange(page - 1)}
+        size="small"
+        sx={{ mx: 0.5 }}
+      >
+        <ChevronLeftIcon />
+      </IconButton>
+      <IconButton 
+        disabled={page >= totalPages || loading} 
+        onClick={() => onPageChange(page + 1)}
+        size="small"
+        sx={{ mx: 0.5 }}
+      >
+        <ChevronRightIcon />
+      </IconButton>
+      <IconButton 
+        disabled={page >= totalPages || loading} 
+        onClick={() => onPageChange(totalPages)}
+        size="small"
+        sx={{ mx: 0.5 }}
+      >
+        <LastPageIcon />
+      </IconButton>
+    </Stack>
+  );
+}
+
+// Filter Section Component
+function FilterSection({ title, children, onReload, onReset, loading }) {
+  return (
+    <Card sx={CARD_STYLES}>
+      <Accordion defaultExpanded sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <FilterListIcon color="primary" />
+            <Typography fontWeight={600}>{title}</Typography>
+          </Stack>
+        </AccordionSummary>
+        <AccordionDetails>
+          {children}
+          <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 2 }} flexWrap="wrap">
+            <Button 
+              variant="contained" 
+              onClick={onReload} 
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={16} /> : <ReplayIcon />}
+            >
+              {loading ? "Memuat…" : "Terapkan Filter"}
+            </Button>
+            <Button variant="outlined" onClick={onReset} disabled={loading}>
+              Reset
+            </Button>
+          </Stack>
+        </AccordionDetails>
+      </Accordion>
+    </Card>
+  );
+}
+
+// terjemahkan note teknis jadi "manusiawi" - PERTAHANKAN fungsi existing
 function humanize(note = "") {
   const n = note.toLowerCase();
   if (n.includes("void") || n.includes("dibatalkan") || n.includes("reason"))
@@ -159,273 +254,167 @@ function humanize(note = "") {
   return note || "Mutasi Stok";
 }
 
-export default function RiwayatStokSection() {
-  const toast = useToast();
+/* ========= KOMPONEN UTAMA - PRESENTATIONAL ========= */
+export default function StokSection({
+  // Data & State
+  rows = [],
+  totalRows = 0,
+  loading = false,
+  
+  // Filter State
+  filters = {
+    from: "",
+    to: "",
+    jenis: "ALL",
+    mutasi: "ALL",
+    keyword: ""
+  },
+  
+  // Pagination & Sorting
+  pagination = {
+    page: 1,
+    pageSize: 25,
+    totalPages: 1
+  },
+  sorting = {
+    key: "tanggal",
+    direction: "desc"
+  },
+  
+  // Event Handlers
+  onFilterChange = {},
+  onPaginationChange = {},
+  onSortChange,
+  onReload,
+  onExport
+}) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // filter
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [jenis, setJenis] = useState("ALL");      // ALL | ISI | KOSONG
-  const [mutasi, setMutasi] = useState("ALL");    // ALL | MASUK | KELUAR
-  const [keyword, setKeyword] = useState("");     // cari pada keterangan/note
+  // Destructure handlers
+  const {
+    setFrom,
+    setTo,
+    setJenis,
+    setMutasi,
+    setKeyword
+  } = onFilterChange;
 
-  // data
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const {
+    setPage,
+    setPageSize
+  } = onPaginationChange;
 
-  // sorting & pagination
-  const [sortKey, setSortKey] = useState("tanggal");
-  const [sortDir, setSortDir] = useState("desc");
-  const [pageSize, setPageSize] = useState(25);
-  const [page, setPage] = useState(1);
-
-  const setSort = (f) =>
-    sortKey === f ? setSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setSortKey(f), setSortDir("asc"));
-
-  const load = async () => {
-    try {
-      setLoading(true);
-      const data = await DataService.getStockHistory({
-        from: from || undefined,
-        to: to || undefined,
-        jenis,
-        limit: 600,
-      });
-      setRows(Array.isArray(data) ? data : []);
-    } catch (e) {
-      toast?.show?.({ type: "error", message: `❌ ${e.message}` });
-    } finally {
-      setLoading(false);
-    }
+  // Handle sort
+  const handleSort = (field) => {
+    onSortChange?.(field);
   };
 
-  useEffect(() => { 
-    load(); 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Handle reset filters
+  const handleReset = () => {
+    setFrom?.("");
+    setTo?.("");
+    setJenis?.("ALL");
+    setMutasi?.("ALL");
+    setKeyword?.("");
+    onReload?.();
+  };
 
-  // filter FE: mutasi (masuk/keluar) + keyword
-  const filtered = useMemo(() => {
-    return rows.filter(r => {
-      if (mutasi === "MASUK" && !(r.masuk > 0)) return false;
-      if (mutasi === "KELUAR" && !(r.keluar > 0)) return false;
-      const kw = keyword.trim().toLowerCase();
-      if (kw) {
-        const hay = (r.keterangan + " " + (r.raw_note || "")).toLowerCase();
-        if (!hay.includes(kw)) return false;
-      }
-      return true;
-    });
-  }, [rows, mutasi, keyword]);
+  // Calculate summary totals
+  const totalMasuk = rows.reduce((sum, row) => sum + (Number(row.masuk) || 0), 0);
+  const totalKeluar = rows.reduce((sum, row) => sum + (Number(row.keluar) || 0), 0);
 
-  // re-keterangan manusiawi + sorting
-  const normalized = useMemo(() => {
-    const data = filtered.map(r => ({
-      ...r,
-      friendly: humanize(r.raw_note || r.keterangan),
-    }));
-
-    // Sorting
-    const key = sortKey;
-    const dir = sortDir === "asc" ? 1 : -1;
+  // Apply frontend filtering for mutasi and keyword
+  const filteredRows = rows.filter(row => {
+    // Filter by mutasi type
+    if (filters.mutasi === "MASUK" && !(row.masuk > 0)) return false;
+    if (filters.mutasi === "KELUAR" && !(row.keluar > 0)) return false;
     
-    return data.sort((a, b) => {
-      let va = a[key];
-      let vb = b[key];
-      
-      if (key === "tanggal" || key === "waktu") {
-        va = new Date(a.tanggal || a.waktu || "1970-01-01").getTime();
-        vb = new Date(b.tanggal || b.waktu || "1970-01-01").getTime();
-        return (va - vb) * dir;
-      }
-      if (["masuk", "keluar", "sisa"].includes(key)) {
-        return (Number(va || 0) - Number(vb || 0)) * dir;
-      }
-      if (key === "friendly") {
-        return String(a.friendly || "").localeCompare(String(b.friendly || ""), "id") * dir;
-      }
-      return String(va || "").localeCompare(String(vb || ""), "id") * dir;
-    });
-  }, [filtered, sortKey, sortDir]);
-
-  // Pagination
-  const pagedData = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return normalized.slice(start, start + pageSize);
-  }, [normalized, page, pageSize]);
-
-  const totalPages = Math.max(1, Math.ceil(normalized.length / pageSize));
-
-  useEffect(() => setPage(1), [from, to, jenis, mutasi, keyword, pageSize]);
-
-  // summary
-  const totalMasuk = normalized.reduce((a, b) => a + Number(b.masuk || 0), 0);
-  const totalKeluar = normalized.reduce((a, b) => a + Number(b.keluar || 0), 0);
-
-  // Pagination Component
-  const PaginationControls = () => (
-    <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-end" flexWrap="wrap" sx={{ mb: 2 }}>
-      <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
-        Baris per halaman:
-      </Typography>
-      <FormControl size="small" sx={{ minWidth: 80 }}>
-        <Select
-          value={pageSize}
-          onChange={(e) => setPageSize(Number(e.target.value))}
-          disabled={loading}
-        >
-          {[10, 25, 50, 100].map((n) => (
-            <MenuItem key={n} value={n}>{n}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      
-      <Typography variant="body2" sx={{ ml: 1, minWidth: 100, textAlign: 'center' }}>
-        {`Hal. ${page} dari ${totalPages}`}
-      </Typography>
-      
-      <IconButton 
-        disabled={page <= 1 || loading} 
-        onClick={() => setPage(1)}
-        size="small"
-        sx={{ mx: 0.5 }}
-      >
-        <FirstPageIcon />
-      </IconButton>
-      <IconButton 
-        disabled={page <= 1 || loading} 
-        onClick={() => setPage(page - 1)}
-        size="small"
-        sx={{ mx: 0.5 }}
-      >
-        <ChevronLeftIcon />
-      </IconButton>
-      <IconButton 
-        disabled={page >= totalPages || loading} 
-        onClick={() => setPage(page + 1)}
-        size="small"
-        sx={{ mx: 0.5 }}
-      >
-        <ChevronRightIcon />
-      </IconButton>
-      <IconButton 
-        disabled={page >= totalPages || loading} 
-        onClick={() => setPage(totalPages)}
-        size="small"
-        sx={{ mx: 0.5 }}
-      >
-        <LastPageIcon />
-      </IconButton>
-    </Stack>
-  );
+    // Filter by keyword
+    if (filters.keyword) {
+      const searchText = (row.keterangan + " " + (row.raw_note || "")).toLowerCase();
+      if (!searchText.includes(filters.keyword.toLowerCase())) return false;
+    }
+    
+    return true;
+  });
 
   return (
     <>
       {/* Filter Section */}
-      <Card sx={CARD_STYLES}>
-        <Accordion defaultExpanded sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <FilterListIcon color="primary" />
-              <Typography fontWeight={600}>Filter Riwayat Stok</Typography>
-            </Stack>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField
-                  {...FIELD_PROPS}
-                  sx={FIELD_SX}
-                  label="Dari Tanggal"
-                  type="date"
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                  inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <TextField
-                  {...FIELD_PROPS}
-                  sx={FIELD_SX}
-                  label="Sampai"
-                  type="date"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6} md={2}>
-                <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
-                  <InputLabel id="jenis-stok">Jenis Stok</InputLabel>
-                  <Select
-                    labelId="jenis-stok"
-                    label="Jenis Stok"
-                    value={jenis}
-                    onChange={(e) => setJenis(e.target.value)}
-                  >
-                    <MenuItem value="ALL">Semua</MenuItem>
-                    <MenuItem value="ISI">Isi</MenuItem>
-                    <MenuItem value="KOSONG">Kosong</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6} md={2}>
-                <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
-                  <InputLabel id="jenis-mutasi">Jenis Mutasi</InputLabel>
-                  <Select
-                    labelId="jenis-mutasi"
-                    label="Jenis Mutasi"
-                    value={mutasi}
-                    onChange={(e) => setMutasi(e.target.value)}
-                  >
-                    <MenuItem value="ALL">Semua</MenuItem>
-                    <MenuItem value="MASUK">Masuk (+)</MenuItem>
-                    <MenuItem value="KELUAR">Keluar (−)</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <TextField
-                  {...FIELD_PROPS}
-                  sx={FIELD_SX}
-                  label="Keterangan / Kata Kunci"
-                  placeholder="mis: void, penjualan, agen, budi…"
-                  value={keyword}
-                  onChange={(e) => setKeyword(e.target.value)}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap">
-                  <Button 
-                    variant="contained" 
-                    onClick={load} 
-                    disabled={loading} 
-                    startIcon={loading ? <CircularProgress size={16} /> : null}
-                  >
-                    {loading ? "Memuat…" : "Terapkan Filter"}
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    disabled={loading}
-                    onClick={() => {
-                      setFrom("");
-                      setTo("");
-                      setJenis("ALL");
-                      setMutasi("ALL");
-                      setKeyword("");
-                      load();
-                    }}
-                  >
-                    Reset
-                  </Button>
-                </Stack>
-              </Grid>
-            </Grid>
-          </AccordionDetails>
-        </Accordion>
-      </Card>
+      <FilterSection
+        title="Filter Riwayat Stok"
+        onReload={onReload}
+        onReset={handleReset}
+        loading={loading}
+      >
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6} md={3}>
+            <TextField
+              {...FIELD_PROPS}
+              sx={FIELD_SX}
+              label="Dari Tanggal"
+              type="date"
+              value={filters.from}
+              onChange={(e) => setFrom?.(e.target.value)}
+              inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <TextField
+              {...FIELD_PROPS}
+              sx={FIELD_SX}
+              label="Sampai"
+              type="date"
+              value={filters.to}
+              onChange={(e) => setTo?.(e.target.value)}
+              inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={2}>
+            <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
+              <InputLabel id="jenis-stok">Jenis Stok</InputLabel>
+              <Select
+                labelId="jenis-stok"
+                label="Jenis Stok"
+                value={filters.jenis}
+                onChange={(e) => setJenis?.(e.target.value)}
+              >
+                <MenuItem value="ALL">Semua</MenuItem>
+                <MenuItem value="ISI">Isi</MenuItem>
+                <MenuItem value="KOSONG">Kosong</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={6} md={2}>
+            <FormControl {...FIELD_PROPS} sx={FIELD_SX}>
+              <InputLabel id="jenis-mutasi">Jenis Mutasi</InputLabel>
+              <Select
+                labelId="jenis-mutasi"
+                label="Jenis Mutasi"
+                value={filters.mutasi}
+                onChange={(e) => setMutasi?.(e.target.value)}
+              >
+                <MenuItem value="ALL">Semua</MenuItem>
+                <MenuItem value="MASUK">Masuk (+)</MenuItem>
+                <MenuItem value="KELUAR">Keluar (−)</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              {...FIELD_PROPS}
+              sx={FIELD_SX}
+              label="Keterangan / Kata Kunci"
+              placeholder="mis: void, penjualan, agen, budi…"
+              value={filters.keyword}
+              onChange={(e) => setKeyword?.(e.target.value)}
+            />
+          </Grid>
+        </Grid>
+      </FilterSection>
 
       {/* Data Table */}
       <Card sx={CARD_STYLES}>
@@ -434,14 +423,14 @@ export default function RiwayatStokSection() {
             <Stack direction="row" alignItems="center" spacing={1}>
               <InventoryIcon color="primary" />
               <Typography variant="h6" fontWeight={600}>
-                Riwayat Stok
+                Riwayat Mutasi Stok
                 {loading && <CircularProgress size={16} sx={{ ml: 1 }} />}
               </Typography>
             </Stack>
           }
           subheader={
             <Typography variant="body2" color="text.secondary">
-              {`Menampilkan ${pagedData.length} dari ${normalized.length} data`}
+              {`Menampilkan ${filteredRows.length} dari ${totalRows} data mutasi stok`}
             </Typography>
           }
           action={
@@ -452,7 +441,14 @@ export default function RiwayatStokSection() {
           }
         />
         <CardContent>
-          <PaginationControls />
+          <CustomPagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            onPageChange={setPage}
+            pageSize={pagination.pageSize}
+            onPageSizeChange={setPageSize}
+            loading={loading}
+          />
 
           <TableContainer component={Paper} sx={TABLE_STYLES}>
             <Table size="small">
@@ -460,54 +456,54 @@ export default function RiwayatStokSection() {
                 <TableRow>
                   <TableCell>
                     <TableSortLabel
-                      active={sortKey === "tanggal"}
-                      direction={sortDir}
-                      onClick={() => setSort("tanggal")}
+                      active={sorting.key === "tanggal"}
+                      direction={sorting.direction}
+                      onClick={() => handleSort("tanggal")}
                     >
                       <b>📅 Tanggal & Waktu</b>
                     </TableSortLabel>
                   </TableCell>
                   <TableCell>
                     <TableSortLabel
-                      active={sortKey === "code"}
-                      direction={sortDir}
-                      onClick={() => setSort("code")}
+                      active={sorting.key === "code"}
+                      direction={sorting.direction}
+                      onClick={() => handleSort("code")}
                     >
                       <b>Jenis</b>
                     </TableSortLabel>
                   </TableCell>
                   <TableCell>
                     <TableSortLabel
-                      active={sortKey === "friendly"}
-                      direction={sortDir}
-                      onClick={() => setSort("friendly")}
+                      active={sorting.key === "friendly"}
+                      direction={sorting.direction}
+                      onClick={() => handleSort("friendly")}
                     >
                       <b>Keterangan</b>
                     </TableSortLabel>
                   </TableCell>
                   <TableCell align="right">
                     <TableSortLabel
-                      active={sortKey === "masuk"}
-                      direction={sortDir}
-                      onClick={() => setSort("masuk")}
+                      active={sorting.key === "masuk"}
+                      direction={sorting.direction}
+                      onClick={() => handleSort("masuk")}
                     >
                       <b>Masuk</b>
                     </TableSortLabel>
                   </TableCell>
                   <TableCell align="right">
                     <TableSortLabel
-                      active={sortKey === "keluar"}
-                      direction={sortDir}
-                      onClick={() => setSort("keluar")}
+                      active={sorting.key === "keluar"}
+                      direction={sorting.direction}
+                      onClick={() => handleSort("keluar")}
                     >
                       <b>Keluar</b>
                     </TableSortLabel>
                   </TableCell>
                   <TableCell align="right">
                     <TableSortLabel
-                      active={sortKey === "sisa"}
-                      direction={sortDir}
-                      onClick={() => setSort("sisa")}
+                      active={sorting.key === "sisa"}
+                      direction={sorting.direction}
+                      onClick={() => handleSort("sisa")}
                     >
                       <b>Sisa Stok</b>
                     </TableSortLabel>
@@ -523,14 +519,14 @@ export default function RiwayatStokSection() {
                       </TableCell>
                     </TableRow>
                   ))
-                ) : !pagedData.length ? (
+                ) : !filteredRows.length ? (
                   <EmptyState 
                     message="Tidak ada data stok" 
-                    description="Tidak ada data yang ditemukan dengan filter saat ini"
+                    description="Tidak ada data mutasi stok yang ditemukan dengan filter saat ini"
                     icon="📦"
                   />
                 ) : (
-                  pagedData.map((r, i) => (
+                  filteredRows.map((r, i) => (
                     <TableRow 
                       key={r.id} 
                       hover 
@@ -547,7 +543,7 @@ export default function RiwayatStokSection() {
                       <TableCell>
                         <StokBadge code={r.code} />
                       </TableCell>
-                      <TableCell>{r.friendly}</TableCell>
+                      <TableCell>{humanize(r.raw_note || r.keterangan)}</TableCell>
                       <TableCell 
                         align="right" 
                         sx={{ 
@@ -587,11 +583,3 @@ export default function RiwayatStokSection() {
     </>
   );
 }
-
-// Import icons yang diperlukan
-import {
-  FirstPage as FirstPageIcon,
-  LastPage as LastPageIcon,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
-} from "@mui/icons-material";
