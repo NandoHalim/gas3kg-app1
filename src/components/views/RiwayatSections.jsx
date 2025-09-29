@@ -312,7 +312,7 @@ export default function TransaksiSection({
               label="Sampai"
               type="date"
               value={filterValues.to}
-              onChange={(e) => onFilterChange?.onToChange?.(e.target.value)} {/* PERBAHI */}
+              onChange={(e) => onFilterChange?.onToChange?.(e.target.value)}
               InputLabelProps={{ shrink: true }}
             />
           </Grid>
