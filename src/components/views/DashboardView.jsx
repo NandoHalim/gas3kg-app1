@@ -1133,81 +1133,80 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         </CardContent>
       </Card>
 
-      {/* Modal: Riwayat Pelanggan */}
-      <Dialog fullWidth maxWidth="md" open={openHist} onClose={closeCustomerHistory}>
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <PeopleIcon color="primary" />
-            Riwayat Transaksi — {histName}
-          </Box>
-        </DialogTitle>
-        <DialogContent dividers>
-          {histLoading ? (
-            <Stack spacing={1} sx={{ py: 2 }}>
-              {[...Array(5)].map((_, i) => <Skeleton key={i} height={53} />)}
-            </Stack>
-          ) : (
-            <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
-              <Table size="medium">
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: theme.palette.background.default }}>
-                    <TableCell sx={{ fontWeight: 700 }}>Tanggal</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700 }}>Qty</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Metode & Status</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
-                  
-                </TableHead>
-                <TableBody>
-                  {(histRows || []).map((r) => (
-                    <TableRow key={r.id} hover>
-                      <TableCell sx={{ whiteSpace: "nowrap", fontFamily: 'monospace' }}>
-                        {String(r.created_at || "").slice(0,10)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                        {r.qty}
-                      </TableCell>
-                      <TableCell>
-                        <Stack direction="row" alignItems="center" spacing={1}>
-                          <Chip 
-                            label={r.method} 
-                            size="small" 
-                            color={r.method === 'TUNAI' ? 'success' : 'primary'}
-                            variant="outlined"
-                          />
-                          {r.method === "HUTANG" && (
-                            <Chip
-                              size="small"
-                              label={(String(r.status || "").toUpperCase() === "LUNAS") ? "LUNAS" : "BELUM"}
-                              color={(String(r.status || "").toUpperCase() === "LUNAS") ? "success" : "error"}
-                              variant="filled"
-                            />
-                          )}
-                        </Stack>
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
-                        {fmtIDR((Number(r.qty)||0) * (Number(r.price)||0))}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {!histRows?.length && (
-                    <EmptyStateRow colSpan={4} message="Tidak ada riwayat transaksi" />
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DialogContent>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
-          <Typography variant="h6" fontWeight={700} color="primary.main">
-            Total Qty: {histLoading ? "…" : histTotalQty}
-          </Typography>
-          <DialogActions sx={{ px: 0 }}>
-            <Button variant="contained" sx={btnDialogSx} onClick={closeCustomerHistory}>
-              Tutup
-            </Button>
-          </DialogActions>
-        </Stack>
-      </Dialog>
-    </Stack>
-  );
-}
+      // Di bagian Modal: Riwayat Pelanggan - PERBAIKI bagian ini:
+
+{/* Modal: Riwayat Pelanggan */}
+<Dialog fullWidth maxWidth="md" open={openHist} onClose={closeCustomerHistory}>
+  <DialogTitle>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <PeopleIcon color="primary" />
+      Riwayat Transaksi — {histName}
+    </Box>
+  </DialogTitle>
+  <DialogContent dividers>
+    {histLoading ? (
+      <Stack spacing={1} sx={{ py: 2 }}>
+        {[...Array(5)].map((_, i) => <Skeleton key={i} height={53} />)}
+      </Stack>
+    ) : (
+      <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
+        <Table size="medium">
+          <TableHead>
+            <TableRow sx={{ backgroundColor: theme.palette.background.default }}>
+              <TableCell sx={{ fontWeight: 700 }}>Tanggal</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 700 }}>Qty</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Metode & Status</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
+            </TableRow>
+          </TableHead> {/* ← HAPUS salah satu </TableHead> yang berlebih */}
+          <TableBody>
+            {(histRows || []).map((r) => (
+              <TableRow key={r.id} hover>
+                <TableCell sx={{ whiteSpace: "nowrap", fontFamily: 'monospace' }}>
+                  {String(r.created_at || "").slice(0,10)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                  {r.qty}
+                </TableCell>
+                <TableCell>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Chip 
+                      label={r.method} 
+                      size="small" 
+                      color={r.method === 'TUNAI' ? 'success' : 'primary'}
+                      variant="outlined"
+                    />
+                    {r.method === "HUTANG" && (
+                      <Chip
+                        size="small"
+                        label={(String(r.status || "").toUpperCase() === "LUNAS") ? "LUNAS" : "BELUM"}
+                        color={(String(r.status || "").toUpperCase() === "LUNAS") ? "success" : "error"}
+                        variant="filled"
+                      />
+                    )}
+                  </Stack>
+                </TableCell>
+                <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
+                  {fmtIDR((Number(r.qty)||0) * (Number(r.price)||0))}
+                </TableCell>
+              </TableRow>
+            ))}
+            {!histRows?.length && (
+              <EmptyStateRow colSpan={4} message="Tidak ada riwayat transaksi" />
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    )}
+  </DialogContent>
+  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
+    <Typography variant="h6" fontWeight={700} color="primary.main">
+      Total Qty: {histLoading ? "…" : histTotalQty}
+    </Typography>
+    <DialogActions sx={{ px: 0 }}>
+      <Button variant="contained" sx={btnDialogSx} onClick={closeCustomerHistory}>
+        Tutup
+      </Button>
+    </DialogActions>
+  </Stack>
+</Dialog>
