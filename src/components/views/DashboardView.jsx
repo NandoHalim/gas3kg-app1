@@ -1210,3 +1210,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     </DialogActions>
   </Stack>
 </Dialog>
+    </Stack>
+  );
+}
