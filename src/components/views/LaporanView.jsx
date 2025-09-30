@@ -63,9 +63,20 @@ async function saveXLSX(filename, rows, headers) {
   URL.revokeObjectURL(a.href);
 }
 
-const isPaid = (r) =>
-  String(r.method).toUpperCase() === "TUNAI" ||
-  String(r.status || "").toUpperCase() === "LUNAS";
+const isPaid = (r) => {
+  if (!r) return false;
+  const status = String(r.status || "").toUpperCase();
+  const method = String(r.method || "").toUpperCase();
+
+  // 🚫 abaikan transaksi dibatalkan
+  if (status === "DIBATALKAN") return false;
+
+  // ✅ hanya hitung yang tunai atau sudah lunas
+  if (method === "TUNAI") return true;
+  if (status === "LUNAS") return true;
+
+  return false;
+};
 
 const getStatusColor = (status) => {
   const stat = String(status || "").toUpperCase();
