@@ -28,7 +28,10 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  CircularProgress,
+  useTheme,
+  useMediaQuery,
+  alpha,
+  Divider,
 } from "@mui/material";
 
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
@@ -38,7 +41,12 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import ReportProblemOutlined from "@mui/icons-material/ReportProblemOutlined";
 import InsightsOutlined from "@mui/icons-material/InsightsOutlined";
 import VisibilityOutlined from "@mui/icons-material/VisibilityOutlined";
-import SaveOutlined from "@mui/icons-material/SaveOutlined";
+import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import BarChartIcon from "@mui/icons-material/BarChart";
+import PeopleIcon from "@mui/icons-material/People";
+import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -53,12 +61,17 @@ const fmtPct = (n) => (n === null || n === undefined) ? "–" : `${(Number(n)).t
 
 /* Error banner + Empty state */
 function ErrorBanner({ message, detail }) {
+  const theme = useTheme();
   return (
     <Alert
       severity="error"
       icon={<ReportProblemOutlined />}
       variant="outlined"
-      sx={{ borderRadius: 2 }}
+      sx={{ 
+        borderRadius: 2,
+        border: `1px solid ${alpha(theme.palette.error.main, 0.2)}`,
+        background: `${alpha(theme.palette.error.main, 0.05)}`
+      }}
     >
       <Typography variant="subtitle1" fontWeight={600}>Terjadi kesalahan</Typography>
       <Typography variant="body2" sx={{ mt: 0.5 }}>{message}</Typography>
@@ -70,16 +83,17 @@ function ErrorBanner({ message, detail }) {
     </Alert>
   );
 }
+
 function EmptyStateRow({ colSpan = 5, message = "Tidak ada data", hint }) {
   return (
     <TableRow>
-      <TableCell colSpan={colSpan} align="center" sx={{ py: 4 }}>
+      <TableCell colSpan={colSpan} align="center" sx={{ py: 6 }}>
         <Box sx={{ color: "text.secondary" }}>
-          <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1, mb: 0.5 }}>
-            <InsightsOutlined fontSize="small" />
-            <Typography variant="body2" fontWeight={600}>📊 {message}</Typography>
-          </Box>
-          {hint ? <Typography variant="caption">{hint}</Typography> : null}
+          <InsightsOutlined sx={{ fontSize: 48, mb: 2, opacity: 0.5 }} />
+          <Typography variant="body1" gutterBottom fontWeight={600}>
+            {message}
+          </Typography>
+          {hint && <Typography variant="body2">{hint}</Typography>}
         </Box>
       </TableCell>
     </TableRow>
@@ -109,19 +123,31 @@ function buildLast7DaysSeries(rows = []) {
 }
 
 /* ====== Small UI parts ====== */
-function StatTile({ title, value, subtitle, color = "primary", icon }) {
+function StatTile({ title, value, subtitle, color = "primary", icon, loading = false }) {
+  const theme = useTheme();
+  
   return (
-    <Card sx={{ height: "100%", display: "flex" }}>
-      <CardContent sx={{ flex: 1, display: "flex", alignItems: "center", py: 2 }}>
+    <Card sx={{ 
+      height: "100%", 
+      display: "flex",
+      background: `linear(135deg, ${alpha(theme.palette[color].main, 0.1)} 0%, ${alpha(theme.palette[color].main, 0.05)} 100%)`,
+      border: `1px solid ${alpha(theme.palette[color].main, 0.2)}`,
+      transition: 'all 0.2s ease-in-out',
+      '&:hover': {
+        transform: 'translateY(-2px)',
+        boxShadow: theme.shadows[4],
+      }
+    }}>
+      <CardContent sx={{ flex: 1, display: "flex", alignItems: "center", py: 3, px: 3 }}>
         <Stack direction="row" spacing={2} alignItems="center" sx={{ width: "100%" }}>
           <Box
             sx={(theme) => ({
-              width: 42,
-              height: 42,
+              width: 56,
+              height: 56,
               borderRadius: 2,
               display: "grid",
               placeItems: "center",
-              bgcolor: (theme.palette[color]?.light || theme.palette.primary.light) + "20", // 20% opacity
+              bgcolor: alpha(theme.palette[color].main, 0.15),
               color: `${color}.main`,
               flexShrink: 0,
             })}
@@ -130,24 +156,35 @@ function StatTile({ title, value, subtitle, color = "primary", icon }) {
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography
-              variant="h6"
-              fontWeight={600}
+              variant="h4"
+              fontWeight={700}
               noWrap
-              sx={{ typography: { xs: "h6", sm: "h6" } }}
+              sx={{ 
+                typography: { xs: "h5", sm: "h4" },
+                color: `${color}.main`
+              }}
             >
-              {value}
+              {loading ? <Skeleton variant="text" width={80} /> : value}
             </Typography>
             <Typography
               color="text.secondary"
-              sx={{ typography: { xs: "body2", sm: "subtitle1" }, display: "block", minHeight: 20 }}
+              sx={{ 
+                typography: { xs: "body2", sm: "subtitle1" }, 
+                display: "block", 
+                minHeight: 24,
+                fontWeight: 600 
+              }}
               noWrap
             >
-              {subtitle || ""}
+              {loading ? <Skeleton variant="text" width={120} /> : subtitle}
             </Typography>
             <Typography
               variant="body2"
               color="text.secondary"
-              sx={{ display: { xs: "none", sm: "block" } }}
+              sx={{ 
+                display: { xs: "none", sm: "block" },
+                fontWeight: 500
+              }}
             >
               {title}
             </Typography>
@@ -158,33 +195,90 @@ function StatTile({ title, value, subtitle, color = "primary", icon }) {
   );
 }
 
-function StockProgress({ isi, kosong }) {
+function StockProgress({ isi, kosong, loading = false }) {
   const total = Math.max(isi + kosong, 1);
   const pctKosong = Math.round((kosong / total) * 100);
   const pctIsi = 100 - pctKosong;
+  
+  if (loading) return <Skeleton height={60} />;
+  
   return (
-    <Stack spacing={1}>
-      <LinearProgress
-        variant="determinate"
-        value={pctIsi}
-        sx={{ height: 10, borderRadius: 5, "& .MuiLinearProgress-bar": { borderRadius: 5 } }}
-        color="success"
-      />
-      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
-        <Chip size="small" label={`Isi: ${pctIsi}%`} color="success" variant="outlined" />
-        <Chip size="small" label={`Kosong: ${pctKosong}%`} color="error" variant="outlined" />
+    <Stack spacing={2}>
+      <Box>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+          <Typography variant="body2" fontWeight={600} color="success.main">
+            Stok Isi ({isi})
+          </Typography>
+          <Typography variant="body2" fontWeight={600} color="text.secondary">
+            {pctIsi}%
+          </Typography>
+        </Stack>
+        <LinearProgress
+          variant="determinate"
+          value={pctIsi}
+          sx={{ 
+            height: 12, 
+            borderRadius: 6, 
+            bgcolor: 'error.50',
+            '& .MuiLinearProgress-bar': { 
+              borderRadius: 6,
+              background: `linear(90deg, #4CAF50, #66BB6A)`
+            } 
+          }}
+        />
+      </Box>
+      
+      <Box>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+          <Typography variant="body2" fontWeight={600} color="error.main">
+            Stok Kosong ({kosong})
+          </Typography>
+          <Typography variant="body2" fontWeight={600} color="text.secondary">
+            {pctKosong}%
+          </Typography>
+        </Stack>
+        <LinearProgress
+          variant="determinate"
+          value={pctKosong}
+          sx={{ 
+            height: 12, 
+            borderRadius: 6, 
+            bgcolor: 'success.50',
+            '& .MuiLinearProgress-bar': { 
+              borderRadius: 6,
+              background: `linear(90deg, #F44336, #EF5350)`
+            } 
+          }}
+          color="error"
+        />
+      </Box>
+      
+      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ mt: 1 }}>
+        <Chip 
+          size="small" 
+          label={`Total: ${isi + kosong} tabung`} 
+          color="primary" 
+          variant="outlined" 
+        />
+        {isi <= LOW_STOCK_THRESHOLD && (
+          <Chip size="small" label="Stok Isi Menipis" color="warning" variant="filled" />
+        )}
+        {kosong <= LOW_STOCK_THRESHOLD && (
+          <Chip size="small" label="Stok Kosong Menipis" color="warning" variant="filled" />
+        )}
       </Stack>
     </Stack>
   );
 }
 
 /* ====== Chart 7 Hari Terakhir ====== */
-function MiniBarChartLabeled({ data = [] }) {
+function MiniBarChartLabeled({ data = [], loading = false }) {
+  const theme = useTheme();
   const max = Math.max(1, ...data.map((d) => Number(d.qty || 0)));
   const labelOf = (iso) => {
     try {
       const dt = new Date(iso);
-      const wk = dt.toLocaleDateString("id-ID", { weekday: "short" });
+      const wk = dt.toLocaleDateString("id-ID", { weekday: "narrow" });
       const dd = String(dt.getDate());
       return `${wk} ${dd}`;
     } catch {
@@ -192,45 +286,81 @@ function MiniBarChartLabeled({ data = [] }) {
     }
   };
 
+  if (loading) return <Skeleton height={160} />;
+
   return (
-    <Box sx={{ px: 1, py: 1 }}>
+    <Box sx={{ px: 1, py: 2 }}>
       <Box
         sx={{
           display: "grid",
           gridTemplateColumns: `repeat(${Math.max(data.length, 1)}, 1fr)`,
           alignItems: "end",
-          gap: 1.5,
+          gap: 2,
           height: 160,
         }}
       >
         {data.map((d, i) => {
           const h = Math.max(8, Math.round((Number(d.qty || 0) / max) * 100));
+          const isToday = isoDate(new Date()) === isoDate(new Date(d.date));
           return (
-            <Stack key={i} alignItems="center" spacing={0.5}>
-              <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.1 }}>
+            <Stack key={i} alignItems="center" spacing={1}>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  fontWeight: 700, 
+                  lineHeight: 1.1,
+                  color: isToday ? theme.palette.primary.main : 'text.primary'
+                }}
+              >
                 {d.qty}
               </Typography>
               <Box
                 title={`${d.date} • ${d.qty} tabung`}
                 sx={{
-                  width: "70%",
+                  width: "75%",
                   height: h,
-                  borderRadius: 0.75,
-                  bgcolor: "primary.main",
-                  opacity: 0.9,
-                  transition: "opacity .15s, transform .15s",
-                  "&:hover": { opacity: 1, transform: "translateY(-2px)" },
+                  borderRadius: 1,
+                  background: isToday 
+                    ? `linear(0deg, ${theme.palette.primary.main}, ${theme.palette.primary.light})`
+                    : `linear(0deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.light})`,
+                  opacity: isToday ? 1 : 0.8,
+                  transition: "all 0.3s ease",
+                  "&:hover": { 
+                    opacity: 1, 
+                    transform: "translateY(-4px)",
+                    boxShadow: theme.shadows[2]
+                  },
                 }}
               />
-              <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center", lineHeight: 1.1 }}>
+              <Typography 
+                variant="caption" 
+                color={isToday ? "primary.main" : "text.secondary"} 
+                sx={{ 
+                  textAlign: "center", 
+                  lineHeight: 1.2,
+                  fontWeight: isToday ? 700 : 400,
+                }}
+              >
                 {labelOf(d.date)}
               </Typography>
             </Stack>
           );
         })}
         {!data.length && (
-          <Typography variant="body2" color="text.secondary" sx={{ gridColumn: "1 / -1", textAlign: "center" }}>
-            Belum ada data penjualan
+          <Typography 
+            variant="body2" 
+            color="text.secondary" 
+            sx={{ 
+              gridColumn: "1 / -1", 
+              textAlign: "center",
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%'
+            }}
+          >
+            <BarChartIcon sx={{ mr: 1, opacity: 0.5 }} />
+            Belum ada data penjualan 7 hari terakhir
           </Typography>
         )}
       </Box>
@@ -238,21 +368,78 @@ function MiniBarChartLabeled({ data = [] }) {
   );
 }
 
+/* ====== Comparison Components ====== */
+function ComparisonCard({ title, current, previous, growth, type = "qty" }) {
+  const isPositive = growth > 0;
+  const theme = useTheme();
+  
+  return (
+    <Card variant="outlined" sx={{ 
+      p: 2, 
+      background: alpha(isPositive ? theme.palette.success.main : theme.palette.error.main, 0.05),
+      border: `1px solid ${alpha(isPositive ? theme.palette.success.main : theme.palette.error.main, 0.2)}`
+    }}>
+      <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+        {title}
+      </Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-end">
+        <Box>
+          <Typography variant="h6" fontWeight={700}>
+            {type === 'currency' ? fmtIDR(current) : current}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            vs {type === 'currency' ? fmtIDR(previous) : previous} sebelumnya
+          </Typography>
+        </Box>
+        <Chip
+          label={`${isPositive ? '+' : ''}${fmtPct(growth)}`}
+          color={isPositive ? 'success' : 'error'}
+          variant="filled"
+          size="small"
+        />
+      </Stack>
+    </Card>
+  );
+}
+
+function RowKV({ k, v, vSx }) {
+  return (
+    <Stack direction="row" justifyContent="space-between" alignItems="center">
+      <Typography variant="body1" color="text.secondary" fontWeight={500}>
+        {k}
+      </Typography>
+      <Typography variant="body1" sx={{ fontWeight: 600, ...vSx }}>
+        {v}
+      </Typography>
+    </Stack>
+  );
+}
+
 /* ====== Main View ====== */
 export default function DashboardView({ stocks: stocksFromApp = {} }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { settings } = useSettings();
-  const hppSetting = Number(settings?.hpp || 0);
 
   const [stocks, setStocks] = useState(stocksFromApp);
   const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
   const [recent, setRecent] = useState([]);
-  const [sum, setSum] = useState({ qty: 0, omzet: 0, laba: 0 });
+  const [financialSummary, setFinancialSummary] = useState({ 
+    omzet: 0, 
+    hpp: 0, 
+    laba: 0,
+    margin: 0,
+    totalQty: 0,
+    transactionCount: 0
+  });
   const [today, setToday] = useState({ qty: 0, money: 0 });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
+  const [financialLoading, setFinancialLoading] = useState(true);
 
-  // ANALITIK (RPC)
+  // ANALITIK (RPC) - MEMPERTAHANKAN LOGIC LAMA
   const [analytics, setAnalytics] = useState({
     topCustomers: [],
     weekly: null,
@@ -307,52 +494,82 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     };
   }, []);
 
-  // 2) Hitung berat (omzet, laba, today)
+  // 2) Ringkasan Keuangan dengan FUNGSI BARU - TERINTEGRASI PENUH
   useEffect(() => {
     let alive = true;
-    const doHeavy = async () => {
+    const calculateFinancialSummary = async () => {
       try {
-        await new Promise((r) => setTimeout(r, 50));
-        const rows = await DataService.loadSales(500);
+        setFinancialLoading(true);
+        
+        // ✅ GUNAKAN FUNGSI BARU getFinancialSummary
+        const summary = await DataService.getFinancialSummary({
+          from: '2000-01-01', // Semua data historis
+          to: todayStr(),
+          hppPerUnit: Number(settings.hpp || 0)
+        });
+
         if (!alive) return;
+        
+        setFinancialSummary(summary);
+        
+      } catch (error) {
+        console.error('Error calculating financial summary:', error);
+        
+        // ✅ FALLBACK: Jika fungsi baru belum ada, gunakan perhitungan manual
+        try {
+          console.warn('Falling back to manual calculation...');
+          const salesData = await DataService.getSalesHistory({
+            from: '2000-01-01',
+            to: todayStr(),
+            method: "ALL",
+            status: "ALL",
+            limit: 10000
+          });
 
-        const notVoid = rows.filter((r) => String(r.status || "").toUpperCase() !== "DIBATALKAN");
-        const qty = notVoid.reduce((a, b) => a + Number(b.qty || 0), 0);
+          if (!alive) return;
 
-        const paid = notVoid.filter(
-          (r) =>
-            String(r.method).toUpperCase() === "TUNAI" ||
-            String(r.status || "").toUpperCase() === "LUNAS"
-        );
-        const omzet = paid.reduce((a, b) => a + Number(b.total || 0), 0);
-        const hpp = paid.reduce((a, b) => a + Number(b.qty || 0) * (Number(hppSetting) || 0), 0);
-        const laba = omzet - hpp;
+          // Logika manual yang sama dengan getFinancialSummary
+          const paid = salesData.filter(sale => {
+            const method = String(sale.method || '').toUpperCase();
+            const status = String(sale.status || '').toUpperCase();
+            return method === 'TUNAI' || status === 'LUNAS';
+          });
 
-        const todaySum =
-          (await DataService.getSalesSummary({ from: todayStr(), to: todayStr() })) ||
-          { qty: 0, money: 0 };
+          const omzet = paid.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+          const totalQty = paid.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
+          const hpp = totalQty * Number(settings.hpp || 0);
+          const laba = omzet - hpp;
+          const margin = omzet > 0 ? Math.round((laba / omzet) * 100) : 0;
 
-        setSum({ qty, omzet, laba });
-        setToday(todaySum);
-      } catch (e) {
-        if (!alive) return;
-        console.warn("[Dashboard heavy]", e?.message || e);
+          setFinancialSummary({ 
+            omzet, 
+            hpp, 
+            laba, 
+            margin, 
+            totalQty, 
+            transactionCount: paid.length 
+          });
+          
+        } catch (fallbackError) {
+          console.error('Fallback calculation also failed:', fallbackError);
+          // Tetap set state kosong agar UI tidak broken
+          setFinancialSummary({ 
+            omzet: 0, hpp: 0, laba: 0, margin: 0, totalQty: 0, transactionCount: 0 
+          });
+        }
+      } finally {
+        if (alive) {
+          setFinancialLoading(false);
+        }
       }
     };
 
-    const ric =
-      "requestIdleCallback" in window
-        ? window.requestIdleCallback
-        : (cb) => setTimeout(() => cb({ timeRemaining: () => 50 }), 150);
-    const cancel =
-      "cancelIdleCallback" in window ? window.cancelIdleCallback : (id) => clearTimeout(id);
-
-    const id = ric(doHeavy);
+    calculateFinancialSummary();
+    
     return () => {
       alive = false;
-      cancel(id);
     };
-  }, [hppSetting]);
+  }, [settings.hpp]);
 
   // 3) Realtime revalidate snapshot
   useEffect(() => {
@@ -400,9 +617,9 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       }
     })();
     return () => { alive = false; };
-  }, [recent, today.qty, stocks]);
+  }, [recent, today, stocks]);
 
-  // 5) Analytics via RPC-only (Top, Weekly, Monthly, YoY)
+  // 5) Analytics via RPC-only (Top, Weekly, Monthly, YoY) - MEMPERTAHANKAN LOGIC LAMA
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -415,7 +632,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 
         if (!alive) return;
 
-        // Hitung growth dari aggregate
+        // Hitung growth dari aggregate - LOGIC LAMA TETAP DIJAGA
         const wk = comps?.weekly || null;
         const weeklyGrowthPct = wk && wk.last_week_qty
           ? ((Number(wk.this_week_qty || 0) - Number(wk.last_week_qty || 0)) / Number(wk.last_week_qty)) * 100
@@ -469,6 +686,23 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     return () => { alive = false; };
   }, []);
 
+  // 6) Penjualan Hari Ini - Tetap menggunakan fungsi lama untuk konsistensi
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const todaySum = await DataService.getSalesSummary({ 
+          from: todayStr(), 
+          to: todayStr() 
+        });
+        if (!alive) return;
+        setToday(todaySum || { qty: 0, money: 0 });
+      } catch (error) {
+        console.error('Error getting today sales:', error);
+      }
+    })();
+  }, []);
+
   // Modal handler: riwayat pelanggan (periode: bulan ini, mulai tgl 1)
   const openCustomerHistory = async (name) => {
     setHistName(name);
@@ -476,16 +710,15 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     setHistLoading(true);
     try {
       const now = new Date();
-      const s = new Date(now.getFullYear(), now.getMonth(), 1); // selalu tgl 1
+      const s = new Date(now.getFullYear(), now.getMonth(), 1);
       s.setHours(0,0,0,0);
       const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       e.setHours(23,59,59,999);
 
-      // gunakan getSalesHistory dengan query nama pelanggan (kompatibel view/tabel)
       const rows = await DataService.getSalesHistory({
         from: s.toISOString(),
         to: e.toISOString(),
-        q: name,      // cari di customer/invoice
+        q: name,
         limit: 500,
       });
 
@@ -508,184 +741,229 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
   const total = isi + kosong;
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={3}>
       {/* Header */}
-      <Stack direction="row" alignItems="baseline" justifyContent="space-between" flexWrap="wrap" sx={{ gap: 2 }}>
-        <Box>
-          <Typography
-            variant="h4"
-            fontWeight={600}
-            sx={{ typography: { xs: "h5", sm: "h4" } }}
-          >
-            Dashboard
-          </Typography>
-          <Typography
-            color="text.secondary"
-            sx={{ typography: { xs: "body2", sm: "subtitle1" } }}
-          >
-            Ringkasan stok & penjualan
-          </Typography>
-        </Box>
-        <Chip label={`Total Tabung: ${total}`} variant="outlined" color="default" sx={{ fontWeight: 700 }} />
-      </Stack>
+      <Box>
+        <Typography 
+          variant="h3" 
+          fontWeight={800} 
+          gutterBottom
+          sx={{ 
+            typography: { xs: "h4", sm: "h3" },
+            background: `linear(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            color: 'transparent',
+          }}
+        >
+          Dashboard
+        </Typography>
+        <Typography 
+          color="text.secondary" 
+          variant="h6"
+          sx={{ typography: { xs: "body1", sm: "h6" } }}
+        >
+          Ringkasan performa bisnis dan analitik penjualan
+        </Typography>
+      </Box>
 
       {err && <ErrorBanner message={err} />}
 
       {/* Ringkasan Stok & Penjualan */}
-      <Grid container spacing={2} alignItems="stretch">
+      <Grid container spacing={3} alignItems="stretch">
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Stok Isi"
-            value={loading ? <Skeleton variant="text" width={60} sx={{ fontSize: "2rem" }} /> : isi}
+            value={isi}
             subtitle={isi <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Siap jual"}
             color="success"
             icon={<Inventory2Icon />}
+            loading={loading}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Stok Kosong"
-            value={loading ? <Skeleton variant="text" width={60} sx={{ fontSize: "2rem" }} /> : kosong}
+            value={kosong}
             subtitle={kosong <= LOW_STOCK_THRESHOLD ? "⚠️ Stok menipis" : "Tabung kembali"}
             color="error"
             icon={<Inventory2Icon />}
+            loading={loading}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Penjualan Hari Ini"
-            value={loading ? <Skeleton variant="text" width={60} sx={{ fontSize: "2rem" }} /> : today.qty}
-            subtitle={loading ? <Skeleton variant="text" width={100} /> : fmtIDR(today.money)}
+            value={today.qty}
+            subtitle={fmtIDR(today.money)}
             color="info"
             icon={<ShoppingCartIcon />}
+            loading={loading}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
             title="Piutang"
-            value={loading ? <Skeleton variant="text" width={100} sx={{ fontSize: "2rem" }} /> : fmtIDR(piutang)}
+            value={fmtIDR(piutang)}
             subtitle="Belum lunas"
             color="warning"
             icon={<ReceiptLongIcon />}
+            loading={loading}
           />
         </Grid>
       </Grid>
 
       {/* Kondisi Stok */}
-      <Card>
+      <Card sx={{
+        background: `linear(135deg, ${alpha(theme.palette.primary.main, 0.03)} 0%, ${alpha(theme.palette.secondary.main, 0.03)} 100%)`,
+        border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
+      }}>
         <CardHeader
-          title={<Typography variant="h6" fontWeight={600}>Kondisi Stok</Typography>}
+          title={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Inventory2Icon color="primary" />
+              <Typography variant="h6" fontWeight={700}>Kondisi Stok</Typography>
+            </Box>
+          }
           subheader="Perbandingan stok isi vs kosong"
           sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
         />
         <CardContent>
-          {loading ? <Skeleton height={24} /> : <StockProgress isi={isi} kosong={kosong} />}
+          <StockProgress isi={isi} kosong={kosong} loading={loading} />
         </CardContent>
       </Card>
 
-      {/* Ringkasan Keuangan + Total Terjual */}
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={6} lg={5}>
-          <Card>
+      {/* Ringkasan Keuangan + Chart */}
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={6}>
+          <Card sx={{
+            background: `linear(135deg, ${alpha(theme.palette.success.main, 0.05)} 0%, ${alpha(theme.palette.info.main, 0.05)} 100%)`,
+            border: `1px solid ${alpha(theme.palette.success.main, 0.1)}`
+          }}>
             <CardHeader
-              title={<Typography variant="h6" fontWeight={600}>Ringkasan Keuangan</Typography>}
+              title={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AccountBalanceWalletIcon color="success" />
+                  <Typography variant="h6" fontWeight={700}>Ringkasan Keuangan</Typography>
+                </Box>
+              }
+              subheader="Akumulasi semua transaksi dibayar"
               sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
             />
             <CardContent>
-              {loading ? (
-                <Stack spacing={1}>
-                  <Skeleton height={24} />
-                  <Skeleton height={24} />
-                  <Skeleton height={24} />
+              {financialLoading ? (
+                <Stack spacing={2}>
+                  <Skeleton height={32} />
+                  <Skeleton height={32} />
+                  <Skeleton height={32} />
+                  <Skeleton height={32} />
                 </Stack>
               ) : (
-                <Stack spacing={1}>
-                  <RowKV k="Omzet (dibayar)" v={fmtIDR(sum.omzet)} />
-                  <RowKV k="HPP" v={`− ${fmtIDR(sum.omzet - sum.laba)}`} />
-                  <RowKV k="Laba" v={fmtIDR(sum.laba)} vSx={{ color: "success.main", fontWeight: 700 }} />
+                <Stack spacing={2}>
+                  <RowKV 
+                    k="Omzet (Tunai + LUNAS)" 
+                    v={fmtIDR(financialSummary.omzet)} 
+                    vSx={{ fontWeight: 700, color: 'success.main' }}
+                  />
+                  <RowKV 
+                    k="Harga Pokok Penjualan" 
+                    v={`- ${fmtIDR(financialSummary.hpp)}`} 
+                    vSx={{ fontWeight: 600, color: 'error.main' }}
+                  />
+                  <Divider />
+                  <RowKV 
+                    k="Laba Kotor" 
+                    v={fmtIDR(financialSummary.laba)} 
+                    vSx={{ 
+                      fontWeight: 800, 
+                      fontSize: '1.2rem',
+                      color: financialSummary.laba >= 0 ? 'success.main' : 'error.main' 
+                    }}
+                  />
+                  <RowKV 
+                    k="Margin Laba" 
+                    v={`${financialSummary.margin}%`}
+                    vSx={{ 
+                      fontWeight: 700, 
+                      color: financialSummary.margin >= 0 ? 'info.main' : 'error.main' 
+                    }}
+                  />
+                  <Box sx={{ mt: 1, p: 2, bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 1 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {financialSummary.transactionCount} transaksi • {financialSummary.totalQty} tabung
+                    </Typography>
+                  </Box>
                 </Stack>
               )}
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={6} lg={7}>
-          <Card>
+        <Grid item xs={12} md={6}>
+          <Card sx={{
+            background: `linear(135deg, ${alpha(theme.palette.info.main, 0.05)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
+            border: `1px solid ${alpha(theme.palette.info.main, 0.1)}`
+          }}>
             <CardHeader
-              title={<Typography variant="h6" fontWeight={600}>Total Terjual</Typography>}
+              title={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <BarChartIcon color="info" />
+                  <Typography variant="h6" fontWeight={700}>Penjualan 7 Hari Terakhir</Typography>
+                </Box>
+              }
+              subheader="Trend penjualan harian"
               sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
             />
             <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Box
-                  sx={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 2,
-                    display: "grid",
-                    placeItems: "center",
-                    bgcolor: "info.50",
-                    color: "info.main",
-                  }}
-                >
-                  <TrendingUpIcon />
-                </Box>
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography color="text.secondary" sx={{ typography: { xs: "body2", sm: "subtitle1" } }}>
-                    Total Terjual (riwayat)
-                  </Typography>
-                  <Typography
-                    noWrap
-                    sx={{ fontWeight: 600, fontSize: "clamp(1.25rem, 2.5vw, 1.75rem)" }}
-                  >
-                    {loading ? <Skeleton variant="text" width={80} sx={{ fontSize: "2rem" }} /> : sum.qty}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">Akumulasi data</Typography>
-                </Box>
-              </Stack>
+              <MiniBarChartLabeled data={series7} loading={loading} />
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      {/* Penjualan 7 Hari Terakhir */}
-      <Card>
+      {/* Analitik Penjualan - MEMPERTAHANKAN LOGIC LAMA */}
+      <Card sx={{
+        background: `linear(135deg, ${alpha(theme.palette.warning.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
+        border: `1px solid ${alpha(theme.palette.warning.main, 0.1)}`
+      }}>
         <CardHeader
-          title={<Typography variant="h6" fontWeight={600}>Penjualan 7 Hari Terakhir</Typography>}
-          sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
-        />
-        <CardContent>
-          {loading ? <Skeleton height={120} /> : <MiniBarChartLabeled data={series7} />}
-        </CardContent>
-      </Card>
-
-      {/* ====== Analitik Penjualan (BARU) ====== */}
-      <Card>
-        <CardHeader
-          title={<Typography variant="h6" fontWeight={600}>Analitik Penjualan</Typography>}
+          title={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <InsightsOutlined color="warning" />
+              <Typography variant="h6" fontWeight={700}>Analitik Penjualan</Typography>
+            </Box>
+          }
           sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
         />
         <CardContent>
           {analyticsLoading ? (
-            <Stack spacing={1}>
-              <Skeleton height={28} />
-              <Skeleton height={28} />
-              <Skeleton height={28} />
+            <Stack spacing={2}>
+              <Skeleton height={40} />
+              <Skeleton height={40} />
+              <Skeleton height={40} />
             </Stack>
           ) : (
-            <Grid container spacing={2}>
-              {/* Top Customers */}
+            <Grid container spacing={3}>
+              {/* Top Customers - LOGIC LAMA */}
               <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-                  Top Customers (bulan ini)
+                <Typography variant="h6" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <PeopleIcon fontSize="small" />
+                  Top Customers (Bulan Ini)
                 </Typography>
-                <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
-                  <Table size="medium" sx={{ minWidth: 650 }}>
+                <TableContainer 
+                  component={Paper} 
+                  elevation={0}
+                  sx={{ 
+                    border: `1px solid ${theme.palette.divider}`,
+                    borderRadius: 2
+                  }}
+                >
+                  <Table size={isSmallMobile ? "small" : "medium"}>
                     <TableHead>
-                      <TableRow>
-                        <TableCell>Pelanggan</TableCell>
-                        <TableCell align="right">Transaksi</TableCell>
-                        <TableCell align="right">Total</TableCell>
+                      <TableRow sx={{ backgroundColor: theme.palette.background.default }}>
+                        <TableCell sx={{ fontWeight: 700 }}>Pelanggan</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700 }}>Transaksi</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -699,11 +977,13 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                               sx={btnLinkSx}
                               onClick={() => openCustomerHistory(c.customer_name)}
                             >
-                              {c.customer_name}
+                              {isSmallMobile ? c.customer_name.slice(0, 12) + '...' : c.customer_name}
                             </Button>
                           </TableCell>
                           <TableCell align="right">{c.total_transaksi}</TableCell>
-                          <TableCell align="right">{fmtIDR(c.total_value)}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600 }}>
+                            {fmtIDR(c.total_value)}
+                          </TableCell>
                         </TableRow>
                       ))}
                       {!analytics.topCustomers?.length && (
@@ -714,68 +994,46 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                 </TableContainer>
               </Grid>
 
-              {/* Perbandingan Weekly / Monthly / YoY */}
+              {/* Perbandingan - LOGIC LAMA TETAP DIJAGA */}
               <Grid item xs={12} md={6}>
-                <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-                  Perbandingan
+                <Typography variant="h6" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CompareArrowsIcon fontSize="small" />
+                  Perbandingan Kinerja
                 </Typography>
-                <Stack spacing={1.25}>
-                  <RowKV
-                    k="Weekly (Qty)"
-                    v={
-                      analytics.weekly
-                        ? `${analytics.weekly.this_week_qty} vs ${analytics.weekly.last_week_qty} (${fmtPct(analytics.weekly.growthPct)})`
-                        : "-"
-                    }
-                  />
-                  <RowKV
-                    k="Monthly (Qty)"
-                    v={
-                      analytics.monthly
-                        ? `${analytics.monthly.this_month_qty} vs ${analytics.monthly.last_month_qty} (${fmtPct(analytics.monthly.growthPctQty)})`
-                        : "-"
-                    }
-                  />
-                  <RowKV
-                    k="Monthly (Omzet)"
-                    v={
-                      analytics.monthly
-                        ? `${fmtIDR(analytics.monthly.this_month_value)} vs ${fmtIDR(analytics.monthly.last_month_value)} (${fmtPct(analytics.monthly.growthPctOmzet)})`
-                        : "-"
-                    }
-                  />
-                  <RowKV
-                    k="Monthly (Laba)"
-                    v={
-                      analytics.monthly
-                        ? `${fmtIDR(analytics.monthly.this_month_laba)} vs ${fmtIDR(analytics.monthly.last_month_laba)} (${fmtPct(analytics.monthly.growthPctLaba)})`
-                        : "-"
-                    }
-                  />
-                  <RowKV
-                    k="YoY (Qty)"
-                    v={
-                      analytics.yoy
-                        ? `${analytics.yoy.this_year_qty} vs ${analytics.yoy.last_year_qty} (${fmtPct(analytics.yoy.growthPctQty)})`
-                        : "-"
-                    }
-                  />
-                  <RowKV
-                    k="YoY (Omzet)"
-                    v={
-                      analytics.yoy
-                        ? `${fmtIDR(analytics.yoy.this_year_value)} vs ${fmtIDR(analytics.yoy.last_year_value)} (${fmtPct(analytics.yoy.growthPctOmzet)})`
-                        : "-"
-                    }
-                  />
-                  <RowKV
-                    k="YoY (Laba)"
-                    v={
-                      analytics.yoy
-                        ? `${fmtIDR(analytics.yoy.this_year_laba)} vs ${fmtIDR(analytics.yoy.last_year_laba)} (${fmtPct(analytics.yoy.growthPctLaba)})`
-                        : "-"
-                    }
-                  />
+                <Stack spacing={2}>
+                  {analytics.weekly && (
+                    <ComparisonCard 
+                      title="Minggu Ini vs Minggu Lalu"
+                      current={analytics.weekly.this_week_qty}
+                      previous={analytics.weekly.last_week_qty}
+                      growth={analytics.weekly.growthPct}
+                      type="qty"
+                    />
+                  )}
+                  {analytics.monthly && (
+                    <>
+                      <ComparisonCard 
+                        title="Bulan Ini vs Bulan Lalu (Qty)"
+                        current={analytics.monthly.this_month_qty}
+                        previous={analytics.monthly.last_month_qty}
+                        growth={analytics.monthly.growthPctQty}
+                        type="qty"
+                      />
+                      <ComparisonCard 
+                        title="Bulan Ini vs Bulan Lalu (Omzet)"
+                        current={analytics.monthly.this_month_value}
+                        previous={analytics.monthly.last_month_value}
+                        growth={analytics.monthly.growthPctOmzet}
+                        type="currency"
+                      />
+                    </>
+                  )}
+                  {!analytics.weekly && !analytics.monthly && (
+                    <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                      <CompareArrowsIcon sx={{ fontSize: 48, mb: 1, opacity: 0.5 }} />
+                      <Typography>Data perbandingan belum tersedia</Typography>
+                    </Box>
+                  )}
                 </Stack>
               </Grid>
             </Grid>
@@ -784,50 +1042,79 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       </Card>
 
       {/* Transaksi Terbaru */}
-      <Card>
+      <Card sx={{
+        background: `linear(135deg, ${alpha(theme.palette.primary.main, 0.03)} 0%, ${alpha(theme.palette.info.main, 0.03)} 100%)`,
+        border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
+      }}>
         <CardHeader
-          title={<Typography variant="h6" fontWeight={600}>Transaksi Terbaru</Typography>}
+          title={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ReceiptLongIcon color="primary" />
+              <Typography variant="h6" fontWeight={700}>Transaksi Terbaru</Typography>
+            </Box>
+          }
           sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
         />
         <CardContent>
           {loading ? (
-            <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
-              <Table size="medium" sx={{ minWidth: 650 }}>
+            <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
+              <Table>
                 <TableBody>
                   {[...Array(5)].map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell><Skeleton variant="text" /></TableCell>
-                      <TableCell><Skeleton variant="text" /></TableCell>
-                      <TableCell><Skeleton variant="text" /></TableCell>
-                      <TableCell><Skeleton variant="text" /></TableCell>
-                      <TableCell><Skeleton variant="text" /></TableCell>
+                      {[...Array(5)].map((_, j) => (
+                        <TableCell key={j}><Skeleton variant="text" height={40} /></TableCell>
+                      ))}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </TableContainer>
           ) : (
-            <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
-              <Table size="medium" sx={{ minWidth: 650 }}>
+            <TableContainer 
+              component={Paper} 
+              elevation={0}
+              sx={{ 
+                border: `1px solid ${theme.palette.divider}`,
+                borderRadius: 2,
+                maxHeight: 400
+              }}
+            >
+              <Table stickyHeader size={isSmallMobile ? "small" : "medium"}>
                 <TableHead>
-                  <TableRow>
-                    <TableCell>Tanggal</TableCell>
-                    <TableCell>Pelanggan</TableCell>
-                    <TableCell align="right">Qty</TableCell>
-                    <TableCell>Metode</TableCell>
-                    <TableCell align="right">Total</TableCell>
+                  <TableRow sx={{ backgroundColor: theme.palette.background.default }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Tanggal</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Pelanggan</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Qty</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Metode</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {recent.map((x) => (
                     <TableRow key={x.id} hover>
-                      <TableCell sx={{ whiteSpace: "nowrap" }}>
+                      <TableCell sx={{ whiteSpace: "nowrap", fontFamily: 'monospace', fontSize: isSmallMobile ? '0.75rem' : 'inherit' }}>
                         {(x.created_at || "").slice(0, 10)}
                       </TableCell>
-                      <TableCell>{x.customer || "PUBLIC"}</TableCell>
-                      <TableCell align="right">{x.qty}</TableCell>
-                      <TableCell>{x.method}</TableCell>
-                      <TableCell align="right">
+                      <TableCell>
+                        <Typography variant={isSmallMobile ? "caption" : "body2"} fontWeight={500}>
+                          {isSmallMobile && x.customer && x.customer.length > 12 
+                            ? x.customer.slice(0, 12) + '...' 
+                            : x.customer || "PUBLIC"}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                        {x.qty}
+                      </TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={x.method} 
+                          size="small" 
+                          color={x.method === 'TUNAI' ? 'success' : 'primary'}
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
                         {fmtIDR((Number(x.qty) || 0) * (Number(x.price) || 0))}
                       </TableCell>
                     </TableRow>
@@ -848,44 +1135,58 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 
       {/* Modal: Riwayat Pelanggan */}
       <Dialog fullWidth maxWidth="md" open={openHist} onClose={closeCustomerHistory}>
-        <DialogTitle>Riwayat Transaksi — {histName}</DialogTitle>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PeopleIcon color="primary" />
+            Riwayat Transaksi — {histName}
+          </Box>
+        </DialogTitle>
         <DialogContent dividers>
           {histLoading ? (
-            <Stack spacing={1}>
-              {[...Array(5)].map((_, i) => <Skeleton key={i} height={28} />)}
+            <Stack spacing={1} sx={{ py: 2 }}>
+              {[...Array(5)].map((_, i) => <Skeleton key={i} height={53} />)}
             </Stack>
           ) : (
-            <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
-              <Table size="medium" sx={{ minWidth: 650 }}>
+            <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
+              <Table size="medium">
                 <TableHead>
-                  <TableRow>
-                    <TableCell>Tanggal</TableCell>
-                    <TableCell align="right">Qty</TableCell>
-                    <TableCell>Metode</TableCell>
-                    <TableCell align="right">Total</TableCell>
-                  </TableRow>
+                  <TableRow sx={{ backgroundColor: theme.palette.background.default }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Tanggal</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Qty</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Metode & Status</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
+                  </TableHead>
                 </TableHead>
                 <TableBody>
                   {(histRows || []).map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell sx={{ whiteSpace: "nowrap" }}>{String(r.created_at || "").slice(0,10)}</TableCell>
-                      <TableCell align="right">{r.qty}</TableCell>
+                    <TableRow key={r.id} hover>
+                      <TableCell sx={{ whiteSpace: "nowrap", fontFamily: 'monospace' }}>
+                        {String(r.created_at || "").slice(0,10)}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                        {r.qty}
+                      </TableCell>
                       <TableCell>
-                        {r.method}
-                        {r.method === "HUTANG" && (
-                          <Chip
-                            size="small"
-                            label={(String(r.status || "").toUpperCase() === "LUNAS") ? "LUNAS" : "BELUM"}
-                            sx={{
-                              ml: 1,
-                              color: (String(r.status || "").toUpperCase() === "LUNAS") ? "success.main" : "error.main",
-                              borderColor: (String(r.status || "").toUpperCase() === "LUNAS") ? "success.main" : "error.main",
-                            }}
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <Chip 
+                            label={r.method} 
+                            size="small" 
+                            color={r.method === 'TUNAI' ? 'success' : 'primary'}
                             variant="outlined"
                           />
-                        )}
+                          {r.method === "HUTANG" && (
+                            <Chip
+                              size="small"
+                              label={(String(r.status || "").toUpperCase() === "LUNAS") ? "LUNAS" : "BELUM"}
+                              color={(String(r.status || "").toUpperCase() === "LUNAS") ? "success" : "error"}
+                              variant="filled"
+                            />
+                          )}
+                        </Stack>
                       </TableCell>
-                      <TableCell align="right">{fmtIDR((Number(r.qty)||0) * (Number(r.price)||0))}</TableCell>
+                      <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
+                        {fmtIDR((Number(r.qty)||0) * (Number(r.price)||0))}
+                      </TableCell>
                     </TableRow>
                   ))}
                   {!histRows?.length && (
@@ -896,31 +1197,17 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
             </TableContainer>
           )}
         </DialogContent>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 3, py: 1.5 }}>
-          <Typography variant="subtitle1" fontWeight={600}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
+          <Typography variant="h6" fontWeight={700} color="primary.main">
             Total Qty: {histLoading ? "…" : histTotalQty}
           </Typography>
           <DialogActions sx={{ px: 0 }}>
-            <Button variant="outlined" sx={btnDialogSx} onClick={closeCustomerHistory}>
+            <Button variant="contained" sx={btnDialogSx} onClick={closeCustomerHistory}>
               Tutup
             </Button>
           </DialogActions>
         </Stack>
       </Dialog>
-    </Stack>
-  );
-}
-
-/* Helpers */
-function RowKV({ k, v, vSx }) {
-  return (
-    <Stack direction="row" justifyContent="space-between" alignItems="center">
-      <Typography variant="body2" color="text.secondary">
-        {k}
-      </Typography>
-      <Typography variant="body2" sx={vSx}>
-        {v}
-      </Typography>
     </Stack>
   );
 }
