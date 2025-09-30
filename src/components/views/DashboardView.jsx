@@ -530,10 +530,18 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 
           // Logika manual yang sama dengan getFinancialSummary
           const paid = salesData.filter(sale => {
-            const method = String(sale.method || '').toUpperCase();
-            const status = String(sale.status || '').toUpperCase();
-            return method === 'TUNAI' || status === 'LUNAS';
-          });
+   const method = String(sale.method || '').toUpperCase();
+   const status = String(sale.status || '').toUpperCase();
+
+   // 🚫 abaikan transaksi dibatalkan
+   if (status === 'DIBATALKAN') return false;
+
+   // ✅ hanya hitung tunai atau lunas
+   if (method === 'TUNAI') return true;
+   if (status === 'LUNAS') return true;
+
+   return false;
+});
 
           const omzet = paid.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
           const totalQty = paid.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
