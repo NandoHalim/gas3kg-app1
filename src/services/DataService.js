@@ -1297,10 +1297,18 @@ DataService.getFinancialSummary = async function ({ from, to, hppPerUnit }) {
 
     // Logika perhitungan yang SAMA PERSIS dengan LaporanView.jsx
     const paid = salesData.filter(sale => {
-      const method = String(sale.method || '').toUpperCase();
-      const status = String(sale.status || '').toUpperCase();
-      return method === 'TUNAI' || status === 'LUNAS';
-    });
+   const method = String(sale.method || '').toUpperCase();
+   const status = String(sale.status || '').toUpperCase();
+
+   // 🚫 abaikan transaksi dibatalkan
+   if (status === 'DIBATALKAN') return false;
+
+   // ✅ hanya hitung tunai atau sudah lunas
+   if (method === 'TUNAI') return true;
+   if (status === 'LUNAS') return true;
+
+   return false;
+ });
 
     // Hitung omzet dari total transaksi (sama seperti LaporanView)
     const omzet = paid.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
