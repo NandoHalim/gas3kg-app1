@@ -1133,8 +1133,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         </CardContent>
       </Card>
 
-      // Di bagian Modal: Riwayat Pelanggan - PERBAIKI bagian ini:
-
 {/* Modal: Riwayat Pelanggan */}
 <Dialog fullWidth maxWidth="md" open={openHist} onClose={closeCustomerHistory}>
   <DialogTitle>
