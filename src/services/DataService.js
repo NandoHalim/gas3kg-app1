@@ -1280,3 +1280,144 @@ DataService.getDashboardSnapshot = async function ({
     _ts: 0,
   };
 };
+
+// ====== FUNGSI BARU: RINGKASAN KEUANGAN ======
+DataService.getFinancialSummary = async function ({ from, to, hppPerUnit }) {
+  try {
+    // REUSE existing function untuk konsistensi data dengan LaporanView
+    const salesData = await this.getSalesHistory({
+      from,
+      to,
+      method: "ALL",
+      status: "ALL",
+      limit: 10000
+    });
+
+    // Logika perhitungan yang SAMA PERSIS dengan LaporanView.jsx
+    const paid = salesData.filter(sale => {
+      const method = String(sale.method || '').toUpperCase();
+      const status = String(sale.status || '').toUpperCase();
+      return method === 'TUNAI' || status === 'LUNAS';
+    });
+
+    // Hitung omzet dari total transaksi (sama seperti LaporanView)
+    const omzet = paid.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+    
+    // Hitung total quantity dari transaksi dibayar
+    const totalQty = paid.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
+    
+    // Hitung HPP (sama seperti LaporanView: totalQty × hppPerUnit)
+    const hpp = totalQty * hppPerUnit;
+    
+    // Hitung laba dan margin (sama seperti LaporanView)
+    const laba = omzet - hpp;
+    const margin = omzet > 0 ? Math.round((laba / omzet) * 100) : 0;
+
+    return { 
+      omzet, 
+      hpp, 
+      laba, 
+      margin, 
+      totalQty, 
+      transactionCount: paid.length,
+      period: { from, to }
+    };
+  } catch (error) {
+    console.error('[getFinancialSummary] Error:', error);
+    throw new Error(errMsg(error, "Gagal menghitung ringkasan keuangan"));
+  }
+};
+
+// ====== FUNGSI BARU: RINGKASAN KEUANGAN BULAN INI ======
+DataService.getCurrentMonthFinancialSummary = async function (hppPerUnit) {
+  try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    const from = toISOStringWithOffset(startOfMonth).slice(0, 10);
+    const to = toISOStringWithOffset(endOfMonth).slice(0, 10);
+
+    return await this.getFinancialSummary({
+      from,
+      to,
+      hppPerUnit
+    });
+  } catch (error) {
+    console.error('[getCurrentMonthFinancialSummary] Error:', error);
+    throw new Error(errMsg(error, "Gagal menghitung ringkasan keuangan bulan ini"));
+  }
+};
+
+// ====== FUNGSI BARU: RINGKASAN KEUANGAN MINGGU INI ======
+DataService.getCurrentWeekFinancialSummary = async function (hppPerUnit) {
+  try {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay()); // Minggu sebagai awal minggu
+    startOfWeek.setHours(0, 0, 0, 0);
+    
+    const endOfWeek = new Date(now);
+    endOfWeek.setDate(now.getDate() + (6 - now.getDay())); // Sabtu sebagai akhir minggu
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const from = toISOStringWithOffset(startOfWeek).slice(0, 10);
+    const to = toISOStringWithOffset(endOfWeek).slice(0, 10);
+
+    return await this.getFinancialSummary({
+      from,
+      to,
+      hppPerUnit
+    });
+  } catch (error) {
+    console.error('[getCurrentWeekFinancialSummary] Error:', error);
+    throw new Error(errMsg(error, "Gagal menghitung ringkasan keuangan minggu ini"));
+  }
+};
+
+// ====== FUNGSI BARU: RINGKASAN KEUANGAN HARI INI ======
+DataService.getTodayFinancialSummary = async function (hppPerUnit) {
+  try {
+    const today = todayStr();
+    
+    return await this.getFinancialSummary({
+      from: today,
+      to: today,
+      hppPerUnit
+    });
+  } catch (error) {
+    console.error('[getTodayFinancialSummary] Error:', error);
+    throw new Error(errMsg(error, "Gagal menghitung ringkasan keuangan hari ini"));
+  }
+};
+
+// ====== FUNGSI BARU: COMPARISON KEUANGAN ======
+DataService.getFinancialComparison = async function ({ currentFrom, currentTo, previousFrom, previousTo, hppPerUnit }) {
+  try {
+    const [current, previous] = await Promise.all([
+      this.getFinancialSummary({ from: currentFrom, to: currentTo, hppPerUnit }),
+      this.getFinancialSummary({ from: previousFrom, to: previousTo, hppPerUnit })
+    ]);
+
+    // Hitung growth percentage
+    const calculateGrowth = (currentVal, previousVal) => {
+      if (previousVal === 0) return currentVal > 0 ? 100 : 0;
+      return ((currentVal - previousVal) / previousVal) * 100;
+    };
+
+    return {
+      current,
+      previous,
+      growth: {
+        omzet: calculateGrowth(current.omzet, previous.omzet),
+        laba: calculateGrowth(current.laba, previous.laba),
+        margin: current.margin - previous.margin,
+        transactionCount: calculateGrowth(current.transactionCount, previous.transactionCount),
+        totalQty: calculateGrowth(current.totalQty, previous.totalQty)
+      }
+    };
+  } catch (error) {
+    console.error('[getFinancialComparison] Error:', error);
+    throw new Error(errMsg(error, "Gagal menghitung perbandingan keuangan"));
+  }
+};
