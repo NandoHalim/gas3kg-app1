@@ -1155,7 +1155,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
                     <TableCell align="right" sx={{ fontWeight: 700 }}>Qty</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Metode & Status</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
-                  </TableHead>
+                  
                 </TableHead>
                 <TableBody>
                   {(histRows || []).map((r) => (
