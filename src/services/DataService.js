@@ -1431,3 +1431,594 @@ DataService.getFinancialComparison = async function ({ currentFrom, currentTo, p
     throw new Error(errMsg(error, "Gagal menghitung perbandingan keuangan"));
   }
 };
+
+// ====== COMPREHENSIVE AI SALES ANALYTICS SYSTEM ======
+DataService.getComprehensiveSalesAnalysis = async function ({ 
+  period = "last_90_days",
+  hppPerUnit = 0
+} = {}) {
+  try {
+    // 1. DATE RANGE CALCULATION
+    const now = new Date();
+    const currentRange = { start: '', end: '' };
+    const previousRange = { start: '', end: '' };
+
+    switch (period) {
+      case "last_7_days":
+        currentRange.end = toISOStringWithOffset(now);
+        currentRange.start = toISOStringWithOffset(new Date(now.setDate(now.getDate() - 7)));
+        previousRange.end = toISOStringWithOffset(new Date(now.setDate(now.getDate() - 7)));
+        previousRange.start = toISOStringWithOffset(new Date(now.setDate(now.getDate() - 7)));
+        break;
+      case "last_30_days":
+        currentRange.end = toISOStringWithOffset(now);
+        currentRange.start = toISOStringWithOffset(new Date(now.setDate(now.getDate() - 30)));
+        const prevStart30 = new Date(currentRange.start);
+        previousRange.end = toISOStringWithOffset(new Date(prevStart30.setDate(prevStart30.getDate() - 1)));
+        previousRange.start = toISOStringWithOffset(new Date(prevStart30.setDate(prevStart30.getDate() - 30)));
+        break;
+      case "last_90_days":
+      default:
+        currentRange.end = toISOStringWithOffset(now);
+        currentRange.start = toISOStringWithOffset(new Date(now.setDate(now.getDate() - 90)));
+        const prevStart90 = new Date(currentRange.start);
+        previousRange.end = toISOStringWithOffset(new Date(prevStart90.setDate(prevStart90.getDate() - 1)));
+        previousRange.start = toISOStringWithOffset(new Date(prevStart90.setDate(prevStart90.getDate() - 90)));
+        break;
+    }
+
+    // 2. DATA COLLECTION
+    const [currentData, previousData, stocks, customers, receivables, stockHistory] = await Promise.all([
+      this.getSalesHistory({ from: currentRange.start, to: currentRange.end, status: "ALL", limit: 10000 }),
+      this.getSalesHistory({ from: previousRange.start, to: previousRange.end, status: "ALL", limit: 10000 }),
+      this.loadStocks(),
+      this.getCustomers({ limit: 500 }),
+      this.getTotalReceivables(),
+      this.getStockHistory({ from: currentRange.start, to: currentRange.end, limit: 1000 })
+    ]);
+
+    // Filter paid sales only for financial analysis
+    const currentPaid = currentData.filter(s => 
+      s.status !== 'DIBATALKAN' && (s.method === 'TUNAI' || s.status === 'LUNAS')
+    );
+    const previousPaid = previousData.filter(s => 
+      s.status !== 'DIBATALKAN' && (s.method === 'TUNAI' || s.status === 'LUNAS')
+    );
+
+    // 3. BASIC METRICS ANALYSIS
+    const currentQty = currentPaid.reduce((sum, s) => sum + (Number(s.qty) || 0), 0);
+    const currentRevenue = currentPaid.reduce((sum, s) => sum + (Number(s.total) || 0), 0);
+    const currentTransactions = currentPaid.length;
+    const currentAvgTicket = currentTransactions > 0 ? currentRevenue / currentTransactions : 0;
+
+    const previousQty = previousPaid.reduce((sum, s) => sum + (Number(s.qty) || 0), 0);
+    const previousRevenue = previousPaid.reduce((sum, s) => sum + (Number(s.total) || 0), 0);
+    const previousTransactions = previousPaid.length;
+    const previousAvgTicket = previousTransactions > 0 ? previousRevenue / previousTransactions : 0;
+
+    // Growth calculations
+    const qtyGrowth = previousQty > 0 ? ((currentQty - previousQty) / previousQty) * 100 : (currentQty > 0 ? 100 : 0);
+    const revenueGrowth = previousRevenue > 0 ? ((currentRevenue - previousRevenue) / previousRevenue) * 100 : (currentRevenue > 0 ? 100 : 0);
+    const transactionGrowth = previousTransactions > 0 ? ((currentTransactions - previousTransactions) / previousTransactions) * 100 : (currentTransactions > 0 ? 100 : 0);
+
+    // 4. FINANCIAL ANALYSIS
+    const currentHPP = currentQty * hppPerUnit;
+    const previousHPP = previousQty * hppPerUnit;
+    const currentGrossProfit = currentRevenue - currentHPP;
+    const previousGrossProfit = previousRevenue - previousHPP;
+    const currentMargin = currentRevenue > 0 ? (currentGrossProfit / currentRevenue) * 100 : 0;
+    const previousMargin = previousRevenue > 0 ? (previousGrossProfit / previousRevenue) * 100 : 0;
+
+    // Payment method analysis
+    const paymentAnalysis = {
+      tunai: currentData.filter(s => s.method === 'TUNAI' && s.status !== 'DIBATALKAN').length,
+      hutang: currentData.filter(s => s.method === 'HUTANG' && s.status !== 'DIBATALKAN').length,
+      lunas: currentData.filter(s => s.status === 'LUNAS' && s.method === 'HUTANG').length
+    };
+
+    // 5. OPERATIONAL ANALYSIS
+    // Stock analysis
+    const stockAnalysis = {
+      current: stocks,
+      turnover: this.calculateStockTurnover(currentQty, stocks, stockHistory),
+      optimalLevel: this.calculateOptimalStock(currentData, 7), // 7 days safety stock
+      stockOutRisk: this.assessStockOutRisk(stocks, currentDailyQty)
+    };
+
+    // Time pattern analysis
+    const timeAnalysis = this.analyzeTimePatterns(currentData);
+    
+    // Efficiency metrics
+    const efficiency = {
+      stockTurnoverRate: currentQty / Math.max((stocks.ISI + stocks.KOSONG), 1),
+      fulfillmentRate: (currentData.length - currentData.filter(s => s.status === 'DIBATALKAN').length) / Math.max(currentData.length, 1),
+      collectionEfficiency: paymentAnalysis.lunas / Math.max(paymentAnalysis.hutang, 1)
+    };
+
+    // 6. CUSTOMER ANALYSIS
+    const customerAnalysis = {
+      totalActive: customers.filter(c => c.active).length,
+      topCustomers: this.identifyTopCustomers(currentData, 10),
+      customerSegments: this.segmentCustomers(currentData, customers),
+      retentionRate: this.calculateRetentionRate(currentData, previousData),
+      acquisitionRate: this.calculateAcquisitionRate(currentData, previousData)
+    };
+
+    // 7. PREDICTIVE ANALYSIS
+    const predictions = {
+      nextWeek: this.predictNextWeekSales(currentData),
+      nextMonth: this.predictNextMonthSales(currentData),
+      demandForecast: this.forecastDemand(currentData, 30),
+      optimalStock: this.calculateOptimalStock(currentData, 14),
+      seasonalTrend: this.analyzeSeasonalTrend(currentData)
+    };
+
+    // 8. WARNING SYSTEM
+    const warnings = this.generateWarnings({
+      stocks,
+      receivables,
+      salesTrend: qtyGrowth,
+      paymentAnalysis,
+      efficiency,
+      customerAnalysis
+    });
+
+    // 9. STRATEGIC INSIGHTS
+    const insights = this.generateStrategicInsights({
+      basicMetrics: { currentQty, currentRevenue, currentTransactions, qtyGrowth, revenueGrowth },
+      financials: { currentMargin, currentGrossProfit },
+      operations: efficiency,
+      customers: customerAnalysis,
+      predictions
+    });
+
+    // 10. COMPREHENSIVE REPORT
+    return {
+      // Metadata
+      period: {
+        current: currentRange,
+        previous: previousRange,
+        analysisPeriod: period
+      },
+      
+      // Core Metrics
+      performance: {
+        current: {
+          qty: currentQty,
+          revenue: currentRevenue,
+          transactions: currentTransactions,
+          avgTicket: currentAvgTicket,
+          dailyQty: currentQty / 90, // approximate
+          dailyRevenue: currentRevenue / 90
+        },
+        previous: {
+          qty: previousQty,
+          revenue: previousRevenue,
+          transactions: previousTransactions,
+          avgTicket: previousAvgTicket
+        },
+        growth: {
+          qty: qtyGrowth,
+          revenue: revenueGrowth,
+          transactions: transactionGrowth
+        }
+      },
+      
+      // Financial Health
+      financials: {
+        revenue: currentRevenue,
+        hpp: currentHPP,
+        grossProfit: currentGrossProfit,
+        margin: currentMargin,
+        paymentMethods: paymentAnalysis,
+        receivables: receivables,
+        cashFlowHealth: this.assessCashFlowHealth(currentRevenue, receivables, currentHPP)
+      },
+      
+      // Operational Efficiency
+      operations: {
+        stock: stockAnalysis,
+        timePatterns: timeAnalysis,
+        efficiency: efficiency,
+        warnings: warnings.operational
+      },
+      
+      // Customer Intelligence
+      customers: customerAnalysis,
+      
+      // Predictive Analytics
+      predictions: predictions,
+      
+      // Risk Assessment
+      risks: warnings,
+      
+      // Strategic Recommendations
+      recommendations: insights.recommendations,
+      
+      // Executive Summary
+      summary: {
+        overallHealth: this.calculateOverallHealth({
+          revenueGrowth,
+          currentMargin,
+          efficiency,
+          stockAnalysis,
+          warnings
+        }),
+        priorityAreas: insights.priorityAreas,
+        kpiStatus: this.assessKPIStatus({
+          revenueGrowth,
+          currentMargin,
+          efficiency,
+          customerAnalysis
+        })
+      }
+    };
+
+  } catch (error) {
+    console.error('[getComprehensiveSalesAnalysis] Error:', error);
+    throw new Error(errMsg(error, "Gagal melakukan analisis penjualan komprehensif"));
+  }
+};
+
+// ====== SUPPORTING ANALYTICAL FUNCTIONS ======
+
+// Stock turnover calculation
+DataService.calculateStockTurnover = function(salesQty, stocks, stockHistory) {
+  const avgStock = (stocks.ISI + stocks.KOSONG) / 2;
+  return salesQty / Math.max(avgStock, 1);
+};
+
+// Optimal stock calculation
+DataService.calculateOptimalStock = function(salesData, safetyDays = 7) {
+  const dailySales = salesData
+    .filter(s => s.status !== 'DIBATALKAN')
+    .reduce((acc, sale) => {
+      const date = sale.created_at.slice(0, 10);
+      acc[date] = (acc[date] || 0) + (Number(sale.qty) || 0);
+      return acc;
+    }, {});
+
+  const avgDailySales = Object.values(dailySales).reduce((a, b) => a + b, 0) / Math.max(Object.keys(dailySales).length, 1);
+  
+  return {
+    optimalISI: Math.ceil(avgDailySales * safetyDays * 1.2), // +20% buffer
+    optimalKOSONG: Math.ceil(avgDailySales * safetyDays * 0.8), // 80% of ISI
+    reorderPoint: Math.ceil(avgDailySales * 3) // reorder when 3 days stock left
+  };
+};
+
+// Stock-out risk assessment
+DataService.assessStockOutRisk = function(stocks, dailySales) {
+  const daysOfStockISI = stocks.ISI / dailySales;
+  const daysOfStockKOSONG = stocks.KOSONG / dailySales;
+  
+  return {
+    isiRisk: daysOfStockISI < 3 ? 'high' : daysOfStockISI < 7 ? 'medium' : 'low',
+    kosongRisk: daysOfStockKOSONG < 2 ? 'high' : daysOfStockKOSONG < 5 ? 'medium' : 'low',
+    daysOfStockISI,
+    daysOfStockKOSONG
+  };
+};
+
+// Time pattern analysis
+DataService.analyzeTimePatterns = function(salesData) {
+  const hourlySales = Array(24).fill(0);
+  const dailySales = Array(7).fill(0);
+  const paidSales = salesData.filter(s => s.status !== 'DIBATALKAN');
+
+  paidSales.forEach(sale => {
+    const date = new Date(sale.created_at);
+    const hour = date.getHours();
+    const day = date.getDay();
+    
+    hourlySales[hour] += Number(sale.qty) || 0;
+    dailySales[day] += Number(sale.qty) || 0;
+  });
+
+  const peakHour = hourlySales.indexOf(Math.max(...hourlySales));
+  const peakDay = dailySales.indexOf(Math.max(...dailySales));
+
+  return {
+    peakHour,
+    peakDay,
+    hourlyDistribution: hourlySales,
+    dailyDistribution: dailySales,
+    busiestPeriod: peakHour >= 17 && peakHour <= 20 ? 'evening' : 
+                   peakHour >= 11 && peakHour <= 14 ? 'lunch' : 'morning'
+  };
+};
+
+// Customer segmentation
+DataService.identifyTopCustomers = function(salesData, limit = 10) {
+  const customerStats = {};
+  
+  salesData
+    .filter(s => s.status !== 'DIBATALKAN')
+    .forEach(sale => {
+      const customer = sale.customer || 'PUBLIC';
+      if (!customerStats[customer]) {
+        customerStats[customer] = {
+          name: customer,
+          transactions: 0,
+          totalQty: 0,
+          totalValue: 0,
+          lastPurchase: sale.created_at
+        };
+      }
+      
+      customerStats[customer].transactions++;
+      customerStats[customer].totalQty += Number(sale.qty) || 0;
+      customerStats[customer].totalValue += Number(sale.total) || 0;
+    });
+
+  return Object.values(customerStats)
+    .sort((a, b) => b.totalValue - a.totalValue)
+    .slice(0, limit);
+};
+
+DataService.segmentCustomers = function(salesData, customers) {
+  const customerSegments = {
+    vip: [], // Top 10% by value
+    regular: [], // Next 40%
+    occasional: [], // Next 30%
+    new: [] // Last 20%
+  };
+
+  const customerValues = {};
+  
+  salesData
+    .filter(s => s.status !== 'DIBATALKAN')
+    .forEach(sale => {
+      const customer = sale.customer || 'PUBLIC';
+      customerValues[customer] = (customerValues[customer] || 0) + (Number(sale.total) || 0);
+    });
+
+  const sortedCustomers = Object.entries(customerValues)
+    .sort((a, b) => b[1] - a[1]);
+
+  const total = sortedCustomers.length;
+  
+  sortedCustomers.forEach(([customer, value], index) => {
+    const segment = index < total * 0.1 ? 'vip' :
+                   index < total * 0.5 ? 'regular' :
+                   index < total * 0.8 ? 'occasional' : 'new';
+    
+    customerSegments[segment].push({
+      name: customer,
+      totalValue: value,
+      rank: index + 1
+    });
+  });
+
+  return customerSegments;
+};
+
+// Predictive functions
+DataService.predictNextWeekSales = function(salesData) {
+  const recentSales = salesData
+    .filter(s => s.status !== 'DIBATALKAN')
+    .slice(-30); // Last 30 transactions
+
+  const totalQty = recentSales.reduce((sum, s) => sum + (Number(s.qty) || 0), 0);
+  const avgDailyQty = totalQty / Math.max(recentSales.length, 1);
+  
+  return {
+    predictedQty: Math.round(avgDailyQty * 7),
+    predictedRevenue: Math.round(avgDailyQty * 7 * 30000), // Assuming average price
+    confidence: recentSales.length > 20 ? 'high' : recentSales.length > 10 ? 'medium' : 'low'
+  };
+};
+
+DataService.predictNextMonthSales = function(salesData) {
+  const monthlyData = salesData
+    .filter(s => s.status !== 'DIBATALKAN')
+    .reduce((acc, sale) => {
+      const month = sale.created_at.slice(0, 7);
+      acc[month] = (acc[month] || 0) + (Number(sale.qty) || 0);
+      return acc;
+    }, {});
+
+  const monthlyQty = Object.values(monthlyData);
+  const avgMonthly = monthlyQty.reduce((a, b) => a + b, 0) / Math.max(monthlyQty.length, 1);
+  
+  return {
+    predictedQty: Math.round(avgMonthly),
+    predictedRevenue: Math.round(avgMonthly * 30000),
+    trend: monthlyQty.length > 1 ? (monthlyQty[monthlyQty.length-1] - monthlyQty[monthlyQty.length-2]) / monthlyQty[monthlyQty.length-2] * 100 : 0
+  };
+};
+
+// Warning generation
+DataService.generateWarnings = function(metrics) {
+  const warnings = {
+    critical: [],
+    high: [],
+    medium: [],
+    operational: []
+  };
+
+  // Stock warnings
+  if (metrics.stocks.ISI < 5) {
+    warnings.critical.push({
+      type: 'stock',
+      title: 'STOK ISI KRITIS',
+      description: `Stok isi hanya ${metrics.stocks.ISI} tabung - risiko kehilangan penjualan`,
+      action: 'Restok segera'
+    });
+  }
+
+  if (metrics.stocks.KOSONG < 3) {
+    warnings.high.push({
+      type: 'stock',
+      title: 'Stok Kosong Menipis',
+      description: `Stok kosong hanya ${metrics.stocks.KOSONG} tabung`,
+      action: 'Tambah stok kosong'
+    });
+  }
+
+  // Financial warnings
+  if (metrics.receivables > metrics.salesTrend * 10000) { // Assuming salesTrend is daily revenue
+    warnings.high.push({
+      type: 'finance',
+      title: 'Piutang Tinggi',
+      description: `Piutang mencapai ${fmtIDR(metrics.receivables)} - perhatikan cash flow`,
+      action: 'Tingkatkan penagihan'
+    });
+  }
+
+  // Sales trend warnings
+  if (metrics.salesTrend < -15) {
+    warnings.high.push({
+      type: 'sales',
+      title: 'Penurunan Penjualan Signifikan',
+      description: `Penjualan turun ${Math.abs(metrics.salesTrend).toFixed(1)}%`,
+      action: 'Analisis penyebab penurunan'
+    });
+  }
+
+  // Operational warnings
+  if (metrics.efficiency.stockTurnoverRate < 0.5) {
+    warnings.operational.push({
+      type: 'efficiency',
+      title: 'Turnover Stok Rendah',
+      description: 'Stok bergerak lambat - pertimbangkan adjust harga/promosi',
+      action: 'Tinjau strategi pricing'
+    });
+  }
+
+  return warnings;
+};
+
+// Strategic insights generation
+DataService.generateStrategicInsights = function(metrics) {
+  const recommendations = [];
+  const priorityAreas = [];
+
+  // Growth opportunities
+  if (metrics.basicMetrics.revenueGrowth > 20) {
+    recommendations.push({
+      type: 'growth',
+      priority: 'high',
+      title: 'Pertumbuhan Positif - Ekspansi',
+      description: 'Pertumbuhan revenue tinggi - pertimbangkan ekspansi kapasitas',
+      impact: 'high',
+      effort: 'medium'
+    });
+  }
+
+  // Margin improvement
+  if (metrics.financials.currentMargin < 15) {
+    recommendations.push({
+      type: 'profitability',
+      priority: 'high',
+      title: 'Tingkatkan Margin',
+      description: `Margin saat ini ${metrics.financials.currentMargin.toFixed(1)}% - di bawah optimal`,
+      action: 'Review pricing strategy atau kurangi HPP',
+      impact: 'high',
+      effort: 'medium'
+    });
+    priorityAreas.push('profitability');
+  }
+
+  // Customer retention
+  if (metrics.customers.retentionRate < 60) {
+    recommendations.push({
+      type: 'customer',
+      priority: 'medium',
+      title: 'Tingkatkan Retensi Pelanggan',
+      description: `Retention rate ${metrics.customers.retentionRate.toFixed(1)}% - perlu perbaikan`,
+      action: 'Program loyalitas atau follow-up pelanggan',
+      impact: 'medium',
+      effort: 'low'
+    });
+    priorityAreas.push('customer_retention');
+  }
+
+  // Stock optimization
+  if (metrics.operations.stock.turnover < 1) {
+    recommendations.push({
+      type: 'operations',
+      priority: 'medium',
+      title: 'Optimasi Level Stok',
+      description: 'Turnover stok rendah - pertimbangkan adjust level inventori',
+      action: 'Review safety stock dan reorder point',
+      impact: 'medium',
+      effort: 'low'
+    });
+  }
+
+  return {
+    recommendations: recommendations.sort((a, b) => {
+      const priorityScore = { high: 3, medium: 2, low: 1 };
+      return priorityScore[b.priority] - priorityScore[a.priority];
+    }),
+    priorityAreas: [...new Set(priorityAreas)]
+  };
+};
+
+// Helper functions
+DataService.calculateRetentionRate = function(currentData, previousData) {
+  const currentCustomers = [...new Set(currentData.map(s => s.customer).filter(Boolean))];
+  const previousCustomers = [...new Set(previousData.map(s => s.customer).filter(Boolean))];
+  
+  const retainedCustomers = currentCustomers.filter(customer => 
+    previousCustomers.includes(customer)
+  ).length;
+
+  return previousCustomers.length > 0 ? (retainedCustomers / previousCustomers.length) * 100 : 0;
+};
+
+DataService.calculateAcquisitionRate = function(currentData, previousData) {
+  const currentCustomers = [...new Set(currentData.map(s => s.customer).filter(Boolean))];
+  const previousCustomers = [...new Set(previousData.map(s => s.customer).filter(Boolean))];
+  
+  const newCustomers = currentCustomers.filter(customer => 
+    !previousCustomers.includes(customer)
+  ).length;
+
+  return currentCustomers.length > 0 ? (newCustomers / currentCustomers.length) * 100 : 0;
+};
+
+DataService.assessCashFlowHealth = function(revenue, receivables, hpp) {
+  const cashFlowRatio = revenue / Math.max(receivables + hpp, 1);
+  
+  if (cashFlowRatio > 2) return 'excellent';
+  if (cashFlowRatio > 1) return 'good';
+  if (cashFlowRatio > 0.5) return 'fair';
+  return 'poor';
+};
+
+DataService.calculateOverallHealth = function(metrics) {
+  let score = 100;
+  
+  // Deduct for negative growth
+  if (metrics.revenueGrowth < 0) score -= 20;
+  if (metrics.revenueGrowth < -10) score -= 10;
+  
+  // Deduct for low margin
+  if (metrics.currentMargin < 10) score -= 15;
+  if (metrics.currentMargin < 5) score -= 10;
+  
+  // Deduct for operational issues
+  if (metrics.efficiency.stockTurnoverRate < 0.5) score -= 10;
+  if (metrics.efficiency.fulfillmentRate < 0.8) score -= 5;
+  
+  // Deduct for critical warnings
+  if (metrics.warnings.critical.length > 0) score -= 20;
+  if (metrics.warnings.high.length > 0) score -= 10;
+  
+  return {
+    score: Math.max(0, score),
+    grade: score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 60 ? 'C' : score >= 50 ? 'D' : 'F',
+    status: score >= 70 ? 'healthy' : score >= 50 ? 'needs_attention' : 'critical'
+  };
+};
+
+DataService.assessKPIStatus = function(metrics) {
+  return {
+    revenueGrowth: metrics.revenueGrowth >= 10 ? 'on_target' : metrics.revenueGrowth >= 0 ? 'needs_improvement' : 'off_target',
+    profitability: metrics.currentMargin >= 20 ? 'excellent' : metrics.currentMargin >= 15 ? 'good' : 'needs_attention',
+    customerRetention: metrics.customerAnalysis.retentionRate >= 70 ? 'good' : metrics.customerAnalysis.retentionRate >= 50 ? 'fair' : 'poor',
+    operationalEfficiency: metrics.efficiency.stockTurnoverRate >= 1 ? 'efficient' : 'needs_optimization'
+  };
+};

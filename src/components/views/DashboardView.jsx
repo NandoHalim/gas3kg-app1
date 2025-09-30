@@ -32,6 +32,17 @@ import {
   useMediaQuery,
   alpha,
   Divider,
+  Tabs,
+  Tab,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  CircularProgress,
+  Rating
 } from "@mui/material";
 
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
@@ -47,6 +58,17 @@ import BarChartIcon from "@mui/icons-material/BarChart";
 import PeopleIcon from "@mui/icons-material/People";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import WarningIcon from "@mui/icons-material/Warning";
+import TrendingFlatIcon from "@mui/icons-material/TrendingFlat";
+import TrendingDownIcon from "@mui/icons-material/TrendingDown";
+import TrendingUp from "@mui/icons-material/TrendingUp";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
+import AnalyticsIcon from "@mui/icons-material/Analytics";
+import TimelineIcon from "@mui/icons-material/Timeline";
+import PredictionIcon from "@mui/icons-material/Psychology";
+import RecommendationIcon from "@mui/icons-material/Lightbulb";
+import HealthIcon from "@mui/icons-material/MonitorHeart";
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -415,6 +437,533 @@ function RowKV({ k, v, vSx }) {
   );
 }
 
+/* ====== NEW AI ANALYTICS COMPONENTS ====== */
+
+// Health Score Component
+function HealthScoreCard({ score, grade, status }) {
+  const theme = useTheme();
+  const getColor = () => {
+    if (score >= 80) return theme.palette.success.main;
+    if (score >= 70) return theme.palette.info.main;
+    if (score >= 60) return theme.palette.warning.main;
+    return theme.palette.error.main;
+  };
+
+  const getStatusText = () => {
+    if (score >= 80) return "Sangat Sehat";
+    if (score >= 70) return "Sehat";
+    if (score >= 60) return "Perlu Perhatian";
+    return "Kritis";
+  };
+
+  return (
+    <Card sx={{ p: 3, textAlign: 'center', background: alpha(getColor(), 0.1) }}>
+      <CircularProgress 
+        variant="determinate" 
+        value={score} 
+        size={100}
+        thickness={4}
+        sx={{ color: getColor(), mb: 2 }}
+      />
+      <Typography variant="h4" fontWeight={800} color={getColor()}>
+        {score}/100
+      </Typography>
+      <Typography variant="h6" color={getColor()} fontWeight={600}>
+        {grade} - {getStatusText()}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        Skor Kesehatan Bisnis
+      </Typography>
+    </Card>
+  );
+}
+
+// Warning Alert Component
+function WarningAlert({ warnings }) {
+  const theme = useTheme();
+  
+  if (!warnings.critical.length && !warnings.high.length) return null;
+
+  return (
+    <Box sx={{ mb: 3 }}>
+      {warnings.critical.map((warning, index) => (
+        <Alert 
+          key={index}
+          severity="error"
+          icon={<WarningIcon />}
+          sx={{ mb: 1, alignItems: 'center' }}
+        >
+          <Typography variant="subtitle1" fontWeight={700}>
+            {warning.title}
+          </Typography>
+          <Typography variant="body2">
+            {warning.description}
+          </Typography>
+          <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+            🎯 <strong>Tindakan:</strong> {warning.action}
+          </Typography>
+        </Alert>
+      ))}
+      {warnings.high.map((warning, index) => (
+        <Alert 
+          key={index}
+          severity="warning"
+          sx={{ mb: 1 }}
+        >
+          <Typography variant="subtitle2" fontWeight={600}>
+            {warning.title}
+          </Typography>
+          <Typography variant="body2">
+            {warning.description}
+          </Typography>
+        </Alert>
+      ))}
+    </Box>
+  );
+}
+
+// Recommendation Card Component
+function RecommendationCard({ recommendation }) {
+  const theme = useTheme();
+  const priorityColor = {
+    high: theme.palette.error.main,
+    medium: theme.palette.warning.main,
+    low: theme.palette.info.main
+  };
+
+  const impactColor = {
+    high: theme.palette.success.main,
+    medium: theme.palette.warning.main,
+    low: theme.palette.info.main
+  };
+
+  return (
+    <Card sx={{ 
+      p: 2, 
+      mb: 2,
+      borderLeft: `4px solid ${priorityColor[recommendation.priority]}`,
+      background: alpha(priorityColor[recommendation.priority], 0.05)
+    }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+            {recommendation.title}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" paragraph>
+            {recommendation.description}
+          </Typography>
+          {recommendation.action && (
+            <Typography variant="body2" fontWeight={600} color="primary">
+              💡 {recommendation.action}
+            </Typography>
+          )}
+        </Box>
+        <Stack spacing={1} alignItems="flex-end">
+          <Chip 
+            label={recommendation.priority.toUpperCase()} 
+            size="small" 
+            color={recommendation.priority === 'high' ? 'error' : recommendation.priority === 'medium' ? 'warning' : 'info'}
+          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              Impact:
+            </Typography>
+            <Rating 
+              value={recommendation.impact === 'high' ? 3 : recommendation.impact === 'medium' ? 2 : 1} 
+              max={3}
+              size="small"
+              readOnly
+            />
+          </Box>
+        </Stack>
+      </Stack>
+    </Card>
+  );
+}
+
+// Predictive Analytics Component
+function PredictiveAnalytics({ predictions }) {
+  return (
+    <Card sx={{ p: 3 }}>
+      <Typography variant="h6" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <PredictionIcon color="primary" />
+        Prediksi & Forecast
+      </Typography>
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'primary.50' }}>
+            <Typography variant="h5" fontWeight={700} color="primary.main">
+              {predictions.nextWeek.predictedQty} tabung
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Prediksi Penjualan Minggu Depan
+            </Typography>
+            <Chip 
+              label={`Confidence: ${predictions.nextWeek.confidence}`} 
+              size="small" 
+              color="primary"
+              sx={{ mt: 1 }}
+            />
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'secondary.50' }}>
+            <Typography variant="h5" fontWeight={700} color="secondary.main">
+              {fmtIDR(predictions.nextMonth.predictedRevenue)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Prediksi Revenue Bulan Depan
+            </Typography>
+            <Chip 
+              label={`Trend: ${predictions.nextMonth.trend > 0 ? '+' : ''}${predictions.nextMonth.trend.toFixed(1)}%`} 
+              size="small" 
+              color={predictions.nextMonth.trend > 0 ? 'success' : 'error'}
+              sx={{ mt: 1 }}
+            />
+          </Paper>
+        </Grid>
+      </Grid>
+    </Card>
+  );
+}
+
+// Customer Segmentation Component
+function CustomerSegmentation({ segments }) {
+  return (
+    <Card sx={{ p: 3 }}>
+      <Typography variant="h6" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <PeopleIcon color="primary" />
+        Segmentasi Pelanggan
+      </Typography>
+      <Grid container spacing={2}>
+        {Object.entries(segments).map(([segment, customers]) => (
+          <Grid item xs={12} md={3} key={segment}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="h4" fontWeight={700} color="primary.main">
+                {customers.length}
+              </Typography>
+              <Typography variant="body2" fontWeight={600} textTransform="uppercase">
+                {segment === 'vip' ? 'VIP' : 
+                 segment === 'regular' ? 'Regular' :
+                 segment === 'occasional' ? 'Occasional' : 'New'}
+              </Typography>
+              {customers.length > 0 && (
+                <Typography variant="caption" color="text.secondary">
+                  Top: {customers[0].name}
+                </Typography>
+              )}
+            </Paper>
+          </Grid>
+        ))}
+      </Grid>
+    </Card>
+  );
+}
+
+// Main AI Analytics Dashboard Component
+function AIAnalyticsDashboard({ analytics, loading }) {
+  const theme = useTheme();
+  const [activeTab, setActiveTab] = useState(0);
+
+  if (loading) {
+    return (
+      <Card sx={{ mt: 3, p: 3 }}>
+        <Skeleton height={40} />
+        <Skeleton height={200} sx={{ mt: 2 }} />
+      </Card>
+    );
+  }
+
+  if (!analytics) return null;
+
+  const { summary, performance, financials, operations, customers, predictions, risks, recommendations } = analytics;
+
+  return (
+    <Box sx={{ mt: 4 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+        <Typography variant="h4" fontWeight={800}>
+          🧠 AI Business Intelligence
+        </Typography>
+        <Chip 
+          icon={<AnalyticsIcon />} 
+          label="Analisis Real-time" 
+          color="primary" 
+          variant="filled" 
+        />
+      </Box>
+
+      {/* Critical Warnings */}
+      <WarningAlert warnings={risks} />
+
+      {/* Health Score & Key Metrics */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={4}>
+          <HealthScoreCard {...summary.overallHealth} />
+        </Grid>
+        <Grid item xs={12} md={8}>
+          <Card sx={{ p: 3, height: '100%' }}>
+            <Typography variant="h6" fontWeight={700} gutterBottom>
+              📈 Key Performance Indicators
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={6} md={3}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h4" fontWeight={800} color={performance.growth.revenue >= 0 ? 'success.main' : 'error.main'}>
+                    {fmtPct(performance.growth.revenue)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Growth Revenue
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h4" fontWeight={800} color={financials.margin >= 15 ? 'success.main' : 'warning.main'}>
+                    {financials.margin.toFixed(1)}%
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Margin Kotor
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h4" fontWeight={800} color="primary.main">
+                    {customers.totalActive}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Pelanggan Aktif
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={6} md={3}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h4" fontWeight={800} color={operations.efficiency.stockTurnoverRate >= 1 ? 'success.main' : 'warning.main'}>
+                    {operations.efficiency.stockTurnoverRate.toFixed(1)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Stock Turnover
+                  </Typography>
+                </Box>
+              </Grid>
+            </Grid>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Tab Navigation */}
+      <Card>
+        <Tabs 
+          value={activeTab} 
+          onChange={(e, newValue) => setActiveTab(newValue)}
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab icon={<RecommendationIcon />} label="Rekomendasi" />
+          <Tab icon={<TimelineIcon />} label="Analisis Prediktif" />
+          <Tab icon={<PeopleIcon />} label="Intelijen Pelanggan" />
+          <Tab icon={<ShowChartIcon />} label="Kesehatan Operasional" />
+        </Tabs>
+
+        <CardContent>
+          {/* Tab 1: Recommendations */}
+          {activeTab === 0 && (
+            <Box>
+              <Typography variant="h6" fontWeight={700} gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <RecommendationIcon color="primary" />
+                Rekomendasi Strategis Berdasarkan AI
+              </Typography>
+              {recommendations.recommendations.map((rec, index) => (
+                <RecommendationCard key={index} recommendation={rec} />
+              ))}
+              {recommendations.recommendations.length === 0 && (
+                <Typography color="text.secondary" textAlign="center" sx={{ py: 4 }}>
+                  🎉 Tidak ada rekomendasi khusus - bisnis berjalan dengan baik!
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          {/* Tab 2: Predictive Analytics */}
+          {activeTab === 1 && (
+            <Box>
+              <PredictiveAnalytics predictions={predictions} />
+              
+              {/* Time Patterns */}
+              <Card sx={{ mt: 3, p: 3 }}>
+                <Typography variant="h6" fontWeight={700} gutterBottom>
+                  🕒 Pola Waktu Penjualan
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2 }}>
+                      <Typography variant="body1" fontWeight={600}>
+                        Jam Sibuk: {operations.timePatterns.peakHour}:00
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {operations.timePatterns.busiestPeriod === 'evening' ? 'Sore/Malam' : 
+                         operations.timePatterns.busiestPeriod === 'lunch' ? 'Siang' : 'Pagi'}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Paper sx={{ p: 2 }}>
+                      <Typography variant="body1" fontWeight={600}>
+                        Optimal Stock Level
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        ISI: {operations.stock.optimalLevel.optimalISI} | KOSONG: {operations.stock.optimalLevel.optimalKOSONG}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Card>
+            </Box>
+          )}
+
+          {/* Tab 3: Customer Intelligence */}
+          {activeTab === 2 && (
+            <Box>
+              <CustomerSegmentation segments={customers.customerSegments} />
+              
+              {/* Top Customers */}
+              <Card sx={{ mt: 3, p: 3 }}>
+                <Typography variant="h6" fontWeight={700} gutterBottom>
+                  🏆 Top 5 Pelanggan
+                </Typography>
+                <List>
+                  {customers.topCustomers.slice(0, 5).map((customer, index) => (
+                    <ListItem key={index} divider={index < 4}>
+                      <ListItemIcon>
+                        <Chip label={index + 1} size="small" color="primary" />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={customer.name}
+                        secondary={`${customer.transactions} transaksi • ${fmtIDR(customer.totalValue)}`}
+                      />
+                      <Chip 
+                        label={fmtIDR(customer.totalValue)} 
+                        color="primary" 
+                        variant="outlined"
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Card>
+            </Box>
+          )}
+
+          {/* Tab 4: Operational Health */}
+          {activeTab === 3 && (
+            <Box>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Card sx={{ p: 3 }}>
+                    <Typography variant="h6" fontWeight={700} gutterBottom>
+                      📊 Efisiensi Operasional
+                    </Typography>
+                    <Stack spacing={2}>
+                      <RowKV k="Stock Turnover Rate" v={operations.efficiency.stockTurnoverRate.toFixed(2)} />
+                      <RowKV k="Fulfillment Rate" v={fmtPct(operations.efficiency.fulfillmentRate * 100)} />
+                      <RowKV k="Collection Efficiency" v={fmtPct(operations.efficiency.collectionEfficiency * 100)} />
+                    </Stack>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Card sx={{ p: 3 }}>
+                    <Typography variant="h6" fontWeight={700} gutterBottom>
+                      🚨 Risk Assessment
+                    </Typography>
+                    <Stack spacing={2}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography>Stock-Out Risk (ISI)</Typography>
+                        <Chip 
+                          label={operations.stock.stockOutRisk.isiRisk.toUpperCase()} 
+                          color={
+                            operations.stock.stockOutRisk.isiRisk === 'high' ? 'error' :
+                            operations.stock.stockOutRisk.isiRisk === 'medium' ? 'warning' : 'success'
+                          }
+                          size="small"
+                        />
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography>Stock-Out Risk (KOSONG)</Typography>
+                        <Chip 
+                          label={operations.stock.stockOutRisk.kosongRisk.toUpperCase()} 
+                          color={
+                            operations.stock.stockOutRisk.kosongRisk === 'high' ? 'error' :
+                            operations.stock.stockOutRisk.kosongRisk === 'medium' ? 'warning' : 'success'
+                          }
+                          size="small"
+                        />
+                      </Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Hari stok tersisa: ISI ({operations.stock.stockOutRisk.daysOfStockISI.toFixed(1)}), 
+                        KOSONG ({operations.stock.stockOutRisk.daysOfStockKOSONG.toFixed(1)})
+                      </Typography>
+                    </Stack>
+                  </Card>
+                </Grid>
+              </Grid>
+
+              {/* Financial Health */}
+              <Card sx={{ mt: 3, p: 3 }}>
+                <Typography variant="h6" fontWeight={700} gutterBottom>
+                  💰 Kesehatan Finansial
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={3}>
+                    <Paper sx={{ p: 2, textAlign: 'center' }}>
+                      <Typography variant="h6" color={financials.cashFlowHealth === 'excellent' ? 'success.main' : 
+                                                     financials.cashFlowHealth === 'good' ? 'info.main' :
+                                                     financials.cashFlowHealth === 'fair' ? 'warning.main' : 'error.main'}>
+                        {financials.cashFlowHealth.toUpperCase()}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Cash Flow Health
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Paper sx={{ p: 2, textAlign: 'center' }}>
+                      <Typography variant="h6" color="primary.main">
+                        {fmtPct(financials.margin)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Gross Margin
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Paper sx={{ p: 2, textAlign: 'center' }}>
+                      <Typography variant="h6" color="secondary.main">
+                        {fmtIDR(financials.receivables)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Outstanding Piutang
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <Paper sx={{ p: 2, textAlign: 'center' }}>
+                      <Typography variant="h6" color="success.main">
+                        {financials.paymentMethods.tunai}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Transaksi Tunai
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Card>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+    </Box>
+  );
+}
+
 /* ====== Main View ====== */
 export default function DashboardView({ stocks: stocksFromApp = {} }) {
   const theme = useTheme();
@@ -422,6 +971,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { settings } = useSettings();
 
+  // Existing states (DON'T REMOVE)
   const [stocks, setStocks] = useState(stocksFromApp);
   const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
@@ -448,6 +998,11 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
   });
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
+  // NEW AI ANALYTICS STATES
+  const [aiAnalytics, setAiAnalytics] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showAIAnalytics, setShowAIAnalytics] = useState(false);
+
   // Modal Top Customer
   const [openHist, setOpenHist] = useState(false);
   const [histName, setHistName] = useState("");
@@ -458,7 +1013,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
   const busyRef = useRef(false);
   const idleTimer = useRef(null);
 
-  // 1) Snapshot cepat
+  // 1) Snapshot cepat - EXISTING LOGIC
   useEffect(() => {
     let alive = true;
 
@@ -501,9 +1056,8 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       try {
         setFinancialLoading(true);
         
-        // ✅ GUNAKAN FUNGSI BARU getFinancialSummary
         const summary = await DataService.getFinancialSummary({
-          from: '2000-01-01', // Semua data historis
+          from: '2000-01-01',
           to: todayStr(),
           hppPerUnit: Number(settings.hpp || 0)
         });
@@ -515,7 +1069,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       } catch (error) {
         console.error('Error calculating financial summary:', error);
         
-        // ✅ FALLBACK: Jika fungsi baru belum ada, gunakan perhitungan manual
         try {
           console.warn('Falling back to manual calculation...');
           const salesData = await DataService.getSalesHistory({
@@ -528,20 +1081,15 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 
           if (!alive) return;
 
-          // Logika manual yang sama dengan getFinancialSummary
           const paid = salesData.filter(sale => {
-   const method = String(sale.method || '').toUpperCase();
-   const status = String(sale.status || '').toUpperCase();
+            const method = String(sale.method || '').toUpperCase();
+            const status = String(sale.status || '').toUpperCase();
 
-   // 🚫 abaikan transaksi dibatalkan
-   if (status === 'DIBATALKAN') return false;
-
-   // ✅ hanya hitung tunai atau lunas
-   if (method === 'TUNAI') return true;
-   if (status === 'LUNAS') return true;
-
-   return false;
-});
+            if (status === 'DIBATALKAN') return false;
+            if (method === 'TUNAI') return true;
+            if (status === 'LUNAS') return true;
+            return false;
+          });
 
           const omzet = paid.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
           const totalQty = paid.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
@@ -560,7 +1108,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
           
         } catch (fallbackError) {
           console.error('Fallback calculation also failed:', fallbackError);
-          // Tetap set state kosong agar UI tidak broken
           setFinancialSummary({ 
             omzet: 0, hpp: 0, laba: 0, margin: 0, totalQty: 0, transactionCount: 0 
           });
@@ -579,7 +1126,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     };
   }, [settings.hpp]);
 
-  // 3) Realtime revalidate snapshot
+  // 3) Realtime revalidate snapshot - EXISTING
   useEffect(() => {
     const askRevalidate = () => {
       if (busyRef.current) return;
@@ -602,7 +1149,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     };
   }, []);
 
-  // 4) Recompute 7 hari rolling (realtime)
+  // 4) Recompute 7 hari rolling (realtime) - EXISTING
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -627,7 +1174,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     return () => { alive = false; };
   }, [recent, today, stocks]);
 
-  // 5) Analytics via RPC-only (Top, Weekly, Monthly, YoY) - MEMPERTAHANKAN LOGIC LAMA
+  // 5) Analytics via RPC-only - EXISTING
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -640,7 +1187,6 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
 
         if (!alive) return;
 
-        // Hitung growth dari aggregate - LOGIC LAMA TETAP DIJAGA
         const wk = comps?.weekly || null;
         const weeklyGrowthPct = wk && wk.last_week_qty
           ? ((Number(wk.this_week_qty || 0) - Number(wk.last_week_qty || 0)) / Number(wk.last_week_qty)) * 100
@@ -694,7 +1240,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
     return () => { alive = false; };
   }, []);
 
-  // 6) Penjualan Hari Ini - Tetap menggunakan fungsi lama untuk konsistensi
+  // 6) Penjualan Hari Ini - EXISTING
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -710,6 +1256,42 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
       }
     })();
   }, []);
+
+  // NEW: 7) AI Comprehensive Analytics
+  useEffect(() => {
+    let alive = true;
+
+    const loadAIAnalytics = async () => {
+      if (aiLoading) return;
+      
+      try {
+        setAiLoading(true);
+        const analytics = await DataService.getComprehensiveSalesAnalysis({ 
+          period: "last_90_days",
+          hppPerUnit: Number(settings.hpp || 0)
+        });
+        
+        if (!alive) return;
+        setAiAnalytics(analytics);
+      } catch (error) {
+        console.error('Error loading AI analytics:', error);
+        // Don't show error to user for AI analytics
+      } finally {
+        if (alive) {
+          setAiLoading(false);
+        }
+      }
+    };
+
+    // Load AI analytics after main data is loaded
+    if (!loading && !financialLoading) {
+      loadAIAnalytics();
+    }
+
+    return () => {
+      alive = false;
+    };
+  }, [loading, financialLoading, settings.hpp]);
 
   // Modal handler: riwayat pelanggan (periode: bulan ini, mulai tgl 1)
   const openCustomerHistory = async (name) => {
@@ -773,11 +1355,31 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         >
           Ringkasan performa bisnis dan analitik penjualan
         </Typography>
+        
+        {/* AI Analytics Toggle */}
+        <Box sx={{ mt: 2 }}>
+          <Button
+            variant={showAIAnalytics ? "contained" : "outlined"}
+            onClick={() => setShowAIAnalytics(!showAIAnalytics)}
+            startIcon={<AnalyticsIcon />}
+            color="primary"
+          >
+            {showAIAnalytics ? "Sembunyikan AI Analytics" : "Tampilkan AI Analytics"}
+          </Button>
+        </Box>
       </Box>
 
       {err && <ErrorBanner message={err} />}
 
-      {/* Ringkasan Stok & Penjualan */}
+      {/* NEW: AI Analytics Dashboard */}
+      {showAIAnalytics && (
+        <AIAnalyticsDashboard 
+          analytics={aiAnalytics} 
+          loading={aiLoading}
+        />
+      )}
+
+      {/* EXISTING: Ringkasan Stok & Penjualan */}
       <Grid container spacing={3} alignItems="stretch">
         <Grid item xs={12} sm={6} md={3} sx={{ display: "flex" }}>
           <StatTile
@@ -821,7 +1423,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         </Grid>
       </Grid>
 
-      {/* Kondisi Stok */}
+      {/* EXISTING: Kondisi Stok */}
       <Card sx={{
         background: `linear(135deg, ${alpha(theme.palette.primary.main, 0.03)} 0%, ${alpha(theme.palette.secondary.main, 0.03)} 100%)`,
         border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
@@ -841,7 +1443,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         </CardContent>
       </Card>
 
-      {/* Ringkasan Keuangan + Chart */}
+      {/* EXISTING: Ringkasan Keuangan + Chart */}
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <Card sx={{
@@ -929,7 +1531,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         </Grid>
       </Grid>
 
-      {/* Analitik Penjualan - MEMPERTAHANKAN LOGIC LAMA */}
+      {/* EXISTING: Analitik Penjualan - MEMPERTAHANKAN LOGIC LAMA */}
       <Card sx={{
         background: `linear(135deg, ${alpha(theme.palette.warning.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
         border: `1px solid ${alpha(theme.palette.warning.main, 0.1)}`
@@ -1049,7 +1651,7 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         </CardContent>
       </Card>
 
-      {/* Transaksi Terbaru */}
+      {/* EXISTING: Transaksi Terbaru */}
       <Card sx={{
         background: `linear(135deg, ${alpha(theme.palette.primary.main, 0.03)} 0%, ${alpha(theme.palette.info.main, 0.03)} 100%)`,
         border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
@@ -1141,81 +1743,81 @@ export default function DashboardView({ stocks: stocksFromApp = {} }) {
         </CardContent>
       </Card>
 
-{/* Modal: Riwayat Pelanggan */}
-<Dialog fullWidth maxWidth="md" open={openHist} onClose={closeCustomerHistory}>
-  <DialogTitle>
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      <PeopleIcon color="primary" />
-      Riwayat Transaksi — {histName}
-    </Box>
-  </DialogTitle>
-  <DialogContent dividers>
-    {histLoading ? (
-      <Stack spacing={1} sx={{ py: 2 }}>
-        {[...Array(5)].map((_, i) => <Skeleton key={i} height={53} />)}
-      </Stack>
-    ) : (
-      <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
-        <Table size="medium">
-          <TableHead>
-            <TableRow sx={{ backgroundColor: theme.palette.background.default }}>
-              <TableCell sx={{ fontWeight: 700 }}>Tanggal</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }}>Qty</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Metode & Status</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
-            </TableRow>
-          </TableHead> {/* ← HAPUS salah satu </TableHead> yang berlebih */}
-          <TableBody>
-            {(histRows || []).map((r) => (
-              <TableRow key={r.id} hover>
-                <TableCell sx={{ whiteSpace: "nowrap", fontFamily: 'monospace' }}>
-                  {String(r.created_at || "").slice(0,10)}
-                </TableCell>
-                <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                  {r.qty}
-                </TableCell>
-                <TableCell>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <Chip 
-                      label={r.method} 
-                      size="small" 
-                      color={r.method === 'TUNAI' ? 'success' : 'primary'}
-                      variant="outlined"
-                    />
-                    {r.method === "HUTANG" && (
-                      <Chip
-                        size="small"
-                        label={(String(r.status || "").toUpperCase() === "LUNAS") ? "LUNAS" : "BELUM"}
-                        color={(String(r.status || "").toUpperCase() === "LUNAS") ? "success" : "error"}
-                        variant="filled"
-                      />
-                    )}
-                  </Stack>
-                </TableCell>
-                <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
-                  {fmtIDR((Number(r.qty)||0) * (Number(r.price)||0))}
-                </TableCell>
-              </TableRow>
-            ))}
-            {!histRows?.length && (
-              <EmptyStateRow colSpan={4} message="Tidak ada riwayat transaksi" />
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    )}
-  </DialogContent>
-  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
-    <Typography variant="h6" fontWeight={700} color="primary.main">
-      Total Qty: {histLoading ? "…" : histTotalQty}
-    </Typography>
-    <DialogActions sx={{ px: 0 }}>
-      <Button variant="contained" sx={btnDialogSx} onClick={closeCustomerHistory}>
-        Tutup
-      </Button>
-    </DialogActions>
-  </Stack>
-</Dialog>
+      {/* Modal: Riwayat Pelanggan */}
+      <Dialog fullWidth maxWidth="md" open={openHist} onClose={closeCustomerHistory}>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PeopleIcon color="primary" />
+            Riwayat Transaksi — {histName}
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {histLoading ? (
+            <Stack spacing={1} sx={{ py: 2 }}>
+              {[...Array(5)].map((_, i) => <Skeleton key={i} height={53} />)}
+            </Stack>
+          ) : (
+            <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
+              <Table size="medium">
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: theme.palette.background.default }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Tanggal</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Qty</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Metode & Status</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Total</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(histRows || []).map((r) => (
+                    <TableRow key={r.id} hover>
+                      <TableCell sx={{ whiteSpace: "nowrap", fontFamily: 'monospace' }}>
+                        {String(r.created_at || "").slice(0,10)}
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                        {r.qty}
+                      </TableCell>
+                      <TableCell>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <Chip 
+                            label={r.method} 
+                            size="small" 
+                            color={r.method === 'TUNAI' ? 'success' : 'primary'}
+                            variant="outlined"
+                          />
+                          {r.method === "HUTANG" && (
+                            <Chip
+                              size="small"
+                              label={(String(r.status || "").toUpperCase() === "LUNAS") ? "LUNAS" : "BELUM"}
+                              color={(String(r.status || "").toUpperCase() === "LUNAS") ? "success" : "error"}
+                              variant="filled"
+                            />
+                          )}
+                        </Stack>
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
+                        {fmtIDR((Number(r.qty)||0) * (Number(r.price)||0))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!histRows?.length && (
+                    <EmptyStateRow colSpan={4} message="Tidak ada riwayat transaksi" />
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 3, py: 2, borderTop: 1, borderColor: 'divider' }}>
+          <Typography variant="h6" fontWeight={700} color="primary.main">
+            Total Qty: {histLoading ? "…" : histTotalQty}
+          </Typography>
+          <DialogActions sx={{ px: 0 }}>
+            <Button variant="contained" sx={btnDialogSx} onClick={closeCustomerHistory}>
+              Tutup
+            </Button>
+          </DialogActions>
+        </Stack>
+      </Dialog>
     </Stack>
   );
 }
