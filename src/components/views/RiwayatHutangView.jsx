@@ -59,7 +59,7 @@ import {
   FileDownload as FileDownloadIcon,
 } from "@mui/icons-material";
 
-/* ========= Constants & Styles - PERTAHANKAN ========= */
+/* ========= Constants & Styles - PERBAIKAN TABLE_STYLES ========= */
 const CARD_STYLES = {
   borderRadius: 3,
   boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
@@ -71,6 +71,13 @@ const TABLE_STYLES = {
   overflow: 'hidden',
   '& .MuiTableHead-root': {
     background: 'linear-gradient(45deg, #f8fafc 30%, #f1f5f9 90%)'
+  },
+  // ✅ PERBAIKAN: Tambahkan scroll horizontal untuk mobile
+  overflowX: 'auto',
+  display: 'block',
+  maxWidth: '100%',
+  '& table': {
+    minWidth: 700 // Minimum width untuk hutang dengan 7 kolom
   }
 };
 
@@ -241,7 +248,7 @@ export default function HutangSection({
   totalHutang = 0,
   loading = false,
   
-  // Filter State - PERBAHI: ganti nama prop jadi filterValues
+  // Filter State - PERTAHANKAN
   filterValues = {
     query: "",
     status: "BELUM_LUNAS"
@@ -258,7 +265,7 @@ export default function HutangSection({
     direction: "desc"
   },
   
-  // Event Handlers - PERBAHI: struktur handler
+  // Event Handlers - PERTAHANKAN
   onFilterChange = {},
   onPaginationChange = {},
   onSortChange,
@@ -270,7 +277,7 @@ export default function HutangSection({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Local state untuk dialog bayar hutang
+  // Local state untuk dialog bayar hutang - PERTAHANKAN
   const [paying, setPaying] = useState(null);
   const [payLoading, setPayLoading] = useState(false);
 
@@ -279,7 +286,7 @@ export default function HutangSection({
     onSortChange?.(field);
   };
 
-  // Handle reset filters - PERBAHI: panggil handler yang benar
+  // Handle reset filters - PERTAHANKAN
   const handleReset = () => {
     onFilterChange?.onQueryChange?.("");
     onFilterChange?.onStatusChange?.("BELUM_LUNAS");
@@ -289,7 +296,7 @@ export default function HutangSection({
     }, 100);
   };
 
-  // Handle bayar hutang - PERBAHI: panggil handler dari parent
+  // Handle bayar hutang - PERTAHANKAN
   const handlePay = async () => {
     if (!paying) return;
     
@@ -311,7 +318,7 @@ export default function HutangSection({
     }
   };
 
-  // Handle WhatsApp - PERBAHI: panggil handler dari parent
+  // Handle WhatsApp - PERTAHANKAN
   const handleWhatsApp = (customer, total) => {
     const waUrl = onWhatsApp?.(customer, total);
     if (waUrl) {
@@ -407,11 +414,12 @@ export default function HutangSection({
             loading={loading}
           />
 
+          {/* ✅ PERBAIKAN: TableContainer dengan scroll horizontal */}
           <TableContainer component={Paper} sx={TABLE_STYLES}>
-            <Table size="small">
+            <Table size="small" sx={{ minWidth: 700 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 100 }}>
                     <TableSortLabel
                       active={sorting.key === "created_at"}
                       direction={sorting.direction}
@@ -420,7 +428,7 @@ export default function HutangSection({
                       <b>📅 Tanggal</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 120 }}>
                     <TableSortLabel
                       active={sorting.key === "customer"}
                       direction={sorting.direction}
@@ -429,7 +437,7 @@ export default function HutangSection({
                       <b>Pelanggan</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                  <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' }, minWidth: 60 }}>
                     <TableSortLabel
                       active={sorting.key === "qty"}
                       direction={sorting.direction}
@@ -438,7 +446,7 @@ export default function HutangSection({
                       <b>Qty</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                  <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' }, minWidth: 100 }}>
                     <TableSortLabel
                       active={sorting.key === "price"}
                       direction={sorting.direction}
@@ -447,7 +455,7 @@ export default function HutangSection({
                       <b>Harga</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ minWidth: 120 }}>
                     <TableSortLabel
                       active={sorting.key === "total"}
                       direction={sorting.direction}
@@ -456,7 +464,7 @@ export default function HutangSection({
                       <b>Total Hutang</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell align="center"><b>Aksi</b></TableCell>
+                  <TableCell align="center" sx={{ minWidth: 150 }}><b>Aksi</b></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -497,16 +505,16 @@ export default function HutangSection({
                           <Typography fontWeight={600}>{r.customer || "PUBLIC"}</Typography>
                         </Stack>
                       </TableCell>
-                      <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                      <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' }, whiteSpace: "nowrap" }}>
                         {r.qty}
                       </TableCell>
-                      <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                      <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' }, whiteSpace: "nowrap" }}>
                         {fmtIDR(r.price)}
                       </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600, color: 'error.main' }}>
+                      <TableCell align="right" sx={{ fontWeight: 600, color: 'error.main', whiteSpace: "nowrap" }}>
                         {fmtIDR(r.total)}
                       </TableCell>
-                      <TableCell align="center">
+                      <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
                         <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap">
                           <Tooltip title="Ingatkan via WhatsApp">
                             <IconButton
@@ -526,7 +534,7 @@ export default function HutangSection({
                             size="small"
                             variant="contained"
                             startIcon={<PaidIcon />}
-                            onClick={() => setPaying({ /* PERBAHI: set local state dulu */
+                            onClick={() => setPaying({ 
                               id: r.id,
                               customer: r.customer,
                               total: r.total,
@@ -548,7 +556,7 @@ export default function HutangSection({
         </CardContent>
       </Card>
 
-      {/* Dialog Bayar Hutang */}
+      {/* Dialog Bayar Hutang - PERTAHANKAN */}
       <Dialog open={!!paying} onClose={() => !payLoading && setPaying(null)} fullWidth maxWidth="sm">
         <DialogTitle>
           <Stack direction="row" alignItems="center" spacing={1}>

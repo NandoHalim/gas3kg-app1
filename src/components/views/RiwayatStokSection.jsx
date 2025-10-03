@@ -50,7 +50,7 @@ import {
   FileDownload as FileDownloadIcon,
 } from "@mui/icons-material";
 
-/* ========= Constants & Styles - PERTAHANKAN ========= */
+/* ========= Constants & Styles - PERBAIKAN TABLE_STYLES ========= */
 const CARD_STYLES = {
   borderRadius: 3,
   boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
@@ -62,6 +62,13 @@ const TABLE_STYLES = {
   overflow: 'hidden',
   '& .MuiTableHead-root': {
     background: 'linear-gradient(45deg, #f8fafc 30%, #f1f5f9 90%)'
+  },
+  // ✅ PERBAIKAN: Tambahkan scroll horizontal untuk mobile
+  overflowX: 'auto',
+  display: 'block',
+  maxWidth: '100%',
+  '& table': {
+    minWidth: 650 // Minimum width untuk stok dengan 6 kolom
   }
 };
 
@@ -262,7 +269,7 @@ export default function StokSection({
   totalRows = 0,
   loading = false,
   
-  // Filter State - PERBAHI: ganti nama prop jadi filterValues
+  // Filter State - PERTAHANKAN
   filterValues = {
     from: "",
     to: "",
@@ -282,7 +289,7 @@ export default function StokSection({
     direction: "desc"
   },
   
-  // Event Handlers - PERBAHI: struktur handler
+  // Event Handlers - PERTAHANKAN
   onFilterChange = {},
   onPaginationChange = {},
   onSortChange,
@@ -292,7 +299,7 @@ export default function StokSection({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Local state untuk frontend filtering
+  // Local state untuk frontend filtering - PERTAHANKAN
   const [localFilters, setLocalFilters] = useState({
     mutasi: "ALL",
     keyword: ""
@@ -303,7 +310,7 @@ export default function StokSection({
     onSortChange?.(field);
   };
 
-  // Handle reset filters - PERBAHI: panggil handler yang benar
+  // Handle reset filters - PERTAHANKAN
   const handleReset = () => {
     onFilterChange?.onFromChange?.("");
     onFilterChange?.onToChange?.("");
@@ -319,7 +326,7 @@ export default function StokSection({
     }, 100);
   };
 
-  // Handle local filter changes
+  // Handle local filter changes - PERTAHANKAN
   const handleLocalFilterChange = (key, value) => {
     setLocalFilters(prev => ({
       ...prev,
@@ -327,7 +334,7 @@ export default function StokSection({
     }));
   };
 
-  // Apply frontend filtering untuk mutasi dan keyword
+  // Apply frontend filtering untuk mutasi dan keyword - PERTAHANKAN
   const filteredRows = useMemo(() => {
     return rows.filter(row => {
       // Filter by mutasi type
@@ -344,7 +351,7 @@ export default function StokSection({
     });
   }, [rows, localFilters.mutasi, localFilters.keyword]);
 
-  // Calculate summary totals dari filtered rows
+  // Calculate summary totals dari filtered rows - PERTAHANKAN
   const totalMasuk = filteredRows.reduce((sum, row) => sum + (Number(row.masuk) || 0), 0);
   const totalKeluar = filteredRows.reduce((sum, row) => sum + (Number(row.keluar) || 0), 0);
 
@@ -470,11 +477,12 @@ export default function StokSection({
             loading={loading}
           />
 
+          {/* ✅ PERBAIKAN: TableContainer dengan scroll horizontal */}
           <TableContainer component={Paper} sx={TABLE_STYLES}>
-            <Table size="small">
+            <Table size="small" sx={{ minWidth: 650 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 120 }}>
                     <TableSortLabel
                       active={sorting.key === "tanggal"}
                       direction={sorting.direction}
@@ -483,7 +491,7 @@ export default function StokSection({
                       <b>📅 Tanggal & Waktu</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 80 }}>
                     <TableSortLabel
                       active={sorting.key === "code"}
                       direction={sorting.direction}
@@ -492,7 +500,7 @@ export default function StokSection({
                       <b>Jenis</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 150 }}>
                     <TableSortLabel
                       active={sorting.key === "friendly"}
                       direction={sorting.direction}
@@ -501,7 +509,7 @@ export default function StokSection({
                       <b>Keterangan</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ minWidth: 80 }}>
                     <TableSortLabel
                       active={sorting.key === "masuk"}
                       direction={sorting.direction}
@@ -510,7 +518,7 @@ export default function StokSection({
                       <b>Masuk</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ minWidth: 80 }}>
                     <TableSortLabel
                       active={sorting.key === "keluar"}
                       direction={sorting.direction}
@@ -519,7 +527,7 @@ export default function StokSection({
                       <b>Keluar</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ minWidth: 100 }}>
                     <TableSortLabel
                       active={sorting.key === "sisa"}
                       direction={sorting.direction}
@@ -559,16 +567,17 @@ export default function StokSection({
                         }
                       }}
                     >
-                      <TableCell>{r.waktu || r.tanggal}</TableCell>
-                      <TableCell>
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>{r.waktu || r.tanggal}</TableCell>
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>
                         <StokBadge code={r.code} />
                       </TableCell>
-                      <TableCell>{humanize(r.raw_note || r.keterangan)}</TableCell>
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>{humanize(r.raw_note || r.keterangan)}</TableCell>
                       <TableCell 
                         align="right" 
                         sx={{ 
                           fontWeight: r.masuk ? 600 : 'normal',
-                          color: r.masuk ? "#166534" : undefined 
+                          color: r.masuk ? "#166534" : undefined,
+                          whiteSpace: "nowrap" 
                         }}
                       >
                         {r.masuk || ""}
@@ -577,14 +586,15 @@ export default function StokSection({
                         align="right" 
                         sx={{ 
                           fontWeight: r.keluar ? 600 : 'normal',
-                          color: r.keluar ? "#991b1b" : undefined 
+                          color: r.keluar ? "#991b1b" : undefined,
+                          whiteSpace: "nowrap" 
                         }}
                       >
                         {r.keluar || ""}
                       </TableCell>
                       <TableCell 
                         align="right" 
-                        sx={{ fontWeight: 600 }}
+                        sx={{ fontWeight: 600, whiteSpace: "nowrap" }}
                       >
                         {(r.sisa ?? "") === "" ? "-" : r.sisa}
                       </TableCell>

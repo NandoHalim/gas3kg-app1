@@ -52,7 +52,7 @@ import {
   FileDownload as FileDownloadIcon,
 } from "@mui/icons-material";
 
-/* ========= Constants & Styles - PERTAHANKAN ========= */
+/* ========= Constants & Styles - PERBAIKAN TABLE_STYLES ========= */
 const CARD_STYLES = {
   borderRadius: 3,
   boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
@@ -64,6 +64,13 @@ const TABLE_STYLES = {
   overflow: 'hidden',
   '& .MuiTableHead-root': {
     background: 'linear-gradient(45deg, #f8fafc 30%, #f1f5f9 90%)'
+  },
+  // ✅ PERBAIKAN: Tambahkan scroll horizontal untuk mobile
+  overflowX: 'auto',
+  display: 'block',
+  maxWidth: '100%',
+  '& table': {
+    minWidth: 800 // Minimum width untuk transaksi dengan 9 kolom
   }
 };
 
@@ -227,7 +234,7 @@ export default function TransaksiSection({
   totalRows = 0,
   loading = false,
   
-  // Filter State - PERBAHI: ganti nama prop jadi filterValues
+  // Filter State - PERTAHANKAN
   filterValues = {
     from: "",
     to: "",
@@ -248,7 +255,7 @@ export default function TransaksiSection({
     direction: "desc"
   },
   
-  // Event Handlers - PERBAHI: struktur handler
+  // Event Handlers - PERTAHANKAN
   onFilterChange = {},
   onPaginationChange = {},
   onSortChange,
@@ -265,7 +272,7 @@ export default function TransaksiSection({
     onSortChange?.(field);
   };
 
-  // Handle reset filters - PERBAHI: panggil handler yang benar
+  // Handle reset filters - PERTAHANKAN
   const handleReset = () => {
     onFilterChange?.onFromChange?.("");
     onFilterChange?.onToChange?.("");
@@ -279,7 +286,7 @@ export default function TransaksiSection({
     }, 100);
   };
 
-   // Can void logic - PERBAIKAN: izinkan void untuk semua transaksi kecuali yang sudah DIBATALKAN
+   // Can void logic - PERTAHANKAN seperti semula
 const canVoid = (row) => {
   return (row.status || "").toUpperCase() !== "DIBATALKAN";
 };
@@ -412,11 +419,12 @@ const canVoid = (row) => {
             loading={loading}
           />
 
+          {/* ✅ PERBAIKAN: TableContainer dengan scroll horizontal */}
           <TableContainer component={Paper} sx={TABLE_STYLES}>
-            <Table size="small">
+            <Table size="small" sx={{ minWidth: 800 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 100 }}>
                     <TableSortLabel
                       active={sorting.key === "created_at"}
                       direction={sorting.direction}
@@ -425,7 +433,7 @@ const canVoid = (row) => {
                       <b>📅 Tanggal</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 120 }}>
                     <TableSortLabel
                       active={sorting.key === "id"}
                       direction={sorting.direction}
@@ -434,7 +442,7 @@ const canVoid = (row) => {
                       <b>No. Invoice</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 100 }}>
                     <TableSortLabel
                       active={sorting.key === "customer"}
                       direction={sorting.direction}
@@ -443,7 +451,7 @@ const canVoid = (row) => {
                       <b>Pelanggan</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ minWidth: 60 }}>
                     <TableSortLabel
                       active={sorting.key === "qty"}
                       direction={sorting.direction}
@@ -452,7 +460,7 @@ const canVoid = (row) => {
                       <b>Qty</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ minWidth: 100 }}>
                     <TableSortLabel
                       active={sorting.key === "total"}
                       direction={sorting.direction}
@@ -461,7 +469,7 @@ const canVoid = (row) => {
                       <b>Total</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 80 }}>
                     <TableSortLabel
                       active={sorting.key === "method"}
                       direction={sorting.direction}
@@ -470,13 +478,13 @@ const canVoid = (row) => {
                       <b>Metode</b>
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 90 }}>
                     <b>Status</b>
                   </TableCell>
-                  <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
+                  <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' }, minWidth: 80 }}>
                     <b>Kasir</b>
                   </TableCell>
-                  <TableCell align="center"><b>Aksi</b></TableCell>
+                  <TableCell align="center" sx={{ minWidth: 150 }}><b>Aksi</b></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -513,21 +521,21 @@ const canVoid = (row) => {
                           }
                         }}
                       >
-                        <TableCell>{String(r.created_at || "").slice(0, 10)}</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>{invoiceDisplay}</TableCell>
-                        <TableCell>{r.customer || "PUBLIC"}</TableCell>
-                        <TableCell align="right">{r.qty}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600 }}>
+                        <TableCell sx={{ whiteSpace: "nowrap" }}>{String(r.created_at || "").slice(0, 10)}</TableCell>
+                        <TableCell sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>{invoiceDisplay}</TableCell>
+                        <TableCell sx={{ whiteSpace: "nowrap" }}>{r.customer || "PUBLIC"}</TableCell>
+                        <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>{r.qty}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
                           {fmtIDR((Number(r.qty) || 0) * (Number(r.price) || 0))}
                         </TableCell>
-                        <TableCell>{r.method}</TableCell>
-                        <TableCell>
+                        <TableCell sx={{ whiteSpace: "nowrap" }}>{r.method}</TableCell>
+                        <TableCell sx={{ whiteSpace: "nowrap" }}>
                           <StatusChip status={r.status} />
                         </TableCell>
-                        <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
+                        <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' }, whiteSpace: "nowrap" }}>
                           {r.kasir || r.cashier || "-"}
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="center" sx={{ whiteSpace: "nowrap" }}>
                           <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap">
                             <Button 
                               size="small" 
