@@ -52,7 +52,7 @@ import {
   FileDownload as FileDownloadIcon,
 } from "@mui/icons-material";
 
-/* ========= Constants & Styles - PERTAHANKAN ========= */
+/* ========= Constants & Styles - PERBAIKAN TABLE_STYLES ========= */
 const CARD_STYLES = {
   borderRadius: 3,
   boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
@@ -64,7 +64,10 @@ const TABLE_STYLES = {
   overflow: 'hidden',
   '& .MuiTableHead-root': {
     background: 'linear-gradient(45deg, #f8fafc 30%, #f1f5f9 90%)'
-  }
+  },
+  // ✅ PERBAIKAN: Scroll horizontal hanya untuk tabel
+  overflowX: 'auto',
+  maxWidth: '100%',
 };
 
 const FIELD_PROPS = { fullWidth: true, size: "medium" };
@@ -227,7 +230,7 @@ export default function TransaksiSection({
   totalRows = 0,
   loading = false,
   
-  // Filter State - PERBAHI: ganti nama prop jadi filterValues
+  // Filter State - PERTAHANKAN
   filterValues = {
     from: "",
     to: "",
@@ -248,7 +251,7 @@ export default function TransaksiSection({
     direction: "desc"
   },
   
-  // Event Handlers - PERBAHI: struktur handler
+  // Event Handlers - PERTAHANKAN
   onFilterChange = {},
   onPaginationChange = {},
   onSortChange,
@@ -265,7 +268,7 @@ export default function TransaksiSection({
     onSortChange?.(field);
   };
 
-  // Handle reset filters - PERBAHI: panggil handler yang benar
+  // Handle reset filters - PERTAHANKAN
   const handleReset = () => {
     onFilterChange?.onFromChange?.("");
     onFilterChange?.onToChange?.("");
@@ -279,7 +282,7 @@ export default function TransaksiSection({
     }, 100);
   };
 
-   // Can void logic - PERBAIKAN: izinkan void untuk semua transaksi kecuali yang sudah DIBATALKAN
+   // Can void logic - PERTAHANKAN seperti semula
 const canVoid = (row) => {
   return (row.status || "").toUpperCase() !== "DIBATALKAN";
 };
@@ -412,8 +415,9 @@ const canVoid = (row) => {
             loading={loading}
           />
 
+          {/* ✅ PERBAIKAN: TableContainer dengan scroll horizontal HANYA untuk tabel */}
           <TableContainer component={Paper} sx={TABLE_STYLES}>
-            <Table size="small">
+            <Table size="small" sx={{ minWidth: 850 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>

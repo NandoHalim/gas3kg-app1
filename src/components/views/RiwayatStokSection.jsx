@@ -50,7 +50,7 @@ import {
   FileDownload as FileDownloadIcon,
 } from "@mui/icons-material";
 
-/* ========= Constants & Styles - PERTAHANKAN ========= */
+/* ========= Constants & Styles - PERBAIKAN TABLE_STYLES ========= */
 const CARD_STYLES = {
   borderRadius: 3,
   boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
@@ -62,7 +62,10 @@ const TABLE_STYLES = {
   overflow: 'hidden',
   '& .MuiTableHead-root': {
     background: 'linear-gradient(45deg, #f8fafc 30%, #f1f5f9 90%)'
-  }
+  },
+  // ✅ PERBAIKAN: Scroll horizontal hanya untuk tabel
+  overflowX: 'auto',
+  maxWidth: '100%',
 };
 
 const FIELD_PROPS = { fullWidth: true, size: "medium" };
@@ -262,7 +265,7 @@ export default function StokSection({
   totalRows = 0,
   loading = false,
   
-  // Filter State - PERBAHI: ganti nama prop jadi filterValues
+  // Filter State - PERTAHANKAN
   filterValues = {
     from: "",
     to: "",
@@ -282,7 +285,7 @@ export default function StokSection({
     direction: "desc"
   },
   
-  // Event Handlers - PERBAHI: struktur handler
+  // Event Handlers - PERTAHANKAN
   onFilterChange = {},
   onPaginationChange = {},
   onSortChange,
@@ -292,7 +295,7 @@ export default function StokSection({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Local state untuk frontend filtering
+  // Local state untuk frontend filtering - PERTAHANKAN
   const [localFilters, setLocalFilters] = useState({
     mutasi: "ALL",
     keyword: ""
@@ -303,7 +306,7 @@ export default function StokSection({
     onSortChange?.(field);
   };
 
-  // Handle reset filters - PERBAHI: panggil handler yang benar
+  // Handle reset filters - PERTAHANKAN
   const handleReset = () => {
     onFilterChange?.onFromChange?.("");
     onFilterChange?.onToChange?.("");
@@ -319,7 +322,7 @@ export default function StokSection({
     }, 100);
   };
 
-  // Handle local filter changes
+  // Handle local filter changes - PERTAHANKAN
   const handleLocalFilterChange = (key, value) => {
     setLocalFilters(prev => ({
       ...prev,
@@ -327,7 +330,7 @@ export default function StokSection({
     }));
   };
 
-  // Apply frontend filtering untuk mutasi dan keyword
+  // Apply frontend filtering untuk mutasi dan keyword - PERTAHANKAN
   const filteredRows = useMemo(() => {
     return rows.filter(row => {
       // Filter by mutasi type
@@ -344,7 +347,7 @@ export default function StokSection({
     });
   }, [rows, localFilters.mutasi, localFilters.keyword]);
 
-  // Calculate summary totals dari filtered rows
+  // Calculate summary totals dari filtered rows - PERTAHANKAN
   const totalMasuk = filteredRows.reduce((sum, row) => sum + (Number(row.masuk) || 0), 0);
   const totalKeluar = filteredRows.reduce((sum, row) => sum + (Number(row.keluar) || 0), 0);
 
@@ -470,8 +473,9 @@ export default function StokSection({
             loading={loading}
           />
 
+          {/* ✅ PERBAIKAN: TableContainer dengan scroll horizontal HANYA untuk tabel */}
           <TableContainer component={Paper} sx={TABLE_STYLES}>
-            <Table size="small">
+            <Table size="small" sx={{ minWidth: 700 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>
