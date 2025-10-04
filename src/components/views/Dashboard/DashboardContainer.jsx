@@ -397,12 +397,14 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
     <Box sx={{ 
       width: '100%',
       overflowX: 'auto',
-      minHeight: '100vh'
+      minHeight: '100vh',
+      backgroundColor: theme.palette.background.default
     }}>
       <Stack spacing={3} sx={{ 
         minWidth: isMobile ? '800px' : 'auto',
         p: isMobile ? 2 : 3,
-        width: '100%'
+        width: '100%',
+        maxWidth: '100%'
       }}>
 
         <HeaderSection />
@@ -410,7 +412,10 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
         {err && <ErrorBanner message={err} />}
 
         {/* KPI Strip - New Component */}
-        <Box sx={{ minWidth: isMobile ? '800px' : 'auto' }}>
+        <Box sx={{ 
+          minWidth: isMobile ? '800px' : 'auto',
+          width: '100%'
+        }}>
           <KpiStrip
             financialData={financialSummary}
             stockPrediction={stockPrediction}
@@ -433,7 +438,8 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           display: 'grid',
           gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
           gap: 3,
-          minWidth: isMobile ? '800px' : 'auto'
+          minWidth: isMobile ? '800px' : 'auto',
+          width: '100%'
         }}>
           
           {/* Left Column - Stock & Prediction */}
