@@ -1,26 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Box, Stack, useTheme, useMediaQuery, Alert, CircularProgress } from "@mui/material";
-
-// Import services dengan error handling
-let DataService;
-let supabase;
-
-try {
-  const services = require("../../../services/DataService.js");
-  DataService = services.DataService;
-} catch (error) {
-  console.error("Failed to load DataService:", error);
-  DataService = null;
-}
-
-try {
-  const supabaseModule = require("../../../lib/supabase.js");
-  supabase = supabaseModule.supabase;
-} catch (error) {
-  console.error("Failed to load supabase:", error);
-  supabase = null;
-}
-
+import { Box, Stack, useTheme, useMediaQuery } from "@mui/material";
+import { DataService } from "../../../services/DataService.js";
+import { supabase } from "../../../lib/supabase.js";
 import { useSettings } from "../../../context/SettingsContext.jsx";
 import { fmtIDR, todayStr } from "../../../utils/helpers.js";
 
@@ -66,27 +47,6 @@ function buildLast7DaysSeries(rows = []) {
   return series;
 }
 
-// Fallback functions jika DataService tidak tersedia
-const fallbackDataService = {
-  getDashboardSnapshot: async () => ({
-    stocks: { ISI: 0, KOSONG: 0 },
-    sevenDays: [],
-    receivables: 0,
-    recentSales: [],
-    _ts: Date.now(),
-  }),
-  getFinancialSummary: async () => ({
-    omzet: 0, hpp: 0, laba: 0, margin: 0, totalQty: 0, transactionCount: 0
-  }),
-  getSalesHistory: async () => [],
-  getStockPrediction: async () => null,
-  getCurrentMonthBusinessIntelligence: async () => null,
-  getSalesSummary: async () => ({ qty: 0, money: 0 }),
-  loadSalesByDateRange: async () => [],
-  getTopCustomersPeriod: async () => [],
-  getComparisonsSummary: async () => ({}),
-};
-
 export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -120,10 +80,6 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   });
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
-  // Service availability state
-  const [dataServiceAvailable, setDataServiceAvailable] = useState(!!DataService);
-  const [supabaseAvailable, setSupabaseAvailable] = useState(!!supabase);
-
   // Modal state
   const [openHist, setOpenHist] = useState(false);
   const [histName, setHistName] = useState("");
@@ -134,22 +90,13 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const busyRef = useRef(false);
   const idleTimer = useRef(null);
 
-  // Gunakan DataService yang tersedia atau fallback
-  const currentDataService = DataService || fallbackDataService;
-
   // 1) Initial snapshot
   useEffect(() => {
     let alive = true;
 
-    if (!dataServiceAvailable) {
-      setLoading(false);
-      setErr("DataService tidak tersedia. Menggunakan data simulasi.");
-      return;
-    }
-
     (async () => {
       try {
-        const snap = await currentDataService.getDashboardSnapshot({ revalidate: true });
+        const snap = await DataService.getDashboardSnapshot({ revalidate: true });
         if (!alive) return;
 
         setStocks(snap.stocks || { ISI: 0, KOSONG: 0 });
@@ -171,18 +118,13 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
       setPiutang(Number.isFinite(d.receivables) ? d.receivables : 0);
       setRecent(Array.isArray(d.recentSales) ? d.recentSales : []);
     };
-    
-    if (dataServiceAvailable) {
-      window.addEventListener("dashboard:snapshot", onSnap);
-    }
+    window.addEventListener("dashboard:snapshot", onSnap);
 
     return () => {
       alive = false;
-      if (dataServiceAvailable) {
-        window.removeEventListener("dashboard:snapshot", onSnap);
-      }
+      window.removeEventListener("dashboard:snapshot", onSnap);
     };
-  }, [dataServiceAvailable, currentDataService]);
+  }, []);
 
   // 2) Financial summary
   useEffect(() => {
@@ -191,7 +133,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
       try {
         setFinancialLoading(true);
         
-        const summary = await currentDataService.getFinancialSummary({
+        const summary = await DataService.getFinancialSummary({
           from: '2000-01-01',
           to: todayStr(),
           hppPerUnit: Number(settings.hpp || 0)
@@ -204,7 +146,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
         console.error('Error calculating financial summary:', error);
         
         try {
-          const salesData = await currentDataService.getSalesHistory({
+          const salesData = await DataService.getSalesHistory({
             from: '2000-01-01',
             to: todayStr(),
             method: "ALL",
@@ -250,7 +192,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
     calculateFinancialSummary();
     
     return () => { alive = false; };
-  }, [settings.hpp, currentDataService]);
+  }, [settings.hpp]);
 
   // 3) Advanced features data (Stock Prediction & Business Intelligence)
   useEffect(() => {
@@ -261,11 +203,11 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
         setAdvancedLoading(true);
         
         const [prediction, intelligence] = await Promise.all([
-          currentDataService.getStockPrediction(30).catch(error => {
+          DataService.getStockPrediction(30).catch(error => {
             console.error('Error loading stock prediction:', error);
             return null;
           }),
-          currentDataService.getCurrentMonthBusinessIntelligence().catch(error => {
+          DataService.getCurrentMonthBusinessIntelligence().catch(error => {
             console.error('Error loading business intelligence:', error);
             return null;
           })
@@ -285,25 +227,17 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
       }
     };
 
-    if (dataServiceAvailable) {
-      loadAdvancedFeatures();
-    } else {
-      setAdvancedLoading(false);
-    }
+    loadAdvancedFeatures();
 
     return () => { alive = false; };
-  }, [dataServiceAvailable, currentDataService]);
+  }, []);
 
   // 4) Realtime updates
   useEffect(() => {
-    if (!supabaseAvailable || !dataServiceAvailable) {
-      return;
-    }
-
     const askRevalidate = () => {
       if (busyRef.current) return;
       busyRef.current = true;
-      currentDataService.getDashboardSnapshot({ revalidate: true });
+      DataService.getDashboardSnapshot({ revalidate: true });
 
       clearTimeout(idleTimer.current);
       idleTimer.current = setTimeout(() => (busyRef.current = false), 1200);
@@ -319,7 +253,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
       try { supabase.removeChannel(ch); } catch {}
       clearTimeout(idleTimer.current);
     };
-  }, [supabaseAvailable, dataServiceAvailable, currentDataService]);
+  }, []);
 
   // 5) 7-day series recomputation
   useEffect(() => {
@@ -331,7 +265,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
         from.setHours(0,0,0,0);
         const to = new Date();
 
-        const rows = await currentDataService.loadSalesByDateRange?.(
+        const rows = await DataService.loadSalesByDateRange?.(
           from.toISOString(),
           to.toISOString()
         ).catch(() => []);
@@ -344,7 +278,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
       }
     })();
     return () => { alive = false; };
-  }, [recent, today, stocks, currentDataService]);
+  }, [recent, today, stocks]);
 
   // 6) Analytics data
   useEffect(() => {
@@ -353,8 +287,8 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
       try {
         setAnalyticsLoading(true);
         const [tops, comps] = await Promise.all([
-          currentDataService.getTopCustomersPeriod?.({ period: "this_month", limit: 5, onlyPaid: true }).catch(() => []),
-          currentDataService.getComparisonsSummary?.({ onlyPaid: true }).catch(() => ({})),
+          DataService.getTopCustomersPeriod?.({ period: "this_month", limit: 5, onlyPaid: true }).catch(() => []),
+          DataService.getComparisonsSummary?.({ onlyPaid: true }).catch(() => ({})),
         ]);
 
         if (!alive) return;
@@ -403,14 +337,14 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
     })();
 
     return () => { alive = false; };
-  }, [currentDataService]);
+  }, []);
 
   // 7) Today's sales
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const todaySum = await currentDataService.getSalesSummary({ 
+        const todaySum = await DataService.getSalesSummary({ 
           from: todayStr(), 
           to: todayStr() 
         });
@@ -420,7 +354,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
         console.error('Error getting today sales:', error);
       }
     })();
-  }, [currentDataService]);
+  }, []);
 
   // Modal handlers
   const openCustomerHistory = async (name) => {
@@ -434,7 +368,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
       const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       e.setHours(23,59,59,999);
 
-      const rows = await currentDataService.getSalesHistory({
+      const rows = await DataService.getSalesHistory({
         from: s.toISOString(),
         to: e.toISOString(),
         q: name,
@@ -459,104 +393,6 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const isi = Number(stocks?.ISI || 0);
   const kosong = Number(stocks?.KOSONG || 0);
 
-  // Jika DataService tidak tersedia, tampilkan pesan error yang jelas
-  if (!dataServiceAvailable) {
-    return (
-      <Box sx={{ 
-        width: '100%',
-        minHeight: '100vh',
-        backgroundColor: theme.palette.background.default,
-        p: 3
-      }}>
-        <Stack spacing={3}>
-          <HeaderSection />
-          
-          <Alert severity="error" sx={{ mb: 2 }}>
-            <strong>DataService Tidak Tersedia</strong>
-          </Alert>
-          
-          <Alert severity="warning">
-            Modul DataService gagal dimuat. Hal ini bisa disebabkan oleh:
-            <ul>
-              <li>File DataService.js tidak ditemukan</li>
-              <li>Error dalam kode DataService</li>
-              <li>Masalah dalam build process</li>
-            </ul>
-            Silakan refresh halaman atau hubungi administrator.
-          </Alert>
-
-          {/* Tampilkan data simulasi */}
-          <SummaryTiles
-            isi={isi}
-            kosong={kosong}
-            todayQty={today.qty}
-            todayMoney={fmtIDR(today.money)}
-            receivablesTotal={fmtIDR(piutang)}
-            loading={false}
-          />
-
-          <Box sx={{ 
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
-            gap: 3
-          }}>
-            <Stack spacing={3}>
-              <StockConditionCard
-                isi={isi}
-                kosong={kosong}
-                loading={false}
-              />
-              
-              <StockPredictionCard
-                data={null}
-                loading={false}
-              />
-
-              <FinancialSummaryCard
-                omzet={financialSummary.omzet}
-                hpp={financialSummary.hpp}
-                laba={financialSummary.laba}
-                margin={financialSummary.margin}
-                transactionCount={financialSummary.transactionCount}
-                totalQty={financialSummary.totalQty}
-                loading={false}
-              />
-            </Stack>
-
-            <Stack spacing={3}>
-              <SevenDaysChartCard
-                series={series7}
-                loading={false}
-              />
-              
-              <AnalyticsSection
-                topCustomers={[]}
-                weekly={null}
-                monthly={null}
-                loading={false}
-                onOpenCustomerHistory={openCustomerHistory}
-                isSmallMobile={isSmallMobile}
-              />
-
-              <RecentTransactionsTable
-                rows={[]}
-                loading={false}
-                isSmallMobile={isSmallMobile}
-              />
-            </Stack>
-
-            <Stack spacing={3}>
-              <BusinessIntelligenceCard
-                data={null}
-                loading={false}
-              />
-            </Stack>
-          </Box>
-        </Stack>
-      </Box>
-    );
-  }
-
   return (
     <Box sx={{ 
       width: '100%',
@@ -574,12 +410,6 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
         <HeaderSection />
 
         {err && <ErrorBanner message={err} />}
-
-        {!supabaseAvailable && (
-          <Alert severity="warning">
-            Koneksi database tidak tersedia. Data mungkin tidak real-time.
-          </Alert>
-        )}
 
         {/* KPI Strip - New Component */}
         <Box sx={{ 
