@@ -13,7 +13,7 @@ import FinancialSummaryCard from "./sections/FinancialSummaryCard.jsx";
 import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
 import AnalyticsSection from "./sections/AnalyticsSection.jsx";
 import RecentTransactionsTable from "./sections/RecentTransactionsTable.jsx";
-import QuickActionsSection from "./sections/QuickActionsSection.jsx";
+
 import CustomerHistoryModal from "./modals/CustomerHistoryModal.jsx";
 import ErrorBanner from "./ui/ErrorBanner.jsx";
 
@@ -342,17 +342,11 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const closeCustomerHistory = () => setOpenHist(false);
 
   // Quick actions handlers
-  const handleAddTransaction = () => {
-    console.log('Navigate to add transaction');
-  };
+  
 
-  const handleAddStock = () => {
-    console.log('Navigate to add stock');
-  };
+  
 
-  const handleViewReports = () => {
-    console.log('Navigate to reports');
-  };
+  
 
   // Derived values
   const isi = Number(stocks?.ISI || 0);
@@ -374,11 +368,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
 
         {err && <ErrorBanner message={err} />}
 
-        <QuickActionsSection 
-          onAddTransaction={handleAddTransaction}
-          onAddStock={handleAddStock}
-          onViewReports={handleViewReports}
-        />
+        
 
         <SummaryTiles
           isi={isi}
