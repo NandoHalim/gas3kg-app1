@@ -2,7 +2,7 @@ import React, { useEffect, useState, Suspense, lazy } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout.jsx";
 
-import DashboardView from "./components/views/DashboardView.jsx";
+import DashboardView from "./components/views/Dashboard/index.jsx";
 import LoginView from "./components/views/LoginView.jsx";
 import PenjualanView from "./components/views/PenjualanView.jsx";
 import StokView from "./components/views/StokView.jsx";
