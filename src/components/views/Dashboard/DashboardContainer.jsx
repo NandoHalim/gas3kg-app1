@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Box, Stack, useTheme, useMediaQuery } from "@mui/material";
-import { DataService } from "../../../../services/DataService.js";
-import { supabase } from "../../../../lib/supabase.js";
-import { useSettings } from "../../../../context/SettingsContext.jsx";
-import { fmtIDR, todayStr } from "../../../../utils/helpers.js";
+import { DataService } from "../../../services/DataService.js";
+import { supabase } from "../../../lib/supabase.js";
+import { useSettings } from "../../../context/SettingsContext.jsx";
+import { fmtIDR, todayStr } from "../../../utils/helpers.js";
 
 // Import sections
 import HeaderSection from "./sections/HeaderSection.jsx";

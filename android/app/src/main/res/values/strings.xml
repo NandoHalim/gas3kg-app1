@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">gas3kg-app</string>
+    <string name="title_activity_main">gas3kg-app</string>
+    <string name="package_name">com.gas3kg.manager</string>
+    <string name="custom_url_scheme">com.gas3kg.manager</string>
+</resources>
