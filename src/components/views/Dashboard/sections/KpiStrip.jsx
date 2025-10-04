@@ -1,255 +1,90 @@
-// src/components/views/Dashboard/sections/BusinessIntelligenceCard.jsx
+// KpiStripMobile.jsx - Versi sederhana untuk mobile
 import React from 'react';
 import {
+  Box,
   Card,
   CardContent,
   Typography,
-  Box,
   Stack,
   Chip,
-  Tooltip,
-  Grid,
-  Alert
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import {
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  People as PeopleIcon,
-  Receipt as ReceiptIcon,
-  AttachMoney as AttachMoneyIcon,
-  Analytics as AnalyticsIcon
+  TrendingUp,
+  TrendingDown,
+  Inventory,
+  AttachMoney,
+  Analytics
 } from '@mui/icons-material';
 
-const BusinessIntelligenceCard = ({ data, loading }) => {
-  if (loading) {
-    return (
-      <Card sx={{ minWidth: 275 }}>
-        <CardContent>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h6" component="h2">
-              Business Intelligence
-            </Typography>
-            <Chip label="Loading..." color="default" size="small" />
-          </Box>
-          <Typography variant="body2" color="text.secondary">
-            Memuat analisis bisnis...
-          </Typography>
-        </CardContent>
-      </Card>
-    );
-  }
+const KpiStripMobile = ({ financialData, stockPrediction, businessIntel, loading }) => {
+  const theme = useTheme();
 
-  if (!data) {
-    return (
-      <Card sx={{ minWidth: 275 }}>
-        <CardContent>
-          <Typography variant="h6" component="h2" gutterBottom>
-            Business Intelligence
-          </Typography>
-          <Alert severity="info">
-            Tidak dapat memuat analisis bisnis saat ini.
-          </Alert>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const { atv, growth_metrics, insights, period } = data;
-  const { revenue_growth, transaction_growth, customer_growth } = growth_metrics;
-
-  // Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0,
-    }).format(amount);
+    }).format(amount || 0);
   };
 
-  // Format percentage
-  const formatPercent = (value) => {
-    if (value === null || value === undefined) return '0%';
-    return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
-  };
-
-  // Get growth color and icon
-  const getGrowthConfig = (value) => {
-    if (value > 0) {
-      return {
-        color: 'success',
-        icon: <TrendingUpIcon fontSize="small" />
-      };
-    } else if (value < 0) {
-      return {
-        color: 'error',
-        icon: <TrendingDownIcon fontSize="small" />
-      };
-    }
-    return {
-      color: 'default',
-      icon: null
-    };
-  };
-
-  const formatPeriod = (dateString) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleDateString('id-ID');
-  };
+  if (loading) {
+    return (
+      <Card sx={{ width: '100%', mb: 2 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>KPI</Typography>
+          <Typography variant="body2" color="text.secondary">Loading...</Typography>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Card sx={{ minWidth: 275 }}>
+    <Card sx={{ width: '100%', mb: 2 }}>
       <CardContent>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-          <Typography variant="h6" component="h2">
-            Business Intelligence
-          </Typography>
-          <Chip 
-            label={`${formatPeriod(period?.from)} - ${formatPeriod(period?.to)}`}
-            color="primary"
-            variant="outlined"
-            size="small"
-          />
-        </Box>
-
-        <Stack spacing={3}>
-          {/* ATV Section */}
-          <Card variant="outlined" sx={{ p: 2 }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-              <Tooltip title="Average Transaction Value">
-                <Box display="flex" alignItems="center" gap={1}>
-                  <AttachMoneyIcon color="primary" fontSize="small" />
-                  <Typography variant="subtitle2" fontWeight="bold">
-                    ATV
-                  </Typography>
-                </Box>
-              </Tooltip>
-              <Typography variant="h5" fontWeight="bold">
-                {formatCurrency(atv || 0)}
-              </Typography>
+        <Typography variant="h6" gutterBottom>Key Indicators</Typography>
+        
+        <Stack spacing={2}>
+          {/* Financial */}
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Box display="flex" alignItems="center" gap={1}>
+              <AttachMoney fontSize="small" color="primary" />
+              <Typography variant="body2">Laba:</Typography>
             </Box>
-            <Typography variant="caption" color="text.secondary">
-              Rata-rata nilai transaksi
+            <Typography variant="body2" fontWeight="bold">
+              {formatCurrency(financialData.laba || 0)}
             </Typography>
-          </Card>
-
-          {/* Growth Metrics */}
-          <Box>
-            <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-              Growth Metrics
-            </Typography>
-            <Grid container spacing={1}>
-              <Grid item xs={4}>
-                <Tooltip title="Pertumbuhan Pendapatan">
-                  <Box textAlign="center">
-                    <TrendingUpIcon 
-                      fontSize="small"
-                      color={
-                        revenue_growth > 0 ? 'success' : 
-                        revenue_growth < 0 ? 'error' : 
-                        'disabled'
-                      } 
-                    />
-                    <Typography variant="caption" display="block" color="text.secondary">
-                      Revenue
-                    </Typography>
-                    <Chip 
-                      label={formatPercent(revenue_growth)}
-                      color={getGrowthConfig(revenue_growth).color}
-                      variant="outlined"
-                      size="small"
-                      sx={{ mt: 0.5 }}
-                    />
-                  </Box>
-                </Tooltip>
-              </Grid>
-
-              <Grid item xs={4}>
-                <Tooltip title="Pertumbuhan Transaksi">
-                  <Box textAlign="center">
-                    <ReceiptIcon 
-                      fontSize="small"
-                      color={
-                        transaction_growth > 0 ? 'success' : 
-                        transaction_growth < 0 ? 'error' : 
-                        'disabled'
-                      } 
-                    />
-                    <Typography variant="caption" display="block" color="text.secondary">
-                      Transactions
-                    </Typography>
-                    <Chip 
-                      label={formatPercent(transaction_growth)}
-                      color={getGrowthConfig(transaction_growth).color}
-                      variant="outlined"
-                      size="small"
-                      sx={{ mt: 0.5 }}
-                    />
-                  </Box>
-                </Tooltip>
-              </Grid>
-
-              <Grid item xs={4}>
-                <Tooltip title="Pertumbuhan Pelanggan">
-                  <Box textAlign="center">
-                    <PeopleIcon 
-                      fontSize="small"
-                      color={
-                        customer_growth > 0 ? 'success' : 
-                        customer_growth < 0 ? 'error' : 
-                        'disabled'
-                      } 
-                    />
-                    <Typography variant="caption" display="block" color="text.secondary">
-                      Customers
-                    </Typography>
-                    <Chip 
-                      label={formatPercent(customer_growth)}
-                      color={getGrowthConfig(customer_growth).color}
-                      variant="outlined"
-                      size="small"
-                      sx={{ mt: 0.5 }}
-                    />
-                  </Box>
-                </Tooltip>
-              </Grid>
-            </Grid>
           </Box>
 
-          {/* Insights */}
-          {insights && insights.length > 0 && (
-            <Box>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                <Typography variant="subtitle1" fontWeight="bold">
-                  Insights
-                </Typography>
-                <AnalyticsIcon fontSize="small" color="action" />
-              </Box>
-              <Stack spacing={1}>
-                {insights.map((insight, index) => (
-                  <Card key={index} variant="outlined" sx={{ p: 1 }}>
-                    <Typography variant="body2">{insight}</Typography>
-                  </Card>
-                ))}
-              </Stack>
+          {/* Stock */}
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Box display="flex" alignItems="center" gap={1}>
+              <Inventory fontSize="small" color="secondary" />
+              <Typography variant="body2">Stok ISI:</Typography>
             </Box>
-          )}
-
-          {/* Performance Summary */}
-          <Alert 
-            severity={revenue_growth > 0 ? "success" : "warning"}
-            sx={{ mt: 1 }}
-          >
-            <Typography variant="body2">
-              <strong>Summary:</strong> {' '}
-              {revenue_growth > 0 ? 'Pertumbuhan positif ' : 'Perlu perhatian '}
-              dengan ATV {formatCurrency(atv || 0)}.{' '}
-              {transaction_growth > 0 ? 'Transaksi meningkat.' : 'Transaksi menurun.'}
+            <Typography variant="body2" fontWeight="bold">
+              {stockPrediction?.current_stock?.ISI || 0}
             </Typography>
-          </Alert>
+          </Box>
+
+          {/* Growth */}
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Box display="flex" alignItems="center" gap={1}>
+              <Analytics fontSize="small" color="info" />
+              <Typography variant="body2">Growth:</Typography>
+            </Box>
+            <Chip 
+              label={`${businessIntel?.growth_metrics?.revenue_growth > 0 ? '+' : ''}${businessIntel?.growth_metrics?.revenue_growth || 0}%`}
+              color={businessIntel?.growth_metrics?.revenue_growth > 0 ? 'success' : 'error'}
+              size="small"
+              icon={businessIntel?.growth_metrics?.revenue_growth > 0 ? <TrendingUp /> : <TrendingDown />}
+            />
+          </Box>
         </Stack>
       </CardContent>
     </Card>
   );
 };
 
-export default BusinessIntelligenceCard;
+export default KpiStripMobile;
