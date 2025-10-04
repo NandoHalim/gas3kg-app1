@@ -28,7 +28,7 @@ const BN_HEIGHT = 64;
 
 // Prefetch ringan: petakan key → dynamic import (tidak mengubah routing)
 const prefetchMap = {
-  dashboard: () => import("../views/DashboardView.jsx"),
+  dashboard: () => import("../views/Dashboard/index.jsx"),
   transaksi: () => import("../views/TransaksiView.jsx"),
   stok: () => import("../views/StokView.jsx"),
   riwayat: () => import("../views/RiwayatView.jsx"),
