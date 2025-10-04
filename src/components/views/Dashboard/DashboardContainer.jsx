@@ -14,6 +14,11 @@ import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
 import AnalyticsSection from "./sections/AnalyticsSection.jsx";
 import RecentTransactionsTable from "./sections/RecentTransactionsTable.jsx";
 
+// Import new sections
+import StockPredictionCard from "./sections/StockPredictionCard.jsx";
+import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx";
+import KpiStrip from "./sections/KpiStrip.jsx";
+
 import CustomerHistoryModal from "./modals/CustomerHistoryModal.jsx";
 import ErrorBanner from "./ui/ErrorBanner.jsx";
 
@@ -60,6 +65,11 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
   const [financialLoading, setFinancialLoading] = useState(true);
+
+  // New state for advanced features
+  const [stockPrediction, setStockPrediction] = useState(null);
+  const [businessIntelligence, setBusinessIntelligence] = useState(null);
+  const [advancedLoading, setAdvancedLoading] = useState(true);
 
   // Analytics state
   const [analytics, setAnalytics] = useState({
@@ -184,7 +194,45 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
     return () => { alive = false; };
   }, [settings.hpp]);
 
-  // 3) Realtime updates
+  // 3) Advanced features data (Stock Prediction & Business Intelligence)
+  useEffect(() => {
+    let alive = true;
+
+    const loadAdvancedFeatures = async () => {
+      try {
+        setAdvancedLoading(true);
+        
+        const [prediction, intelligence] = await Promise.all([
+          DataService.getStockPrediction(30).catch(error => {
+            console.error('Error loading stock prediction:', error);
+            return null;
+          }),
+          DataService.getCurrentMonthBusinessIntelligence().catch(error => {
+            console.error('Error loading business intelligence:', error);
+            return null;
+          })
+        ]);
+
+        if (!alive) return;
+
+        setStockPrediction(prediction);
+        setBusinessIntelligence(intelligence);
+        
+      } catch (error) {
+        console.error('Error loading advanced features:', error);
+      } finally {
+        if (alive) {
+          setAdvancedLoading(false);
+        }
+      }
+    };
+
+    loadAdvancedFeatures();
+
+    return () => { alive = false; };
+  }, []);
+
+  // 4) Realtime updates
   useEffect(() => {
     const askRevalidate = () => {
       if (busyRef.current) return;
@@ -207,7 +255,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
     };
   }, []);
 
-  // 4) 7-day series recomputation
+  // 5) 7-day series recomputation
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -232,7 +280,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
     return () => { alive = false; };
   }, [recent, today, stocks]);
 
-  // 5) Analytics data
+  // 6) Analytics data
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -291,7 +339,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
     return () => { alive = false; };
   }, []);
 
-  // 6) Today's sales
+  // 7) Today's sales
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -341,13 +389,6 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
 
   const closeCustomerHistory = () => setOpenHist(false);
 
-  // Quick actions handlers
-  
-
-  
-
-  
-
   // Derived values
   const isi = Number(stocks?.ISI || 0);
   const kosong = Number(stocks?.KOSONG || 0);
@@ -368,7 +409,15 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
 
         {err && <ErrorBanner message={err} />}
 
-        
+        {/* KPI Strip - New Component */}
+        <Box sx={{ minWidth: isMobile ? '800px' : 'auto' }}>
+          <KpiStrip
+            financialData={financialSummary}
+            stockPrediction={stockPrediction}
+            businessIntel={businessIntelligence}
+            loading={loading || advancedLoading}
+          />
+        </Box>
 
         <SummaryTiles
           isi={isi}
@@ -379,48 +428,70 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           loading={loading}
         />
 
-        <StockConditionCard
-          isi={isi}
-          kosong={kosong}
-          loading={loading}
-        />
+        {/* Main Content Grid */}
+        <Box sx={{ 
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
+          gap: 3,
+          minWidth: isMobile ? '800px' : 'auto'
+        }}>
+          
+          {/* Left Column - Stock & Prediction */}
+          <Stack spacing={3}>
+            <StockConditionCard
+              isi={isi}
+              kosong={kosong}
+              loading={loading}
+            />
+            
+            <StockPredictionCard
+              data={stockPrediction}
+              loading={advancedLoading}
+            />
 
-        <Box sx={{ minWidth: isMobile ? '800px' : 'auto' }}>
-          <FinancialSummaryCard
-            omzet={financialSummary.omzet}
-            hpp={financialSummary.hpp}
-            laba={financialSummary.laba}
-            margin={financialSummary.margin}
-            transactionCount={financialSummary.transactionCount}
-            totalQty={financialSummary.totalQty}
-            loading={financialLoading}
-          />
-        </Box>
+            <FinancialSummaryCard
+              omzet={financialSummary.omzet}
+              hpp={financialSummary.hpp}
+              laba={financialSummary.laba}
+              margin={financialSummary.margin}
+              transactionCount={financialSummary.transactionCount}
+              totalQty={financialSummary.totalQty}
+              loading={financialLoading}
+            />
+          </Stack>
 
-        <Box sx={{ minWidth: isMobile ? '800px' : 'auto' }}>
-          <SevenDaysChartCard
-            series={series7}
-            loading={loading}
-          />
-        </Box>
+          {/* Middle Column - Charts & Analytics */}
+          <Stack spacing={3}>
+            <SevenDaysChartCard
+              series={series7}
+              loading={loading}
+            />
+            
+            <AnalyticsSection
+              topCustomers={analytics.topCustomers}
+              weekly={analytics.weekly}
+              monthly={analytics.monthly}
+              loading={analyticsLoading}
+              onOpenCustomerHistory={openCustomerHistory}
+              isSmallMobile={isSmallMobile}
+            />
 
-        <Box sx={{ minWidth: isMobile ? '800px' : 'auto' }}>
-          <AnalyticsSection
-            topCustomers={analytics.topCustomers}
-            weekly={analytics.weekly}
-            monthly={analytics.monthly}
-            loading={analyticsLoading}
-            onOpenCustomerHistory={openCustomerHistory}
-            isSmallMobile={isSmallMobile}
-          />
-        </Box>
+            <RecentTransactionsTable
+              rows={recent}
+              loading={loading}
+              isSmallMobile={isSmallMobile}
+            />
+          </Stack>
 
-        <Box sx={{ minWidth: isMobile ? '1000px' : 'auto' }}>
-          <RecentTransactionsTable
-            rows={recent}
-            loading={loading}
-            isSmallMobile={isSmallMobile}
-          />
+          {/* Right Column - Business Intelligence */}
+          <Stack spacing={3}>
+            <BusinessIntelligenceCard
+              data={businessIntelligence}
+              loading={advancedLoading}
+            />
+            
+            {/* You can add more components here in the future */}
+          </Stack>
         </Box>
 
         <CustomerHistoryModal

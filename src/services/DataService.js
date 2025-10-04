@@ -40,6 +40,11 @@ function rowsToStockObject(rows) {
   return obj;
 }
 
+// Helper untuk mendapatkan tanggal hari ini dalam format YYYY-MM-DD
+function todayStr() {
+  return toISOStringWithOffset(new Date()).slice(0, 10);
+}
+
 export const DataService = {
   // ====== STOK ======
   async loadStocks() {
@@ -855,7 +860,110 @@ export const DataService = {
     }));
   },
 
+  // ====== FUNGSI BARU: STOCK PREDICTION ======
+  async getStockPrediction(analysisDays = 30) {
+    try {
+      const { data, error } = await supabase.rpc("get_stock_prediction", {
+        p_analysis_days: analysisDays
+      });
 
+      if (error) throw new Error(errMsg(error, "Gagal mengambil prediksi stok"));
+      
+      // Format response untuk konsistensi
+      return {
+        prediction: data?.prediction || {
+          days_remaining_isi: 0,
+          restock_recommendation: "STOCK_AMAN",
+          estimated_depletion_date: null
+        },
+        current_stock: data?.current_stock || { ISI: 0, KOSONG: 0 },
+        sales_analysis: data?.sales_analysis || {
+          avg_daily_sales: 0,
+          analysis_period_days: analysisDays
+        }
+      };
+    } catch (error) {
+      console.error('[getStockPrediction] Error:', error);
+      throw new Error(errMsg(error, "Gagal menghitung prediksi stok"));
+    }
+  },
+
+  // ====== FUNGSI BARU: BUSINESS INTELLIGENCE ======
+  async getBusinessIntelligence(fromDate = null, toDate = null) {
+    try {
+      // Default ke 30 hari terakhir jika tidak ada parameter
+      const defaultTo = new Date();
+      const defaultFrom = new Date();
+      defaultFrom.setDate(defaultFrom.getDate() - 30);
+
+      const from = fromDate || toISOStringWithOffset(defaultFrom).slice(0, 10);
+      const to = toDate || toISOStringWithOffset(defaultTo).slice(0, 10);
+
+      const { data, error } = await supabase.rpc("get_business_intelligence", {
+        p_from_date: from,
+        p_to_date: to
+      });
+
+      if (error) throw new Error(errMsg(error, "Gagal mengambil business intelligence"));
+
+      // Format response dengan fallback values
+      return data || {
+        atv: 0,
+        growth_metrics: {
+          revenue_growth: 0,
+          transaction_growth: 0,
+          customer_growth: 0
+        },
+        insights: [],
+        period: {
+          from,
+          to
+        }
+      };
+    } catch (error) {
+      console.error('[getBusinessIntelligence] Error:', error);
+      throw new Error(errMsg(error, "Gagal menghitung business intelligence"));
+    }
+  },
+
+  // ====== FUNGSI BARU: BUSINESS INTELLIGENCE BULAN INI ======
+  async getCurrentMonthBusinessIntelligence() {
+    try {
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      
+      const from = toISOStringWithOffset(startOfMonth).slice(0, 10);
+      const to = toISOStringWithOffset(endOfMonth).slice(0, 10);
+
+      return await this.getBusinessIntelligence(from, to);
+    } catch (error) {
+      console.error('[getCurrentMonthBusinessIntelligence] Error:', error);
+      throw new Error(errMsg(error, "Gagal menghitung business intelligence bulan ini"));
+    }
+  },
+
+  // ====== FUNGSI BARU: BUSINESS INTELLIGENCE MINGGU INI ======
+  async getCurrentWeekBusinessIntelligence() {
+    try {
+      const now = new Date();
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay()); // Minggu sebagai awal minggu
+      startOfWeek.setHours(0, 0, 0, 0);
+      
+      const endOfWeek = new Date(now);
+      endOfWeek.setDate(now.getDate() + (6 - now.getDay())); // Sabtu sebagai akhir minggu
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      const from = toISOStringWithOffset(startOfWeek).slice(0, 10);
+      const to = toISOStringWithOffset(endOfWeek).slice(0, 10);
+
+      return await this.getBusinessIntelligence(from, to);
+    } catch (error) {
+      console.error('[getCurrentWeekBusinessIntelligence] Error:', error);
+      throw new Error(errMsg(error, "Gagal menghitung business intelligence minggu ini"));
+    }
+  },
 
 }; // << tutup DataService
 
@@ -1431,5 +1539,3 @@ DataService.getFinancialComparison = async function ({ currentFrom, currentTo, p
     throw new Error(errMsg(error, "Gagal menghitung perbandingan keuangan"));
   }
 };
-
-
