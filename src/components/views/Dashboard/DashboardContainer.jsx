@@ -19,7 +19,7 @@ import { fmtIDR, todayStr } from "../../../utils/helpers.js";
 // Sections
 import HeaderSection from "./sections/HeaderSection.jsx";
 import SummaryTiles from "./sections/SummaryTiles.jsx";
-// ⛔️ DIHAPUS: import StockConditionCard from "./sections/StockConditionCard.jsx";
+import StockConditionCard from "./sections/StockConditionCard.jsx";
 import FinancialSummaryCard from "./sections/FinancialSummaryCard.jsx";
 import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
 import AnalyticsSection from "./sections/AnalyticsSection.jsx";
@@ -146,7 +146,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
         if (!alive) return;
         setFinancialSummary(summary);
       } catch (error) {
-        // Fallback manual
+        // Fallback manual (tetap di sini)
         try {
           const salesData = await DataService.getSalesHistory({
             from: "2000-01-01",
@@ -221,7 +221,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
     };
   }, []);
 
-  // 5) 7 days recompute — cukup saat recent berubah
+  // 5) 7 days recompute
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -234,7 +234,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
       } catch (e) { /* noop */ }
     })();
     return () => { alive = false; };
-  }, [recent]);
+  }, [recent, today, stocks]);
 
   // 6) Analytics
   useEffect(() => {
@@ -322,7 +322,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
       sx={{
         width: "100%",
         maxWidth: "100%",
-        overflowX: "hidden", // ⬅️ halaman terkunci dari scroll horizontal
+        overflowX: "hidden",       // ⬅️ kunci horizontal scroll untuk halaman
         minHeight: "100vh",
         backgroundColor: theme.palette.background.default,
       }}
@@ -332,16 +332,15 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
 
         {err && <ErrorBanner message={err} />}
 
-        {/* KPI di paling atas; compact di mobile, lengkap di tablet/desktop */}
+        {/* KPI di paling atas; tetap ringkas di mobile */}
         <KpiStrip
           financialData={financialSummary}
           stockPrediction={stockPrediction}
           businessIntel={businessIntelligence}
           loading={loading || advancedLoading}
-          // monthlyTarget: bisa dipasang dari pengaturan jika sudah tersedia
+          // Jika KpiStrip mendukung variant/accordion, bisa tambahkan props di sini
         />
 
-        {/* Tiles ringkas (tetap) */}
         <SummaryTiles
           isi={isi}
           kosong={kosong}
@@ -351,7 +350,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           loading={loading}
         />
 
-        {/* Grid utama */}
+        {/* Grid utama: 1 kolom di mobile */}
         <Box
           sx={{
             display: "grid",
@@ -361,7 +360,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
         >
           {/* Kolom kiri */}
           <Stack spacing={3}>
-            {/* ⛔️ Kondisi Stok dihapus */}
+            <StockConditionCard isi={isi} kosong={kosong} loading={loading} />
             <StockPredictionCard data={stockPrediction} loading={advancedLoading} />
             <FinancialSummaryCard
               omzet={financialSummary.omzet}
@@ -377,23 +376,35 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           {/* Kolom tengah */}
           <Stack spacing={3}>
             <SevenDaysChartCard series={series7} loading={loading} />
+
             <AnalyticsSection
               topCustomers={analytics.topCustomers}
               weekly={analytics.weekly}
               monthly={analytics.monthly}
-              yoy={analytics.yoy}                
               loading={analyticsLoading}
               onOpenCustomerHistory={openCustomerHistory}
               isSmallMobile={isSmallMobile}
             />
-            {/* TABEL: hanya bagian ini yang boleh scroll-x */}
-            <Box className="table-scroll nice-scroll" sx={{ mx: -2, px: 2 }}>
-              <RecentTransactionsTable rows={recent} loading={loading} isSmallMobile={isSmallMobile} />
+
+            {/* TABEL: bungkus dengan scroll-x agar yang bisa geser hanya tabel */}
+            <Box
+              sx={{
+                mx: -2, px: 2,
+                overflowX: "auto",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              <RecentTransactionsTable
+                rows={recent}
+                loading={loading}
+                isSmallMobile={isSmallMobile}
+              />
             </Box>
           </Stack>
 
           {/* Kolom kanan */}
           <Stack spacing={3}>
+            {/* Di mobile jadikan Accordion agar ringkas */}
             {isMobile ? (
               <Accordion elevation={0} disableGutters>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -402,11 +413,17 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <BusinessIntelligenceCard data={businessIntelligence} loading={advancedLoading} />
+                  <BusinessIntelligenceCard
+                    data={businessIntelligence}
+                    loading={advancedLoading}
+                  />
                 </AccordionDetails>
               </Accordion>
             ) : (
-              <BusinessIntelligenceCard data={businessIntelligence} loading={advancedLoading} />
+              <BusinessIntelligenceCard
+                data={businessIntelligence}
+                loading={advancedLoading}
+              />
             )}
           </Stack>
         </Box>

@@ -1,47 +1,35 @@
 import React from "react";
-import { Box, Stack, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 
-function fmtDateLong(d = new Date()) {
-  try {
-    return d.toLocaleDateString("id-ID", {
-      weekday: "long",
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return "—";
-  }
-}
-
-export default function HeaderSection() {
-  const now = new Date();
+function HeaderSection() {
+  const theme = useTheme();
 
   return (
-    <Box
-      component="header"
-      className="sticky"
-      sx={{
-        position: "sticky",
-        top: 0,
-        zIndex: 5,
-        bgcolor: "background.paper",
-        borderBottom: "1px solid",
-        borderColor: "divider",
-        px: { xs: 2, md: 3 },
-        py: 1.5,
-        borderRadius: 2,
-      }}
-    >
-      <Stack direction="row" alignItems="baseline" spacing={1}>
-        <Typography variant="h5" fontWeight={800}>
-          Dashboard
-        </Typography>
-        <Box sx={{ flex: 1 }} />
-        <Typography variant="caption" color="text.secondary">
-          {fmtDateLong(now)} · update {now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-        </Typography>
-      </Stack>
+    <Box>
+      <Typography 
+        variant="h3" 
+        fontWeight={800} 
+        gutterBottom
+        sx={{ 
+          typography: { xs: "h4", sm: "h3" },
+          background: `linear(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+          backgroundClip: 'text',
+          WebkitBackgroundClip: 'text',
+          color: 'transparent',
+        }}
+      >
+        Dashboard
+      </Typography>
+      <Typography 
+        color="text.secondary" 
+        variant="h6"
+        sx={{ typography: { xs: "body1", sm: "h6" } }}
+      >
+        Ringkasan performa bisnis dan analitik penjualan
+      </Typography>
     </Box>
   );
 }
+
+export default HeaderSection;

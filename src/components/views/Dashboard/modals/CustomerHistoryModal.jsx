@@ -1,4 +1,3 @@
-// src/components/views/Dashboard/modals/CustomerHistoryModal.jsx
 import React from "react";
 import {
   Dialog,

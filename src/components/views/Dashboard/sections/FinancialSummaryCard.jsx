@@ -1,85 +1,76 @@
 import React from "react";
-import {
-  Card,
-  CardHeader,
-  CardContent,
-  Typography,
-  Stack,
-  Skeleton,
-  Box,
-} from "@mui/material";
-import PaidIcon from "@mui/icons-material/Paid";
+import { Card, CardHeader, CardContent, Stack, Box, Typography, Divider, Skeleton } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import { fmtIDR } from "../../../../utils/helpers.js";
+import RowKV from "../ui/RowKV.jsx";
 
-function fmtIDR(n = 0) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    maximumFractionDigits: 0,
-    minimumFractionDigits: 0,
-  }).format(Number(n) || 0);
-}
-
-/**
- * Props:
- * - omzet, hpp, laba, margin, transactionCount, totalQty
- * - loading?: boolean
- */
-export default function FinancialSummaryCard({
-  omzet = 0,
-  hpp = 0,
-  laba = 0,
-  margin = 0,
-  transactionCount = 0,
-  totalQty = 0,
-  loading = false,
-}) {
-  const Row = ({ k, v }) => (
-    <Stack direction="row" alignItems="baseline" sx={{ py: 0.5 }}>
-      <Typography variant="body2" color="text.secondary">
-        {k}
-      </Typography>
-      <Box sx={{ flex: 1 }} />
-      <Typography
-        variant="body2"
-        fontWeight={800}
-        sx={{ fontVariantNumeric: "tabular-nums" }}
-      >
-        {v}
-      </Typography>
-    </Stack>
-  );
+function FinancialSummaryCard({ omzet, hpp, laba, margin, transactionCount, totalQty, loading = false }) {
+  const theme = useTheme();
 
   return (
-    <Card variant="outlined" sx={{ borderRadius: 2 }}>
+    <Card sx={{
+      background: `linear(135deg, ${alpha(theme.palette.success.main, 0.05)} 0%, ${alpha(theme.palette.info.main, 0.05)} 100%)`,
+      border: `1px solid ${alpha(theme.palette.success.main, 0.1)}`
+    }}>
       <CardHeader
         title={
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <PaidIcon fontSize="small" color="success" />
-            <Typography variant="h6" fontWeight={800}>
-              Ringkasan Keuangan (MTD)
-            </Typography>
-          </Stack>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <AccountBalanceWalletIcon color="success" />
+            <Typography variant="h6" fontWeight={700}>Ringkasan Keuangan</Typography>
+          </Box>
         }
-        sx={{ pb: 0 }}
+        subheader="Akumulasi semua transaksi dibayar"
+        sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
       />
-      <CardContent sx={{ pt: 2 }}>
+      <CardContent>
         {loading ? (
-          <Stack spacing={1}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} variant="rectangular" height={16} sx={{ borderRadius: 1 }} />
-            ))}
+          <Stack spacing={2}>
+            <Skeleton height={32} />
+            <Skeleton height={32} />
+            <Skeleton height={32} />
+            <Skeleton height={32} />
           </Stack>
         ) : (
-          <Stack spacing={0.5}>
-            <Row k="Omzet" v={fmtIDR(omzet)} />
-            <Row k="HPP" v={fmtIDR(hpp)} />
-            <Row k="Laba" v={fmtIDR(laba)} />
-            <Row k="Margin" v={`${Math.round(margin)}%`} />
-            <Row k="Transaksi" v={transactionCount} />
-            <Row k="Qty" v={totalQty} />
+          <Stack spacing={2}>
+            <RowKV 
+              k="Omzet (Tunai + LUNAS)" 
+              v={fmtIDR(omzet)} 
+              vSx={{ fontWeight: 700, color: 'success.main' }}
+            />
+            <RowKV 
+              k="Harga Pokok Penjualan" 
+              v={`- ${fmtIDR(hpp)}`} 
+              vSx={{ fontWeight: 600, color: 'error.main' }}
+            />
+            <Divider />
+            <RowKV 
+              k="Laba Kotor" 
+              v={fmtIDR(laba)} 
+              vSx={{ 
+                fontWeight: 800, 
+                fontSize: '1.2rem',
+                color: laba >= 0 ? 'success.main' : 'error.main' 
+              }}
+            />
+            <RowKV 
+              k="Margin Laba" 
+              v={`${margin}%`}
+              vSx={{ 
+                fontWeight: 700, 
+                color: margin >= 0 ? 'info.main' : 'error.main' 
+              }}
+            />
+            <Box sx={{ mt: 1, p: 2, bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 1 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                {transactionCount} transaksi • {totalQty} tabung
+              </Typography>
+            </Box>
           </Stack>
         )}
       </CardContent>
     </Card>
   );
 }
+
+export default FinancialSummaryCard;

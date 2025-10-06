@@ -60,7 +60,7 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
 
   if (loading) {
     return (
-      <Card sx={{ minWidth: 275, height: '100%', borderRadius: 2 }}>
+      <Card sx={{ minWidth: 275, height: '100%' }}>
         <CardContent>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
             <Typography variant="h6" component="h2">
@@ -83,7 +83,7 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
 
   if (error) {
     return (
-      <Card sx={{ minWidth: 275, height: '100%', borderRadius: 2 }}>
+      <Card sx={{ minWidth: 275, height: '100%' }}>
         <CardContent>
           <Typography variant="h6" component="h2" gutterBottom>
             Business Intelligence
@@ -100,7 +100,7 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
 
   if (!data || !isValidBusinessData(data)) {
     return (
-      <Card sx={{ minWidth: 275, height: '100%', borderRadius: 2 }}>
+      <Card sx={{ minWidth: 275, height: '100%' }}>
         <CardContent>
           <Typography variant="h6" component="h2" gutterBottom>
             Business Intelligence
@@ -267,7 +267,7 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
   const dynamicInsights = insights.length > 0 ? insights : generateDynamicInsights();
 
   return (
-    <Card sx={{ minWidth: 275, height: '100%', borderRadius: 2 }}>
+    <Card sx={{ minWidth: 275, height: '100%' }}>
       <CardContent>
         <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
           <Box>
@@ -291,7 +291,7 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
 
         <Stack spacing={2}>
           {/* ATV Section */}
-          <Card variant="outlined" sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
+          <Card variant="outlined" sx={{ p: 2, bgcolor: 'background.default' }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
               <Tooltip title="Average Transaction Value - Nilai rata-rata setiap transaksi">
                 <Box display="flex" alignItems="center" gap={1}>
@@ -319,7 +319,7 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
             <Grid container spacing={1}>
               <Grid item xs={4}>
                 <Tooltip title="Pertumbuhan pendapatan dibandingkan periode sebelumnya">
-                  <Card variant="outlined" sx={{ p: 1, textAlign: 'center', borderRadius: 2 }}>
+                  <Card variant="outlined" sx={{ p: 1, textAlign: 'center' }}>
                     <AttachMoneyIcon 
                       fontSize="small"
                       color={
@@ -347,7 +347,7 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
 
               <Grid item xs={4}>
                 <Tooltip title="Pertumbuhan jumlah transaksi dibandingkan periode sebelumnya">
-                  <Card variant="outlined" sx={{ p: 1, textAlign: 'center', borderRadius: 2 }}>
+                  <Card variant="outlined" sx={{ p: 1, textAlign: 'center' }}>
                     <ReceiptIcon 
                       fontSize="small"
                       color={
@@ -375,7 +375,7 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
 
               <Grid item xs={4}>
                 <Tooltip title="Pertumbuhan jumlah customer aktif dibandingkan periode sebelumnya">
-                  <Card variant="outlined" sx={{ p: 1, textAlign: 'center', borderRadius: 2 }}>
+                  <Card variant="outlined" sx={{ p: 1, textAlign: 'center' }}>
                     <PeopleIcon 
                       fontSize="small"
                       color={
@@ -404,7 +404,7 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
           </Box>
 
           {/* Comparative Analysis */}
-          <Card variant="outlined" sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
+          <Card variant="outlined" sx={{ p: 2, bgcolor: 'background.default' }}>
             <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
               Analisis Komparatif
             </Typography>

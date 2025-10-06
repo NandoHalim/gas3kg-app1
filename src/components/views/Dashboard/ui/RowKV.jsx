@@ -1,61 +1,17 @@
-// src/components/views/Dashboard/ui/RowKV.jsx
 import React from "react";
-import { Stack, Typography, Skeleton, IconButton, Tooltip } from "@mui/material";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import { Stack, Typography } from "@mui/material";
 
-/**
- * Baris key–value untuk ringkasan.
- *
- * Props:
- * - k: string | ReactNode (label kiri)
- * - v: string | number | ReactNode (nilai kanan)
- * - loading?: boolean
- * - copyable?: boolean  // kalau true & v string → tampil ikon copy
- * - mono?: boolean      // font monospace untuk angka/nilai
- */
-export default function RowKV({ k, v, loading = false, copyable = false, mono = false }) {
-  const canCopy = copyable && typeof v === "string" && v.length > 0;
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(v);
-    } catch {
-      // no-op
-    }
-  };
-
-  if (loading) {
-    return (
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ py: 0.5 }}>
-        <Skeleton variant="text" width={120} />
-        <Skeleton variant="text" width={80} sx={{ ml: "auto" }} />
-      </Stack>
-    );
-  }
-
+function RowKV({ k, v, vSx }) {
   return (
-    <Stack direction="row" alignItems="center" spacing={1} sx={{ py: 0.5 }}>
-      <Typography variant="body2" color="text.secondary">
+    <Stack direction="row" justifyContent="space-between" alignItems="center">
+      <Typography variant="body1" color="text.secondary" fontWeight={500}>
         {k}
       </Typography>
-      <Typography
-        variant="body2"
-        fontWeight={800}
-        sx={{
-          ml: "auto",
-          fontVariantNumeric: "tabular-nums",
-          ...(mono ? { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" } : null),
-        }}
-      >
+      <Typography variant="body1" sx={{ fontWeight: 600, ...vSx }}>
         {v}
       </Typography>
-      {canCopy && (
-        <Tooltip title="Salin">
-          <IconButton size="small" onClick={copy} edge="end" sx={{ ml: 0.5 }}>
-            <ContentCopyIcon fontSize="inherit" />
-          </IconButton>
-        </Tooltip>
-      )}
     </Stack>
   );
 }
+
+export default RowKV;
