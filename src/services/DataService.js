@@ -1539,3 +1539,41 @@ DataService.getFinancialComparison = async function ({ currentFrom, currentTo, p
     throw new Error(errMsg(error, "Gagal menghitung perbandingan keuangan"));
   }
 };
+
+// ====== FUNGSI BARU: BUSINESS INTELLIGENCE WRAPPERS ======
+DataService.getCurrentMonthBusinessIntelligence = async function() {
+  try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    const from = toISOStringWithOffset(startOfMonth).slice(0, 10);
+    const to = toISOStringWithOffset(endOfMonth).slice(0, 10);
+
+    return await this.getBusinessIntelligence(from, to);
+  } catch (error) {
+    console.error('[getCurrentMonthBusinessIntelligence] Error:', error);
+    throw new Error(errMsg(error, "Gagal mengambil business intelligence bulan ini"));
+  }
+};
+
+DataService.getCurrentWeekBusinessIntelligence = async function() {
+  try {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    
+    const endOfWeek = new Date(now);
+    endOfWeek.setDate(now.getDate() + (6 - now.getDay()));
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const from = toISOStringWithOffset(startOfWeek).slice(0, 10);
+    const to = toISOStringWithOffset(endOfWeek).slice(0, 10);
+
+    return await this.getBusinessIntelligence(from, to);
+  } catch (error) {
+    console.error('[getCurrentWeekBusinessIntelligence] Error:', error);
+    throw new Error(errMsg(error, "Gagal mengambil business intelligence minggu ini"));
+  }
+};

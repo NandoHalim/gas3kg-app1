@@ -19,10 +19,45 @@ import {
   Receipt as ReceiptIcon,
   AttachMoney as AttachMoneyIcon,
   Analytics as AnalyticsIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  Lightbulb as LightbulbIcon
 } from '@mui/icons-material';
 
 const BusinessIntelligenceCard = ({ data, loading, error }) => {
+  // Safe data extraction dengan default values
+  const safeData = data || {};
+  const atv = safeData.atv || 0;
+  const growth_metrics = safeData.growth_metrics || {};
+  const insights = safeData.insights || [];
+  const period = safeData.period || {};
+  
+  const {
+    revenue_growth = 0,
+    transaction_growth = 0, 
+    customer_growth = 0
+  } = growth_metrics;
+
+  // Validasi data structure
+  const isValidBusinessData = (data) => {
+    if (!data) return false;
+    
+    try {
+      return (
+        typeof data.atv === 'number' &&
+        data.growth_metrics &&
+        typeof data.growth_metrics.revenue_growth === 'number' &&
+        typeof data.growth_metrics.transaction_growth === 'number' &&
+        typeof data.growth_metrics.customer_growth === 'number' &&
+        Array.isArray(data.insights) &&
+        data.period &&
+        typeof data.period.from === 'string' &&
+        typeof data.period.to === 'string'
+      );
+    } catch {
+      return false;
+    }
+  };
+
   if (loading) {
     return (
       <Card sx={{ minWidth: 275, height: '100%' }}>
@@ -63,7 +98,7 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
     );
   }
 
-  if (!data) {
+  if (!data || !isValidBusinessData(data)) {
     return (
       <Card sx={{ minWidth: 275, height: '100%' }}>
         <CardContent>
@@ -72,16 +107,15 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
           </Typography>
           <Alert severity="info">
             <Typography variant="body2">
-              Data analisis bisnis tidak tersedia saat ini.
+              Data analisis bisnis tidak tersedia atau format tidak valid.
+              {!data && ' Data kosong.'}
+              {data && !isValidBusinessData(data) && ' Struktur data tidak sesuai.'}
             </Typography>
           </Alert>
         </CardContent>
       </Card>
     );
   }
-
-  const { atv, growth_metrics, insights, period } = data;
-  const { revenue_growth = 0, transaction_growth = 0, customer_growth = 0 } = growth_metrics || {};
 
   // Format currency
   const formatCurrency = (amount) => {
@@ -119,7 +153,7 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
   };
 
   const formatPeriod = (dateString) => {
-    if (!dateString) return '';
+    if (!dateString) return 'Tidak tersedia';
     try {
       return new Date(dateString).toLocaleDateString('id-ID', {
         day: 'numeric',
@@ -131,37 +165,106 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
     }
   };
 
-  // Generate performance summary
-  const getPerformanceSummary = () => {
-    if (revenue_growth > 10 && transaction_growth > 5) {
-      return {
-        severity: "success",
-        message: "Performansi bisnis sangat baik dengan pertumbuhan pendapatan dan transaksi yang kuat."
-      };
-    } else if (revenue_growth > 0 && transaction_growth > 0) {
-      return {
-        severity: "success",
-        message: "Bisnis menunjukkan pertumbuhan positif dalam pendapatan dan transaksi."
-      };
-    } else if (revenue_growth > 0 && transaction_growth <= 0) {
-      return {
-        severity: "warning",
-        message: "Pendapatan tumbuh namun jumlah transaksi menurun. Perhatikan nilai transaksi rata-rata."
-      };
-    } else if (revenue_growth <= 0 && transaction_growth > 0) {
-      return {
-        severity: "warning",
-        message: "Jumlah transaksi meningkat namun pendapatan menurun. Perhatikan harga dan diskon."
-      };
-    } else {
-      return {
-        severity: "error",
-        message: "Perlu perhatian khusus. Baik pendapatan maupun transaksi menunjukkan penurunan."
-      };
+  // Enhanced period formatting dengan durasi
+  const formatPeriodWithDuration = () => {
+    if (!period.from || !period.to) return 'Periode tidak tersedia';
+    
+    try {
+      const fromDate = new Date(period.from);
+      const toDate = new Date(period.to);
+      const durationDays = Math.ceil((toDate - fromDate) / (1000 * 60 * 60 * 24)) + 1;
+      
+      return `${formatPeriod(period.from)} - ${formatPeriod(period.to)} (${durationDays} hari)`;
+    } catch {
+      return `${period.from} - ${period.to}`;
     }
   };
 
-  const performanceSummary = getPerformanceSummary();
+  // Enhanced performance analysis
+  const getEnhancedPerformanceSummary = () => {
+    const conditions = [
+      { 
+        test: () => revenue_growth > 15 && transaction_growth > 10 && customer_growth > 5,
+        severity: "success",
+        message: "🔥 Performa luar biasa! Semua metrik menunjukkan pertumbuhan kuat.",
+        recommendation: "Pertahankan momentum dan ekspansi bisnis"
+      },
+      { 
+        test: () => revenue_growth > 10 && transaction_growth > 5,
+        severity: "success",
+        message: "📈 Bisnis tumbuh sangat sehat dengan peningkatan signifikan.",
+        recommendation: "Tingkatkan kapasitas untuk menangani pertumbuhan"
+      },
+      { 
+        test: () => revenue_growth > 5 && transaction_growth > 0,
+        severity: "success", 
+        message: "✅ Bisnis tumbuh stabil dengan trend positif.",
+        recommendation: "Fokus pada retensi customer yang ada"
+      },
+      { 
+        test: () => revenue_growth > 0 && transaction_growth <= 0 && atv > 0,
+        severity: "warning",
+        message: "⚠️ Nilai transaksi meningkat tapi volume menurun.",
+        recommendation: "Tingkatkan frekuensi pembelian customer"
+      },
+      { 
+        test: () => revenue_growth <= 0 && transaction_growth > 0,
+        severity: "warning",
+        message: "📉 Volume transaksi naik tapi pendapatan turun.",
+        recommendation: "Review pricing strategy dan diskon"
+      },
+      { 
+        test: () => revenue_growth <= 0 && transaction_growth <= 0 && customer_growth > 0,
+        severity: "warning",
+        message: "👥 Customer base tumbuh tapi konversi menurun.",
+        recommendation: "Tingkatkan efektivitas penjualan"
+      },
+      { 
+        test: () => revenue_growth <= 0 && transaction_growth <= 0 && customer_growth <= 0,
+        severity: "error",
+        message: "🚨 Perlu perhatian serius. Semua metrik utama menurun.",
+        recommendation: "Lakukan analisis mendalam dan corrective action"
+      }
+    ];
+
+    const matchedCondition = conditions.find(condition => condition.test()) || conditions[conditions.length - 1];
+    
+    return matchedCondition;
+  };
+
+  // Generate dynamic insights based on data
+  const generateDynamicInsights = () => {
+    const dynamicInsights = [];
+    
+    if (atv > 500000) {
+      dynamicInsights.push("🎯 ATV tinggi menunjukkan efektivitas penjualan premium dan upselling");
+    } else if (atv < 200000) {
+      dynamicInsights.push("💡 Potensi peningkatan ATV melalui bundling dan cross-selling");
+    }
+    
+    if (customer_growth > 10) {
+      dynamicInsights.push("👥 Pertumbuhan customer yang kuat - pertahankan strategi akuisisi");
+    } else if (customer_growth < 0) {
+      dynamicInsights.push("📉 Perlu strategi retensi customer untuk mengurangi churn");
+    }
+    
+    if (revenue_growth > transaction_growth) {
+      dynamicInsights.push("💰 Peningkatan nilai transaksi lebih cepat dari volume - pricing strategy efektif");
+    }
+    
+    if (transaction_growth > revenue_growth) {
+      dynamicInsights.push("📊 Volume transaksi tumbuh lebih cepat - pertimbangkan strategi upselling");
+    }
+
+    if (revenue_growth > 0 && customer_growth <= 0) {
+      dynamicInsights.push("⭐ Existing customers memberikan nilai lebih - fokus pada loyalitas");
+    }
+    
+    return dynamicInsights.length > 0 ? dynamicInsights : ["📈 Pertahankan konsistensi operasional bisnis"];
+  };
+
+  const performanceSummary = getEnhancedPerformanceSummary();
+  const dynamicInsights = insights.length > 0 ? insights : generateDynamicInsights();
 
   return (
     <Card sx={{ minWidth: 275, height: '100%' }}>
@@ -172,10 +275,10 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
               Business Intelligence
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Analisis performa bisnis
+              Analisis performa bisnis komprehensif
             </Typography>
           </Box>
-          <Tooltip title={`Periode analisis: ${formatPeriod(period?.from)} - ${formatPeriod(period?.to)}`}>
+          <Tooltip title={formatPeriodWithDuration()}>
             <Chip 
               label="Analisis"
               color="primary"
@@ -300,48 +403,123 @@ const BusinessIntelligenceCard = ({ data, loading, error }) => {
             </Grid>
           </Box>
 
-          {/* Insights */}
-          {insights && insights.length > 0 && (
-            <Box>
-              <Box display="flex" alignItems="center" gap={1} mb={1}>
-                <AnalyticsIcon fontSize="small" color="primary" />
-                <Typography variant="subtitle2" fontWeight="bold" color="text.primary">
-                  Insights & Rekomendasi
+          {/* Comparative Analysis */}
+          <Card variant="outlined" sx={{ p: 2, bgcolor: 'background.default' }}>
+            <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+              Analisis Komparatif
+            </Typography>
+            <Stack spacing={1}>
+              <Box display="flex" justifyContent="space-between">
+                <Typography variant="caption">vs Periode Sebelumnya:</Typography>
+                <Chip 
+                  label={
+                    revenue_growth > 0 ? "Lebih Baik" : 
+                    revenue_growth < 0 ? "Menurun" : "Stabil"
+                  }
+                  color={
+                    revenue_growth > 0 ? "success" : 
+                    revenue_growth < 0 ? "error" : "default"
+                  }
+                  size="small"
+                />
+              </Box>
+              <Box display="flex" justifyContent="space-between">
+                <Typography variant="caption">Tren Pasar:</Typography>
+                <Typography variant="caption" fontWeight="bold">
+                  {revenue_growth > 10 ? "Ekspansif" : revenue_growth > 0 ? "Stabil" : "Kontraksi"}
                 </Typography>
               </Box>
-              <Stack spacing={1}>
-                {insights.map((insight, index) => (
-                  <Alert 
-                    key={index}
-                    severity="info"
-                    sx={{ 
-                      '& .MuiAlert-message': { 
-                        fontSize: '0.8rem',
-                        lineHeight: 1.4
-                      }
-                    }}
-                  >
-                    {insight}
-                  </Alert>
-                ))}
-              </Stack>
+              <Box display="flex" justifyContent="space-between">
+                <Typography variant="caption">Health Score:</Typography>
+                <Typography variant="caption" fontWeight="bold" color={
+                  revenue_growth > 10 && transaction_growth > 5 ? "success.main" :
+                  revenue_growth > 0 ? "warning.main" : "error.main"
+                }>
+                  {revenue_growth > 10 && transaction_growth > 5 ? "Excellent" :
+                   revenue_growth > 0 ? "Good" : "Needs Attention"}
+                </Typography>
+              </Box>
+            </Stack>
+          </Card>
+
+          {/* Actionable Recommendations */}
+          <Box>
+            <Box display="flex" alignItems="center" gap={1} mb={1}>
+              <LightbulbIcon fontSize="small" color="warning" />
+              <Typography variant="subtitle2" fontWeight="bold" color="text.primary">
+                Rekomendasi Tindakan
+              </Typography>
             </Box>
-          )}
+            <Stack spacing={1}>
+              {revenue_growth < 5 && (
+                <Alert severity="warning" sx={{ fontSize: '0.8rem', py: 0.5 }}>
+                  💡 Pertimbangkan promo untuk meningkatkan volume penjualan
+                </Alert>
+              )}
+              {customer_growth < 2 && (
+                <Alert severity="info" sx={{ fontSize: '0.8rem', py: 0.5 }}>
+                  💡 Fokus pada program loyalitas untuk retensi customer
+                </Alert>
+              )}
+              {atv < 300000 && (
+                <Alert severity="info" sx={{ fontSize: '0.8rem', py: 0.5 }}>
+                  💡 Implementasi upselling dan cross-selling untuk meningkatkan ATV
+                </Alert>
+              )}
+              {transaction_growth < revenue_growth && (
+                <Alert severity="info" sx={{ fontSize: '0.8rem', py: 0.5 }}>
+                  💡 Optimasi konversi untuk meningkatkan volume transaksi
+                </Alert>
+              )}
+            </Stack>
+          </Box>
+
+          {/* Insights */}
+          <Box>
+            <Box display="flex" alignItems="center" gap={1} mb={1}>
+              <AnalyticsIcon fontSize="small" color="primary" />
+              <Typography variant="subtitle2" fontWeight="bold" color="text.primary">
+                Insights & Rekomendasi
+              </Typography>
+            </Box>
+            <Stack spacing={1}>
+              {dynamicInsights.map((insight, index) => (
+                <Alert 
+                  key={index}
+                  severity="info"
+                  sx={{ 
+                    '& .MuiAlert-message': { 
+                      fontSize: '0.8rem',
+                      lineHeight: 1.4
+                    },
+                    py: 0.5
+                  }}
+                >
+                  {insight}
+                </Alert>
+              ))}
+            </Stack>
+          </Box>
 
           {/* Performance Summary */}
           <Alert 
             severity={performanceSummary.severity}
             sx={{ mt: 1 }}
           >
-            <Typography variant="body2" fontWeight="medium">
-              {performanceSummary.message}
-            </Typography>
+            <Box>
+              <Typography variant="body2" fontWeight="medium">
+                {performanceSummary.message}
+              </Typography>
+              <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                {performanceSummary.recommendation}
+              </Typography>
+            </Box>
           </Alert>
 
           {/* Period Info */}
           <Box sx={{ textAlign: 'center', pt: 1 }}>
             <Typography variant="caption" color="text.secondary">
-              Periode: {formatPeriod(period?.from)} - {formatPeriod(period?.to)}
+              {formatPeriodWithDuration()}
             </Typography>
           </Box>
         </Stack>
