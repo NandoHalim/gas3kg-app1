@@ -221,7 +221,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
     };
   }, []);
 
-  // 5) 7 days recompute
+  // 5) 7 days recompute — cukup saat recent berubah
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -234,7 +234,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
       } catch (e) { /* noop */ }
     })();
     return () => { alive = false; };
-  }, [recent, today, stocks]);
+  }, [recent]);
 
   // 6) Analytics
   useEffect(() => {
@@ -381,12 +381,13 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
               topCustomers={analytics.topCustomers}
               weekly={analytics.weekly}
               monthly={analytics.monthly}
+              yoy={analytics.yoy}                 {/* ⬅️ aktifkan YoY chip */}
               loading={analyticsLoading}
               onOpenCustomerHistory={openCustomerHistory}
               isSmallMobile={isSmallMobile}
             />
             {/* TABEL: hanya bagian ini yang boleh scroll-x */}
-            <Box sx={{ mx: -2, px: 2, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            <Box className="table-scroll nice-scroll" sx={{ mx: -2, px: 2 }}>
               <RecentTransactionsTable rows={recent} loading={loading} isSmallMobile={isSmallMobile} />
             </Box>
           </Stack>
