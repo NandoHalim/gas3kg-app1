@@ -1,11 +1,22 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Box, Stack, useTheme, useMediaQuery } from "@mui/material";
+import {
+  Box,
+  Stack,
+  useTheme,
+  useMediaQuery,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Typography,
+} from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+
 import { DataService } from "../../../services/DataService.js";
 import { supabase } from "../../../lib/supabase.js";
 import { useSettings } from "../../../context/SettingsContext.jsx";
 import { fmtIDR, todayStr } from "../../../utils/helpers.js";
 
-// Import sections
+// Sections
 import HeaderSection from "./sections/HeaderSection.jsx";
 import SummaryTiles from "./sections/SummaryTiles.jsx";
 import StockConditionCard from "./sections/StockConditionCard.jsx";
@@ -13,8 +24,6 @@ import FinancialSummaryCard from "./sections/FinancialSummaryCard.jsx";
 import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
 import AnalyticsSection from "./sections/AnalyticsSection.jsx";
 import RecentTransactionsTable from "./sections/RecentTransactionsTable.jsx";
-
-// Import new sections
 import StockPredictionCard from "./sections/StockPredictionCard.jsx";
 import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx";
 import KpiStrip from "./sections/KpiStrip.jsx";
@@ -22,7 +31,7 @@ import KpiStrip from "./sections/KpiStrip.jsx";
 import CustomerHistoryModal from "./modals/CustomerHistoryModal.jsx";
 import ErrorBanner from "./ui/ErrorBanner.jsx";
 
-// Helper functions
+// Helpers
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
 const isoDate = (d) => startOfDay(d).toISOString().slice(0,10);
 
@@ -49,29 +58,29 @@ function buildLast7DaysSeries(rows = []) {
 
 export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const isSmallMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { settings } = useSettings();
 
-  // State management
+  // State
   const [stocks, setStocks] = useState(stocksFromApp);
   const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
   const [recent, setRecent] = useState([]);
-  const [financialSummary, setFinancialSummary] = useState({ 
-    omzet: 0, hpp: 0, laba: 0, margin: 0, totalQty: 0, transactionCount: 0 
+  const [financialSummary, setFinancialSummary] = useState({
+    omzet: 0, hpp: 0, laba: 0, margin: 0, totalQty: 0, transactionCount: 0
   });
   const [today, setToday] = useState({ qty: 0, money: 0 });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
   const [financialLoading, setFinancialLoading] = useState(true);
 
-  // New state for advanced features
+  // Advanced
   const [stockPrediction, setStockPrediction] = useState(null);
   const [businessIntelligence, setBusinessIntelligence] = useState(null);
   const [advancedLoading, setAdvancedLoading] = useState(true);
 
-  // Analytics state
+  // Analytics
   const [analytics, setAnalytics] = useState({
     topCustomers: [],
     weekly: null,
@@ -80,7 +89,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   });
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
-  // Modal state
+  // Modal
   const [openHist, setOpenHist] = useState(false);
   const [histName, setHistName] = useState("");
   const [histRows, setHistRows] = useState([]);
@@ -90,15 +99,13 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const busyRef = useRef(false);
   const idleTimer = useRef(null);
 
-  // 1) Initial snapshot
+  // 1) Snapshot
   useEffect(() => {
     let alive = true;
-
     (async () => {
       try {
         const snap = await DataService.getDashboardSnapshot({ revalidate: true });
         if (!alive) return;
-
         setStocks(snap.stocks || { ISI: 0, KOSONG: 0 });
         setSeries7(snap.sevenDays || []);
         setPiutang(snap.receivables || 0);
@@ -119,7 +126,6 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
       setRecent(Array.isArray(d.recentSales) ? d.recentSales : []);
     };
     window.addEventListener("dashboard:snapshot", onSnap);
-
     return () => {
       alive = false;
       window.removeEventListener("dashboard:snapshot", onSnap);
@@ -129,158 +135,108 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   // 2) Financial summary
   useEffect(() => {
     let alive = true;
-    const calculateFinancialSummary = async () => {
+    const run = async () => {
       try {
         setFinancialLoading(true);
-        
         const summary = await DataService.getFinancialSummary({
-          from: '2000-01-01',
+          from: "2000-01-01",
           to: todayStr(),
-          hppPerUnit: Number(settings.hpp || 0)
+          hppPerUnit: Number(settings.hpp || 0),
         });
-
         if (!alive) return;
         setFinancialSummary(summary);
-        
       } catch (error) {
-        console.error('Error calculating financial summary:', error);
-        
+        // Fallback manual (tetap di sini)
         try {
           const salesData = await DataService.getSalesHistory({
-            from: '2000-01-01',
+            from: "2000-01-01",
             to: todayStr(),
             method: "ALL",
             status: "ALL",
-            limit: 10000
+            limit: 10000,
           });
-
           if (!alive) return;
-
-          const paid = salesData.filter(sale => {
-            const method = String(sale.method || '').toUpperCase();
-            const status = String(sale.status || '').toUpperCase();
-
-            if (status === 'DIBATALKAN') return false;
-            if (method === 'TUNAI') return true;
-            if (status === 'LUNAS') return true;
+          const paid = salesData.filter((s) => {
+            const m = String(s.method || "").toUpperCase();
+            const st = String(s.status || "").toUpperCase();
+            if (st === "DIBATALKAN") return false;
+            if (m === "TUNAI") return true;
+            if (st === "LUNAS") return true;
             return false;
           });
-
-          const omzet = paid.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
-          const totalQty = paid.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
+          const omzet = paid.reduce((a, s) => a + (Number(s.total) || 0), 0);
+          const totalQty = paid.reduce((a, s) => a + (Number(s.qty) || 0), 0);
           const hpp = totalQty * Number(settings.hpp || 0);
           const laba = omzet - hpp;
           const margin = omzet > 0 ? Math.round((laba / omzet) * 100) : 0;
-
-          setFinancialSummary({ 
-            omzet, hpp, laba, margin, totalQty, transactionCount: paid.length 
-          });
-          
-        } catch (fallbackError) {
-          console.error('Fallback calculation also failed:', fallbackError);
-          setFinancialSummary({ 
-            omzet: 0, hpp: 0, laba: 0, margin: 0, totalQty: 0, transactionCount: 0 
-          });
+          setFinancialSummary({ omzet, hpp, laba, margin, totalQty, transactionCount: paid.length });
+        } finally {
+          /* noop */
         }
       } finally {
-        if (alive) {
-          setFinancialLoading(false);
-        }
+        if (alive) setFinancialLoading(false);
       }
     };
-
-    calculateFinancialSummary();
-    
+    run();
     return () => { alive = false; };
   }, [settings.hpp]);
 
-  // 3) Advanced features data (Stock Prediction & Business Intelligence)
+  // 3) Advanced features
   useEffect(() => {
     let alive = true;
-
-    const loadAdvancedFeatures = async () => {
+    (async () => {
       try {
         setAdvancedLoading(true);
-        
         const [prediction, intelligence] = await Promise.all([
-          DataService.getStockPrediction(30).catch(error => {
-            console.error('Error loading stock prediction:', error);
-            return null;
-          }),
-          DataService.getCurrentMonthBusinessIntelligence().catch(error => {
-            console.error('Error loading business intelligence:', error);
-            return null;
-          })
+          DataService.getStockPrediction(30).catch(() => null),
+          DataService.getCurrentMonthBusinessIntelligence().catch(() => null),
         ]);
-
         if (!alive) return;
-
         setStockPrediction(prediction);
         setBusinessIntelligence(intelligence);
-        
-      } catch (error) {
-        console.error('Error loading advanced features:', error);
       } finally {
-        if (alive) {
-          setAdvancedLoading(false);
-        }
+        if (alive) setAdvancedLoading(false);
       }
-    };
-
-    loadAdvancedFeatures();
-
+    })();
     return () => { alive = false; };
   }, []);
 
-  // 4) Realtime updates
+  // 4) Realtime
   useEffect(() => {
     const askRevalidate = () => {
       if (busyRef.current) return;
       busyRef.current = true;
       DataService.getDashboardSnapshot({ revalidate: true });
-
       clearTimeout(idleTimer.current);
       idleTimer.current = setTimeout(() => (busyRef.current = false), 1200);
     };
-
     const ch = supabase
       .channel("dashboard-rt-lite")
       .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, askRevalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "stocks" }, askRevalidate)
       .subscribe();
-
     return () => {
       try { supabase.removeChannel(ch); } catch {}
       clearTimeout(idleTimer.current);
     };
   }, []);
 
-  // 5) 7-day series recomputation
+  // 5) 7 days recompute
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const from = new Date();
-        from.setDate(from.getDate() - 6);
-        from.setHours(0,0,0,0);
+        const from = new Date(); from.setDate(from.getDate() - 6); from.setHours(0,0,0,0);
         const to = new Date();
-
-        const rows = await DataService.loadSalesByDateRange?.(
-          from.toISOString(),
-          to.toISOString()
-        ).catch(() => []);
-
+        const rows = await DataService.loadSalesByDateRange?.(from.toISOString(), to.toISOString()).catch(() => []);
         if (!alive) return;
-        const last7 = buildLast7DaysSeries(rows || []);
-        setSeries7(last7);
-      } catch (e) {
-        console.warn("[series7]", e?.message || e);
-      }
+        setSeries7(buildLast7DaysSeries(rows || []));
+      } catch (e) { /* noop */ }
     })();
     return () => { alive = false; };
   }, [recent, today, stocks]);
 
-  // 6) Analytics data
+  // 6) Analytics
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -290,10 +246,8 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           DataService.getTopCustomersPeriod?.({ period: "this_month", limit: 5, onlyPaid: true }).catch(() => []),
           DataService.getComparisonsSummary?.({ onlyPaid: true }).catch(() => ({})),
         ]);
-
         if (!alive) return;
 
-        // Calculate growth percentages
         const wk = comps?.weekly || null;
         const weeklyGrowthPct = wk && wk.last_week_qty
           ? ((Number(wk.this_week_qty || 0) - Number(wk.last_week_qty || 0)) / Number(wk.last_week_qty)) * 100
@@ -318,42 +272,27 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
         setAnalytics({
           topCustomers: tops || [],
           weekly: wk ? { ...wk, growthPct: weeklyGrowthPct } : null,
-          monthly: mo ? {
-            ...mo,
-            growthPctQty: monthlyGrowthQty,
-            growthPctOmzet: monthlyGrowthOmzet,
-          } : null,
-          yoy: yy ? {
-            ...yy,
-            growthPctQty: yoyGrowthQty,
-            growthPctOmzet: yoyGrowthOmzet,
-          } : null,
+          monthly: mo ? { ...mo, growthPctQty: monthlyGrowthQty, growthPctOmzet: monthlyGrowthOmzet } : null,
+          yoy: yy ? { ...yy, growthPctQty: yoyGrowthQty, growthPctOmzet: yoyGrowthOmzet } : null,
         });
-      } catch (e) {
-        console.warn("[Analytics]", e?.message || e);
       } finally {
         setAnalyticsLoading(false);
       }
     })();
-
     return () => { alive = false; };
   }, []);
 
-  // 7) Today's sales
+  // 7) Today
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const todaySum = await DataService.getSalesSummary({ 
-          from: todayStr(), 
-          to: todayStr() 
-        });
+        const todaySum = await DataService.getSalesSummary({ from: todayStr(), to: todayStr() });
         if (!alive) return;
         setToday(todaySum || { qty: 0, money: 0 });
-      } catch (error) {
-        console.error('Error getting today sales:', error);
-      }
+      } catch { /* noop */ }
     })();
+    return () => { alive = false; };
   }, []);
 
   // Modal handlers
@@ -363,66 +302,44 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
     setHistLoading(true);
     try {
       const now = new Date();
-      const s = new Date(now.getFullYear(), now.getMonth(), 1);
-      s.setHours(0,0,0,0);
-      const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      e.setHours(23,59,59,999);
-
-      const rows = await DataService.getSalesHistory({
-        from: s.toISOString(),
-        to: e.toISOString(),
-        q: name,
-        limit: 500,
-      });
-
+      const s = new Date(now.getFullYear(), now.getMonth(), 1); s.setHours(0,0,0,0);
+      const e = new Date(now.getFullYear(), now.getMonth() + 1, 0); e.setHours(23,59,59,999);
+      const rows = await DataService.getSalesHistory({ from: s.toISOString(), to: e.toISOString(), q: name, limit: 500 });
       const filtered = (rows || []).filter(r => (r.customer || "").toLowerCase().includes((name || "").toLowerCase()));
       setHistRows(filtered);
-      const totalQty = filtered.reduce((a,b)=> a + Number(b.qty || 0), 0);
-      setHistTotalQty(totalQty);
-    } catch (e) {
-      setHistRows([]);
-      setHistTotalQty(0);
+      setHistTotalQty(filtered.reduce((a,b)=> a + Number(b.qty || 0), 0));
     } finally {
       setHistLoading(false);
     }
   };
-
   const closeCustomerHistory = () => setOpenHist(false);
 
-  // Derived values
   const isi = Number(stocks?.ISI || 0);
   const kosong = Number(stocks?.KOSONG || 0);
 
   return (
-    <Box sx={{ 
-      width: '100%',
-      overflowX: 'auto',
-      minHeight: '100vh',
-      backgroundColor: theme.palette.background.default
-    }}>
-      <Stack spacing={3} sx={{ 
-        minWidth: isMobile ? '800px' : 'auto',
-        p: isMobile ? 2 : 3,
-        width: '100%',
-        maxWidth: '100%'
-      }}>
-
+    <Box
+      sx={{
+        width: "100%",
+        maxWidth: "100%",
+        overflowX: "hidden",       // ⬅️ kunci horizontal scroll untuk halaman
+        minHeight: "100vh",
+        backgroundColor: theme.palette.background.default,
+      }}
+    >
+      <Stack spacing={3} sx={{ p: { xs: 2, md: 3 } }}>
         <HeaderSection />
 
         {err && <ErrorBanner message={err} />}
 
-        {/* KPI Strip - New Component */}
-        <Box sx={{ 
-          minWidth: isMobile ? '800px' : 'auto',
-          width: '100%'
-        }}>
-          <KpiStrip
-            financialData={financialSummary}
-            stockPrediction={stockPrediction}
-            businessIntel={businessIntelligence}
-            loading={loading || advancedLoading}
-          />
-        </Box>
+        {/* KPI di paling atas; tetap ringkas di mobile */}
+        <KpiStrip
+          financialData={financialSummary}
+          stockPrediction={stockPrediction}
+          businessIntel={businessIntelligence}
+          loading={loading || advancedLoading}
+          // Jika KpiStrip mendukung variant/accordion, bisa tambahkan props di sini
+        />
 
         <SummaryTiles
           isi={isi}
@@ -433,28 +350,18 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           loading={loading}
         />
 
-        {/* Main Content Grid */}
-        <Box sx={{ 
-          display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
-          gap: 3,
-          minWidth: isMobile ? '800px' : 'auto',
-          width: '100%'
-        }}>
-          
-          {/* Left Column - Stock & Prediction */}
+        {/* Grid utama: 1 kolom di mobile */}
+        <Box
+          sx={{
+            display: "grid",
+            gap: 3,
+            gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr 1fr" },
+          }}
+        >
+          {/* Kolom kiri */}
           <Stack spacing={3}>
-            <StockConditionCard
-              isi={isi}
-              kosong={kosong}
-              loading={loading}
-            />
-            
-            <StockPredictionCard
-              data={stockPrediction}
-              loading={advancedLoading}
-            />
-
+            <StockConditionCard isi={isi} kosong={kosong} loading={loading} />
+            <StockPredictionCard data={stockPrediction} loading={advancedLoading} />
             <FinancialSummaryCard
               omzet={financialSummary.omzet}
               hpp={financialSummary.hpp}
@@ -466,13 +373,10 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
             />
           </Stack>
 
-          {/* Middle Column - Charts & Analytics */}
+          {/* Kolom tengah */}
           <Stack spacing={3}>
-            <SevenDaysChartCard
-              series={series7}
-              loading={loading}
-            />
-            
+            <SevenDaysChartCard series={series7} loading={loading} />
+
             <AnalyticsSection
               topCustomers={analytics.topCustomers}
               weekly={analytics.weekly}
@@ -482,21 +386,45 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
               isSmallMobile={isSmallMobile}
             />
 
-            <RecentTransactionsTable
-              rows={recent}
-              loading={loading}
-              isSmallMobile={isSmallMobile}
-            />
+            {/* TABEL: bungkus dengan scroll-x agar yang bisa geser hanya tabel */}
+            <Box
+              sx={{
+                mx: -2, px: 2,
+                overflowX: "auto",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              <RecentTransactionsTable
+                rows={recent}
+                loading={loading}
+                isSmallMobile={isSmallMobile}
+              />
+            </Box>
           </Stack>
 
-          {/* Right Column - Business Intelligence */}
+          {/* Kolom kanan */}
           <Stack spacing={3}>
-            <BusinessIntelligenceCard
-              data={businessIntelligence}
-              loading={advancedLoading}
-            />
-            
-            {/* You can add more components here in the future */}
+            {/* Di mobile jadikan Accordion agar ringkas */}
+            {isMobile ? (
+              <Accordion elevation={0} disableGutters>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="subtitle1" fontWeight={700}>
+                    Business Intelligence
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <BusinessIntelligenceCard
+                    data={businessIntelligence}
+                    loading={advancedLoading}
+                  />
+                </AccordionDetails>
+              </Accordion>
+            ) : (
+              <BusinessIntelligenceCard
+                data={businessIntelligence}
+                loading={advancedLoading}
+              />
+            )}
           </Stack>
         </Box>
 
@@ -508,7 +436,6 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           loading={histLoading}
           onClose={closeCustomerHistory}
         />
-
       </Stack>
     </Box>
   );

@@ -14,9 +14,9 @@ a{color:inherit;text-decoration:none}
 
 header.sticky{position:sticky;top:0;background:#fff;z-index:20;border-bottom:1px solid #e5e7eb}
 
-/* Table & badge (tetap sama) */
+/* Table & badge */
 .table{width:100%;border-collapse:collapse}
-.table th,.table td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
+.table th, .table td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
 .badge{padding:4px 8px;border-radius:6px;font-size:12px;display:inline-block}
 
 /* ===== Layout & Nav ===== */
@@ -26,7 +26,7 @@ header.sticky{position:sticky;top:0;background:#fff;z-index:20;border-bottom:1px
 .nav-desktop{display:grid}
 .nav-mobile{display:none}
 
-/* HP/Tablet: HILANGKAN sidebar, pakai top tabs sticky */
+/* HP/Tablet: sembunyikan sidebar, pakai top tabs sticky */
 @media (max-width: 1024px){
   .app-body{display:block}                 /* konten full-width */
   .nav-desktop{display:none !important}    /* benar-benar disembunyikan */
@@ -43,4 +43,31 @@ header.sticky{position:sticky;top:0;background:#fff;z-index:20;border-bottom:1px
     -webkit-overflow-scrolling:touch;scrollbar-width:none;
   }
   .nav-mobile .tabs::-webkit-scrollbar{display:none}
+}
+
+/* ==== Tambahan: kunci horizontal scroll halaman ==== */
+html, body, #root{
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;        /* cegah geser kiri/kanan di seluruh halaman */
+}
+/* penting untuk item grid/flex agar konten panjang tidak memicu overflow */
+*{min-width:0}
+
+/* Safe area untuk device notch */
+:root{
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+/* Hanya area tertentu yang boleh scroll-x (contoh: tabel) */
+.scroll-x{
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.scroll-x::-webkit-scrollbar{height:6px}
+
+/* Optional: header tabel lengket */
+.table-sticky thead th{
+  position:sticky;top:0;background:#fff;z-index:1;
 }
