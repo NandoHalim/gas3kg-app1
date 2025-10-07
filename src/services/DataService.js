@@ -1729,3 +1729,160 @@ DataService.getAIInsights = async function () {
   };
 };
 
+
+
+// ====== AI v2 Helpers ======
+function _ai_ma(arr, k) {
+  if (!Array.isArray(arr) || arr.length === 0) return [];
+  const out = [];
+  for (let i = 0; i < arr.length; i++) {
+    const from = Math.max(0, i - k + 1);
+    const slice = arr.slice(from, i + 1);
+    const avg = slice.reduce((s, v) => s + (Number(v) || 0), 0) / slice.length;
+    out.push(avg);
+  }
+  return out;
+}
+function _ai_linearForecast(y, horizon = 7) {
+  const n = y.length;
+  if (n < 3) return Array(horizon).fill(y[n-1] || 0);
+  const t = Array.from({ length: n }, (_, i) => i + 1);
+  const sum = (a) => a.reduce((s,v)=>s+v,0);
+  const sumT = sum(t), sumY = sum(y);
+  const sumTT = sum(t.map(v=>v*v));
+  const sumTY = sum(t.map((v,i)=>v*y[i]));
+  const denom = n*sumTT - sumT*sumT;
+  const b = denom ? (n*sumTY - sumT*sumY) / denom : 0;
+  const a = (sumY - b*sumT) / n;
+  const out = [];
+  for (let h = 1; h <= horizon; h++) {
+    const tnext = n + h;
+    out.push(Math.max(0, a + b*tnext));
+  }
+  return out;
+}
+
+// ====== AI Insights v2 (Decision Support) ======
+DataService.getAIInsightsV2 = async function () {
+  const safe = (v)=>Number.isFinite(Number(v))?Number(v):0;
+  const fmtIDR = (n)=> {
+    try { return new Intl.NumberFormat('id-ID', { style:'currency', currency:'IDR', maximumFractionDigits:0 }).format(safe(n)); }
+    catch { return `Rp ${safe(n).toLocaleString('id-ID')}`; }
+  };
+  // settings & HPP
+  const settings = await DataService.getActiveSettings().catch(() => ({ hpp: 0 }));
+  const hppPerUnit = safe(settings?.hpp ?? 0);
+
+  // rentang MTD lokal (+08)
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const startOfMonthLocal = `${yyyy}-${mm}-01T00:00:00.000+08:00`;
+
+  // bulan lalu rentang penuh (local +08)
+  const lastMonth = new Date(now);
+  lastMonth.setMonth(now.getMonth() - 1);
+  const lyyyy = lastMonth.getFullYear();
+  const lmm = String(lastMonth.getMonth() + 1).padStart(2, '0');
+  const lastEndDay = new Date(lyyyy, lastMonth.getMonth()+1, 0).getDate();
+  const lastStart = `${lyyyy}-${lmm}-01T00:00:00.000+08:00`;
+  const lastEnd = `${lyyyy}-${lmm}-${String(lastEndDay).padStart(2,'0')}T23:59:59.999+08:00`;
+
+  // paralel fetch
+  const [
+    finMTD, finPrevMonth,
+    sevenDays, stockPred,
+    topCust
+  ] = await Promise.all([
+    DataService.getFinancialSummary({ from: startOfMonthLocal, to: toISOStringWithOffset(new Date()), hppPerUnit })
+      .catch(()=>({ omzet:0, laba:null, margin:0, totalQty:0 })),
+    DataService.getFinancialSummary({ from: lastStart, to: lastEnd, hppPerUnit })
+      .catch(()=>({ omzet:0, laba:null, margin:0, totalQty:0 })),
+    DataService.getSevenDaySales().catch(()=>[]),
+    DataService.getStockPrediction(30).catch(()=>({ prediction:{ days_remaining_isi:null }, current_stock:{ ISI:0,KOSONG:0 }})),
+    DataService.getTopCustomers({ from: startOfMonthLocal, to: toISOStringWithOffset(new Date()), limit: 5, onlyPaid: true }).catch(()=>[]),
+  ]);
+
+  // growth calc
+  const g = (cur, prev)=> prev===0 ? (cur>0?100:0) : ((cur - prev)/prev)*100;
+  const grow = {
+    omzet: g(safe(finMTD.omzet), safe(finPrevMonth.omzet)),
+    laba:  g(safe(finMTD.laba ?? 0), safe(finPrevMonth.laba ?? 0)),
+    margin_pt: safe(finMTD.margin) - safe(finPrevMonth.margin),
+  };
+
+  // anomaly (z-score) dari qty 7 hari
+  const qtyArr = sevenDays.map(d => safe(d.qty ?? d.net));
+  const avg = qtyArr.reduce((s,v)=>s+v,0)/(qtyArr.length||1);
+  const sd = Math.sqrt(qtyArr.reduce((s,v)=>s+(v-avg)*(v-avg),0)/(Math.max(1, qtyArr.length-1)));
+  const lastQty = qtyArr[qtyArr.length-1] ?? 0;
+  const z = sd ? (lastQty - avg)/sd : 0;
+  const anomaly = Math.abs(z) >= 2 ? { level: "warning", z, lastQty, avg } : null;
+
+  // forecast 7 hari
+  const horizon = 7;
+  const salesForecast = _ai_linearForecast(qtyArr, horizon).map(v=>Math.round(v));
+  const avgDaily = qtyArr.length ? (qtyArr.reduce((s,v)=>s+v,0)/qtyArr.length) : 0;
+  const curIsi = safe(stockPred?.current_stock?.ISI ?? 0);
+  const stokForecast = Array.from({length:horizon}, (_,i)=>Math.max(0, Math.round(curIsi - avgDaily*(i+1))));
+
+  // advice
+  const daysLeft = stockPred?.prediction?.days_remaining_isi ?? null;
+  let advice = null;
+  if (daysLeft != null && daysLeft <= 3) {
+    const restockQty = Math.max(0, Math.ceil(avgDaily*7) - curIsi); // target aman 7 hari
+    advice = {
+      level: "warning",
+      title: "Risiko kekurangan stok",
+      message: `Rata-rata ${Math.round(avgDaily)} tabung/hari, stok ISI ${curIsi}. Usul restock ±${restockQty} tabung agar aman 7 hari.`,
+    };
+  } else if (grow.margin_pt < -1) {
+    advice = {
+      level: "info",
+      title: "Margin menurun",
+      message: "Margin MTD turun dibanding bulan lalu. Cek harga beli LPG/biaya logistik atau evaluasi diskon pelanggan besar.",
+    };
+  } else if (anomaly) {
+    advice = {
+      level: "warning",
+      title: "Anomali penjualan",
+      message: `Terjadi anomali (z=${anomaly.z.toFixed(2)}). Qty terakhir ${anomaly.lastQty} vs rata-rata ${avg.toFixed(1)}.`,
+    };
+  } else {
+    advice = {
+      level: "success",
+      title: "Kondisi stabil",
+      message: "Penjualan dan margin relatif stabil. Lanjutkan rencana operasional saat ini.",
+    };
+  }
+
+  // insight kalimat
+  const parts = [];
+  const toSign = (x)=> (x>=0?'+':'') + x.toFixed(1);
+  parts.push(`Omzet MTD ${fmtIDR(finMTD.omzet)} (${toSign(grow.omzet)}% vs bln lalu).`);
+  if (finMTD.laba != null) parts.push(`Laba ${fmtIDR(finMTD.laba)} (${toSign(grow.laba)}%).`);
+  parts.push(`Margin ${safe(finMTD.margin).toFixed(1)}% (${toSign(grow.margin_pt)} pt).`);
+  if (daysLeft != null) parts.push(`Estimasi stok ISI ${daysLeft} hari.`);
+  const top3 = (topCust||[]).slice(0,3).map((c,i)=>`${i+1}. ${(c.customer_name||c.customer||c.name||'N/A')}`).join(', ');
+  if (top3) parts.push(`Top Pelanggan: ${top3}.`);
+
+  return {
+    insight: parts.join(' '),
+    advice,
+    kpi: {
+      omzet: safe(finMTD.omzet),
+      laba: finMTD.laba != null ? safe(finMTD.laba) : null,
+      margin: safe(finMTD.margin),
+      days_left: daysLeft,
+    },
+    growth: grow,
+    trend7: sevenDays || [],
+    forecast: {
+      sales_next_7: salesForecast,
+      stock_next_7: stokForecast,
+    },
+    anomaly,
+    topCustomers: topCust || [],
+    generated_at: new Date().toISOString(),
+  };
+};
