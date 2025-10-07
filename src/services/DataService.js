@@ -1637,104 +1637,95 @@ DataService.getFinancialComparison = async function ({ currentFrom, currentTo, p
     console.error('[getFinancialComparison] Error:', error);
     throw new Error(errMsg(error, "Gagal menghitung perbandingan keuangan"));
   }
-
-  /**
-   * AI Insights (Preview) — ringkas KPI & insight untuk BusinessIntelligenceCard.
-   * Read-only. Tidak mengubah logika bisnis yang ada.
-   *
-   * Sumber data:
-   * - getActiveSettings()  → ambil HPP per unit (hpp)
-   * - getFinancialSummary({ from, to, hppPerUnit }) → omzet, laba, margin, totalQty
-   * - getStockPrediction() → prediction.days_remaining_isi
-   * - getSevenDaySales()   → [{ date, qty }]
-   * - getTopCustomers({ from, to, limit, onlyPaid }) → top pelanggan
-   */
-  async getAIInsights() {
-    // Helper kecil untuk aman angka
-    const safeNum = (v, d = 0) => {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : d;
-    };
-    const formatIDR = (n) => {
-      try {
-        return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(safeNum(n));
-      } catch {
-        return `Rp ${safeNum(n).toLocaleString('id-ID')}`;
-      }
-    };
-
-    // Rentang MTD di timezone Makassar (+08)
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const startOfMonthLocal = `${yyyy}-${mm}-01T00:00:00.000+08:00`;
-
-    // Ambil HPP dari settings aktif
-    const settings = await this.getActiveSettings().catch(() => ({ hpp: 0 }));
-    const hppPerUnit = safeNum(settings?.hpp, 0);
-
-    // Ambil data paralel
-    const [fin, stockPred, seven, topCust] = await Promise.all([
-      this.getFinancialSummary({ from: startOfMonthLocal, to: toISOStringWithOffset(new Date()), hppPerUnit })
-        .catch(() => ({ omzet: 0, laba: null, margin: 0, totalQty: 0 })),
-      this.getStockPrediction(30).catch(() => ({
-        prediction: { days_remaining_isi: null },
-        current_stock: { ISI: 0, KOSONG: 0 }
-      })),
-      this.getSevenDaySales().catch(() => []),
-      this.getTopCustomers({ from: startOfMonthLocal, to: toISOStringWithOffset(new Date()), limit: 5, onlyPaid: true }).catch(() => []),
-    ]);
-
-    const omzet = safeNum(fin?.omzet, 0);
-    const laba = fin?.laba != null ? safeNum(fin.laba, 0) : null;
-    const margin = safeNum(fin?.margin, 0);
-    const daysLeft = stockPred?.prediction?.days_remaining_isi ?? null;
-
-    // Hitung tren 7 hari (persentase hari terakhir vs rata-rata 7 hari)
-    let trend = null;
-    if (Array.isArray(seven) && seven.length) {
-      const vals = seven.map(r => safeNum(r?.qty, 0));
-      const last = vals[vals.length - 1] ?? 0;
-      const avg = vals.reduce((a, b) => a + b, 0) / vals.length || 0;
-      const pctDelta = avg ? ((last - avg) / avg) * 100 : 0;
-      const dir = pctDelta >= 0 ? 'naik' : 'turun';
-      trend = { pct: pctDelta, dir };
-    }
-
-    // Susun insight kalimat
-    const parts = [];
-    parts.push(`Omzet MTD ${formatIDR(omzet)}.`);
-    if (laba != null) parts.push(`Laba MTD ${formatIDR(laba)}.`);
-    if (Number.isFinite(margin)) parts.push(`Margin ${margin.toFixed(1)}%.`);
-    if (daysLeft != null) {
-      parts.push(daysLeft <= 3
-        ? `⚠️ Stok ISI diperkirakan habis dalam ${daysLeft} hari (segera restock).`
-        : `Estimasi stok ISI cukup ${daysLeft} hari.`
-      );
-    }
-    if (trend) {
-      parts.push(`Penjualan hari terakhir ${trend.dir} ${Math.abs(trend.pct).toFixed(1)}% vs rata-rata 7 hari.`);
-    }
-    if (Array.isArray(topCust) && topCust.length) {
-      const top3 = topCust.slice(0, 3).map((c, i) => {
-        const nm = c.customer_name || c.customer || c.name || 'N/A';
-        const val = c.total_value ?? c.revenue ?? 0;
-        return `${i+1}. ${nm} (${formatIDR(val)})`;
-      }).join(', ');
-      parts.push(`Top Pelanggan MTD: ${top3}.`);
-    }
-
-    return {
-      insight: parts.join(' '),
-      kpi: {
-        omzet,
-        laba,
-        margin,
-        days_left: daysLeft,
-      },
-      trend7: seven || [],
-      topCustomers: topCust || [],
-      generated_at: new Date().toISOString(),
-    };
-  },
 };
+
+// ====== AI Insights (Preview) — appended safely outside object literal ======
+DataService.getAIInsights = async function () {
+  // Helper kecil untuk aman angka
+  const safeNum = (v, d = 0) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : d;
+  };
+  const formatIDR = (n) => {
+    try {
+      return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(safeNum(n));
+    } catch {
+      return `Rp ${safeNum(n).toLocaleString('id-ID')}`;
+    }
+  };
+
+  // Rentang MTD di timezone Makassar (+08)
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const startOfMonthLocal = `${yyyy}-${mm}-01T00:00:00.000+08:00`;
+
+  // Ambil HPP dari settings aktif
+  const settings = await DataService.getActiveSettings().catch(() => ({ hpp: 0 }));
+  const hppPerUnit = safeNum(settings?.hpp, 0);
+
+  // Ambil data paralel
+  const [fin, stockPred, seven, topCust] = await Promise.all([
+    DataService.getFinancialSummary({ from: startOfMonthLocal, to: toISOStringWithOffset(new Date()), hppPerUnit })
+      .catch(() => ({ omzet: 0, laba: null, margin: 0, totalQty: 0 })),
+    DataService.getStockPrediction(30).catch(() => ({
+      prediction: { days_remaining_isi: null },
+      current_stock: { ISI: 0, KOSONG: 0 }
+    })),
+    DataService.getSevenDaySales().catch(() => []),
+    DataService.getTopCustomers({ from: startOfMonthLocal, to: toISOStringWithOffset(new Date()), limit: 5, onlyPaid: true }).catch(() => []),
+  ]);
+
+  const omzet = safeNum(fin?.omzet, 0);
+  const laba = fin?.laba != null ? safeNum(fin.laba, 0) : null;
+  const margin = safeNum(fin?.margin, 0);
+  const daysLeft = stockPred?.prediction?.days_remaining_isi ?? null;
+
+  // Hitung tren 7 hari (persentase hari terakhir vs rata-rata 7 hari)
+  let trend = null;
+  if (Array.isArray(seven) && seven.length) {
+    const vals = seven.map(r => safeNum(r?.qty, 0));
+    const last = vals[vals.length - 1] ?? 0;
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length || 0;
+    const pctDelta = avg ? ((last - avg) / avg) * 100 : 0;
+    const dir = pctDelta >= 0 ? 'naik' : 'turun';
+    trend = { pct: pctDelta, dir };
+  }
+
+  // Susun insight kalimat
+  const parts = [];
+  parts.push(`Omzet MTD ${formatIDR(omzet)}.`);
+  if (laba != null) parts.push(`Laba MTD ${formatIDR(laba)}.`);
+  if (Number.isFinite(margin)) parts.push(`Margin ${margin.toFixed(1)}%.`);
+  if (daysLeft != null) {
+    parts.push(daysLeft <= 3
+      ? `⚠️ Stok ISI diperkirakan habis dalam ${daysLeft} hari (segera restock).`
+      : `Estimasi stok ISI cukup ${daysLeft} hari.`
+    );
+  }
+  if (trend) {
+    parts.push(`Penjualan hari terakhir ${trend.dir} ${Math.abs(trend.pct).toFixed(1)}% vs rata-rata 7 hari.`);
+  }
+  if (Array.isArray(topCust) && topCust.length) {
+    const top3 = topCust.slice(0, 3).map((c, i) => {
+      const nm = c.customer_name || c.customer || c.name || 'N/A';
+      const val = c.total_value ?? c.revenue ?? 0;
+      return `${i+1}. ${nm} (${formatIDR(val)})`;
+    }).join(', ');
+    parts.push(`Top Pelanggan MTD: ${top3}.`);
+  }
+
+  return {
+    insight: parts.join(' '),
+    kpi: {
+      omzet,
+      laba,
+      margin,
+      days_left: daysLeft,
+    },
+    trend7: seven || [],
+    topCustomers: topCust || [],
+    generated_at: new Date().toISOString(),
+  };
+};
+
