@@ -1,5 +1,5 @@
 // =======================================================
-// DashboardContainer (tanpa Kondisi Stok & Prediksi Sisa Stok)
+// DashboardContainer (restore layout baik + BI slim)
 // =======================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -22,11 +22,13 @@ import { fmtIDR, todayStr } from "../../../utils/helpers.js";
 // Sections
 import HeaderSection from "./sections/HeaderSection.jsx";
 import SummaryTiles from "./sections/SummaryTiles.jsx";
+import StockConditionCard from "./sections/StockConditionCard.jsx";
 import FinancialSummaryCard from "./sections/FinancialSummaryCard.jsx";
 import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
 import AnalyticsSection from "./sections/AnalyticsSection.jsx";
 import RecentTransactionsTable from "./sections/RecentTransactionsTable.jsx";
-import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx";
+import StockPredictionCard from "./sections/StockPredictionCard.jsx";
+import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx"; // <-- versi slim di file komponennya
 import KpiStrip from "./sections/KpiStrip.jsx";
 
 import CustomerHistoryModal from "./modals/CustomerHistoryModal.jsx";
@@ -63,7 +65,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const isSmallMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { settings } = useSettings();
 
-  // === state dan hooks tetap sama ===
+  // State
   const [stocks, setStocks] = useState(stocksFromApp);
   const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
@@ -76,8 +78,12 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const [loading, setLoading] = useState(true);
   const [financialLoading, setFinancialLoading] = useState(true);
 
+  // Advanced
+  const [stockPrediction, setStockPrediction] = useState(null);
   const [businessIntelligence, setBusinessIntelligence] = useState(null);
   const [advancedLoading, setAdvancedLoading] = useState(true);
+
+  // Analytics
   const [analytics, setAnalytics] = useState({
     topCustomers: [],
     weekly: null,
@@ -86,6 +92,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   });
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
+  // Modal
   const [openHist, setOpenHist] = useState(false);
   const [histName, setHistName] = useState("");
   const [histRows, setHistRows] = useState([]);
@@ -95,8 +102,218 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const busyRef = useRef(false);
   const idleTimer = useRef(null);
 
-  // === efek useEffect tetap sama seperti sebelumnya ===
-  // (getDashboardSnapshot, financial summary, analytics, dll)
+  // 1) Snapshot
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const snap = await DataService.getDashboardSnapshot({ revalidate: true });
+        if (!alive) return;
+        setStocks(snap.stocks || { ISI: 0, KOSONG: 0 });
+        setSeries7(snap.sevenDays || []);
+        setPiutang(snap.receivables || 0);
+        setRecent(snap.recentSales || []);
+        setLoading(false);
+      } catch (e) {
+        if (!alive) return;
+        setErr(e.message || "Gagal memuat dashboard");
+        setLoading(false);
+      }
+    })();
+
+    const onSnap = (e) => {
+      const d = e?.detail || {};
+      setStocks(d.stocks || { ISI: 0, KOSONG: 0 });
+      setSeries7(Array.isArray(d.sevenDays) ? d.sevenDays : []);
+      setPiutang(Number.isFinite(d.receivables) ? d.receivables : 0);
+      setRecent(Array.isArray(d.recentSales) ? d.recentSales : []);
+    };
+    window.addEventListener("dashboard:snapshot", onSnap);
+    return () => {
+      alive = false;
+      window.removeEventListener("dashboard:snapshot", onSnap);
+    };
+  }, []);
+
+  // 2) Financial summary
+  useEffect(() => {
+    let alive = true;
+    const run = async () => {
+      try {
+        setFinancialLoading(true);
+        const summary = await DataService.getFinancialSummary({
+          from: "2000-01-01",
+          to: todayStr(),
+          hppPerUnit: Number(settings.hpp || 0),
+        });
+        if (!alive) return;
+        setFinancialSummary(summary);
+      } catch (error) {
+        // Fallback manual
+        try {
+          const salesData = await DataService.getSalesHistory({
+            from: "2000-01-01",
+            to: todayStr(),
+            method: "ALL",
+            status: "ALL",
+            limit: 10000,
+          });
+          if (!alive) return;
+          const paid = salesData.filter((s) => {
+            const m = String(s.method || "").toUpperCase();
+            const st = String(s.status || "").toUpperCase();
+            if (st === "DIBATALKAN") return false;
+            if (m === "TUNAI") return true;
+            if (st === "LUNAS") return true;
+            return false;
+          });
+          const omzet = paid.reduce((a, s) => a + (Number(s.total) || 0), 0);
+          const totalQty = paid.reduce((a, s) => a + (Number(s.qty) || 0), 0);
+          const hpp = totalQty * Number(settings.hpp || 0);
+          const laba = omzet - hpp;
+          const margin = omzet > 0 ? Math.round((laba / omzet) * 100) : 0;
+          setFinancialSummary({ omzet, hpp, laba, margin, totalQty, transactionCount: paid.length });
+        } finally {}
+      } finally {
+        if (alive) setFinancialLoading(false);
+      }
+    };
+    run();
+    return () => { alive = false; };
+  }, [settings.hpp]);
+
+  // 3) Advanced features
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setAdvancedLoading(true);
+        const [prediction, intelligence] = await Promise.all([
+          DataService.getStockPrediction(30).catch(() => null),
+          DataService.getCurrentMonthBusinessIntelligence().catch(() => null),
+        ]);
+        if (!alive) return;
+        setStockPrediction(prediction);
+        setBusinessIntelligence(intelligence);
+      } finally {
+        if (alive) setAdvancedLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // 4) Realtime
+  useEffect(() => {
+    const askRevalidate = () => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      DataService.getDashboardSnapshot({ revalidate: true });
+      clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(() => (busyRef.current = false), 1200);
+    };
+    const ch = supabase
+      .channel("dashboard-rt-lite")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, askRevalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "stocks" }, askRevalidate)
+      .subscribe();
+    return () => {
+      try { supabase.removeChannel(ch); } catch {}
+      clearTimeout(idleTimer.current);
+    };
+  }, []);
+
+  // 5) 7 days recompute
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const from = new Date(); from.setDate(from.getDate() - 6); from.setHours(0,0,0,0);
+        const to = new Date();
+        const rows = await DataService.loadSalesByDateRange?.(from.toISOString(), to.toISOString()).catch(() => []);
+        if (!alive) return;
+        setSeries7(buildLast7DaysSeries(rows || []));
+      } catch (e) {}
+    })();
+    return () => { alive = false; };
+  }, [recent, today, stocks]);
+
+  // 6) Analytics
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setAnalyticsLoading(true);
+        const [tops, comps] = await Promise.all([
+          DataService.getTopCustomersPeriod?.({ period: "this_month", limit: 5, onlyPaid: true }).catch(() => []),
+          DataService.getComparisonsSummary?.({ onlyPaid: true }).catch(() => ({})),
+        ]);
+        if (!alive) return;
+
+        const wk = comps?.weekly || null;
+        const weeklyGrowthPct = wk && wk.last_week_qty
+          ? ((Number(wk.this_week_qty || 0) - Number(wk.last_week_qty || 0)) / Number(wk.last_week_qty)) * 100
+          : null;
+
+        const mo = comps?.monthly || null;
+        const monthlyGrowthQty = mo && mo.last_month_qty
+          ? ((Number(mo.this_month_qty || 0) - Number(mo.last_month_qty || 0)) / Number(mo.last_month_qty)) * 100
+          : null;
+        const monthlyGrowthOmzet = mo && mo.last_month_value
+          ? ((Number(mo.this_month_value || 0) - Number(mo.last_month_value || 0)) / Number(mo.last_month_value)) * 100
+          : null;
+
+        const yy = comps?.yoy || null;
+        const yoyGrowthQty = yy && yy.last_year_qty
+          ? ((Number(yy.this_year_qty || 0) - Number(yy.last_year_qty || 0)) / Number(yy.last_year_qty)) * 100
+          : null;
+        const yoyGrowthOmzet = yy && yy.last_year_value
+          ? ((Number(yy.this_year_value || 0) - Number(yy.last_year_value || 0)) / Number(yy.last_year_value)) * 100
+          : null;
+
+        setAnalytics({
+          topCustomers: tops || [],
+          weekly: wk ? { ...wk, growthPct: weeklyGrowthPct } : null,
+          monthly: mo ? { ...mo, growthPctQty: monthlyGrowthQty, growthPctOmzet: monthlyGrowthOmzet } : null,
+          yoy: yy ? { ...yy, growthPctQty: yoyGrowthQty, growthPctOmzet: yoyGrowthOmzet } : null,
+        });
+      } finally {
+        setAnalyticsLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // 7) Today
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const todaySum = await DataService.getSalesSummary({ from: todayStr(), to: todayStr() });
+        if (!alive) return;
+        setToday(todaySum || { qty: 0, money: 0 });
+      } catch {}
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Modal handlers
+  const openCustomerHistory = async (name) => {
+    setHistName(name);
+    setOpenHist(true);
+    setHistLoading(true);
+    try {
+      const now = new Date();
+      const s = new Date(now.getFullYear(), now.getMonth(), 1); s.setHours(0,0,0,0);
+      const e = new Date(now.getFullYear(), now.getMonth() + 1, 0); e.setHours(23,59,59,999);
+      const rows = await DataService.getSalesHistory({ from: s.toISOString(), to: e.toISOString(), q: name, limit: 500 });
+      const filtered = (rows || []).filter(r => (r.customer || "").toLowerCase().includes((name || "").toLowerCase()));
+      setHistRows(filtered);
+      setHistTotalQty(filtered.reduce((a,b)=> a + Number(b.qty || 0), 0));
+    } finally {
+      setHistLoading(false);
+    }
+  };
+  const closeCustomerHistory = () => setOpenHist(false);
 
   const isi = Number(stocks?.ISI || 0);
   const kosong = Number(stocks?.KOSONG || 0);
@@ -113,11 +330,13 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
     >
       <Stack spacing={3} sx={{ p: { xs: 2, md: 3 } }}>
         <HeaderSection />
+
         {err && <ErrorBanner message={err} />}
 
-        {/* KPI dan Ringkasan */}
+        {/* KPI Strip (tetap) */}
         <KpiStrip
           financialData={financialSummary}
+          stockPrediction={stockPrediction}
           businessIntel={businessIntelligence}
           loading={loading || advancedLoading}
         />
@@ -131,7 +350,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           loading={loading}
         />
 
-        {/* Layout grid utama */}
+        {/* Grid utama (responsive) */}
         <Box
           sx={{
             display: "grid",
@@ -139,9 +358,10 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
             gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr 1fr" },
           }}
         >
-          {/* Kolom kiri */}
+          {/* Kolom kiri: JANGAN dihapus */}
           <Stack spacing={3}>
-            {/* ❌ Hapus StockConditionCard & StockPredictionCard */}
+            <StockConditionCard isi={isi} kosong={kosong} loading={loading} />
+            <StockPredictionCard data={stockPrediction} loading={advancedLoading} />
             <FinancialSummaryCard
               omzet={financialSummary.omzet}
               hpp={financialSummary.hpp}
@@ -156,20 +376,23 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           {/* Kolom tengah */}
           <Stack spacing={3}>
             <SevenDaysChartCard series={series7} loading={loading} />
+
             <AnalyticsSection
               topCustomers={analytics.topCustomers}
               weekly={analytics.weekly}
               monthly={analytics.monthly}
               loading={analyticsLoading}
-              onOpenCustomerHistory={setOpenHist}
+              onOpenCustomerHistory={openCustomerHistory}
               isSmallMobile={isSmallMobile}
             />
+
+            {/* Tabel transaksi dengan scroll-x lokal */}
             <Box sx={{ mx: -2, px: 2, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
               <RecentTransactionsTable rows={recent} loading={loading} isSmallMobile={isSmallMobile} />
             </Box>
           </Stack>
 
-          {/* Kolom kanan */}
+          {/* Kolom kanan: BI (slim) */}
           <Stack spacing={3}>
             {isMobile ? (
               <Accordion elevation={0} disableGutters>
@@ -194,7 +417,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           rows={histRows}
           totalQty={histTotalQty}
           loading={histLoading}
-          onClose={() => setOpenHist(false)}
+          onClose={closeCustomerHistory}
         />
       </Stack>
     </Box>
