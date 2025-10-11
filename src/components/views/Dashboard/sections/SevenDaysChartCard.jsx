@@ -1,4 +1,3 @@
-// src/components/views/Dashboard/sections/WeeklyMonthlyChartCard.jsx
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -17,22 +16,22 @@ import { alpha, useTheme } from "@mui/material/styles";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
-import MiniBarChartLabeled from "../../../../ui/MiniBarChartLabeled.jsx";
-import { DataService } from "../../../../services/DataService";
+import MiniBarChartLabeled from "../ui/MiniBarChartLabeled.jsx";
+import { DataService } from "../../services/DataService";
 
-function WeeklyMonthlyChartCard({ loading = false }) {
+function SevenDaysChartCard({ loading = false }) {
   const theme = useTheme();
-  const [chartType, setChartType] = useState("7_hari"); // 7_hari, mingguan_bulanan, bulanan_tahunan
+  const [chartType, setChartType] = useState("7_hari");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [series, setSeries] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [monthlySummary, setMonthlySummary] = useState(null);
+  const [summary, setSummary] = useState(null);
 
   const chartTypes = [
     { value: "7_hari", label: "7 Hari Terakhir", icon: "📊" },
-    { value: "mingguan_bulanan", label: "Mingguan per Bulan", icon: "📅" },
-    { value: "bulanan_tahunan", label: "Bulanan per Tahun", icon: "📈" }
+    { value: "mingguan", label: "Perbandingan Mingguan", icon: "📅" },
+    { value: "bulanan", label: "Perbandingan Bulanan", icon: "📈" }
   ];
 
   const months = [
@@ -55,11 +54,11 @@ function WeeklyMonthlyChartCard({ loading = false }) {
         case "7_hari":
           await loadLast7Days();
           break;
-        case "mingguan_bulanan":
-          await loadWeeklyMonthly();
+        case "mingguan":
+          await loadWeeklyComparison();
           break;
-        case "bulanan_tahunan":
-          await loadMonthlyYearly();
+        case "bulanan":
+          await loadMonthlyComparison();
           break;
         default:
           await loadLast7Days();
@@ -67,7 +66,7 @@ function WeeklyMonthlyChartCard({ loading = false }) {
     } catch (error) {
       console.error("Error loading chart data:", error);
       setSeries([]);
-      setMonthlySummary(null);
+      setSummary(null);
     } finally {
       setIsLoading(false);
     }
@@ -77,168 +76,109 @@ function WeeklyMonthlyChartCard({ loading = false }) {
     try {
       const data = await DataService.getSevenDaySales();
       const formattedData = (data || []).map((item, index) => ({
-        label: formatDateLabel(item.date, "7_hari", index),
+        label: formatDateLabel(item.date, index),
         value: item.qty || 0,
         tooltip: `Tanggal: ${formatDate(item.date)}\nQty: ${item.qty || 0} tabung`
       }));
       setSeries(formattedData);
-      setMonthlySummary(null);
+      setSummary(null);
     } catch (error) {
       console.error("Error loading last 7 days:", error);
       setSeries([]);
     }
   };
 
-  const loadWeeklyMonthly = async () => {
+  const loadWeeklyComparison = async () => {
     try {
-      // Dapatkan rentang tanggal untuk bulan yang dipilih
-      const monthStart = new Date(selectedYear, selectedMonth, 1);
-      const monthEnd = new Date(selectedYear, selectedMonth + 1, 0);
-      
-      // Bagi bulan menjadi minggu-minggu
-      const weeks = getWeeksInMonth(selectedYear, selectedMonth);
-      
-      const weeklyData = [];
-      let totalMonthQty = 0;
-      let totalMonthValue = 0;
+      const comparison = await DataService.getWeeklyComparison({ 
+        weekDate: new Date(), 
+        onlyPaid: true 
+      });
 
-      for (let i = 0; i < weeks.length; i++) {
-        const week = weeks[i];
-        const weekSales = await getSalesForPeriod(week.start, week.end);
-        
-        const weekQty = weekSales.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
-        const weekValue = weekSales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
-        
-        weeklyData.push({
-          label: `M${i + 1}`,
-          value: weekQty,
-          tooltip: `Minggu ${i + 1} (${formatDate(week.start)} - ${formatDate(week.end)})\nQty: ${weekQty} tabung\nTotal: Rp ${weekValue.toLocaleString('id-ID')}`,
-          weekNumber: i + 1,
-          dateRange: `${formatDate(week.start)} - ${formatDate(week.end)}`
-        });
-
-        totalMonthQty += weekQty;
-        totalMonthValue += weekValue;
-      }
+      const weeklyData = [
+        {
+          label: "Minggu Ini",
+          value: comparison.this_week_qty || 0,
+          tooltip: `Minggu Ini: ${comparison.this_week_qty || 0} tabung\nTotal: Rp ${(comparison.this_week_value || 0).toLocaleString('id-ID')}`
+        },
+        {
+          label: "Minggu Lalu",
+          value: comparison.last_week_qty || 0,
+          tooltip: `Minggu Lalu: ${comparison.last_week_qty || 0} tabung\nTotal: Rp ${(comparison.last_week_value || 0).toLocaleString('id-ID')}`
+        }
+      ];
 
       setSeries(weeklyData);
       
-      // Hitung rata-rata per minggu
-      const avgWeeklyQty = weeklyData.length > 0 ? totalMonthQty / weeklyData.length : 0;
+      // Hitung growth percentage
+      const lastWeekQty = comparison.last_week_qty || 1;
+      const growth = ((comparison.this_week_qty - lastWeekQty) / lastWeekQty) * 100;
       
-      setMonthlySummary({
-        totalQty: totalMonthQty,
-        totalValue: totalMonthValue,
-        avgWeeklyQty: avgWeeklyQty,
-        weekCount: weeks.length
+      setSummary({
+        growth: growth,
+        currentValue: comparison.this_week_qty || 0,
+        previousValue: comparison.last_week_qty || 0,
+        type: "mingguan"
       });
     } catch (error) {
-      console.error("Error loading weekly monthly data:", error);
+      console.error("Error loading weekly comparison:", error);
       setSeries([]);
     }
   };
 
-  const loadMonthlyYearly = async () => {
+  const loadMonthlyComparison = async () => {
     try {
-      const monthlyData = [];
-      let totalYearQty = 0;
+      const comparison = await DataService.getMonthlyComparison({ 
+        monthDate: new Date(), 
+        onlyPaid: true 
+      });
 
-      for (let month = 0; month < 12; month++) {
-        const monthStart = new Date(selectedYear, month, 1);
-        const monthEnd = new Date(selectedYear, month + 1, 0);
-        
-        const monthSales = await getSalesForPeriod(monthStart, monthEnd);
-        const monthQty = monthSales.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
-        
-        monthlyData.push({
-          label: months[month].substring(0, 3),
-          value: monthQty,
-          tooltip: `${months[month]} ${selectedYear}\nQty: ${monthQty} tabung`,
-          month: months[month]
-        });
-
-        totalYearQty += monthQty;
-      }
+      const monthlyData = [
+        {
+          label: "Bulan Ini",
+          value: comparison.this_month_qty || 0,
+          tooltip: `Bulan Ini: ${comparison.this_month_qty || 0} tabung\nTotal: Rp ${(comparison.this_month_value || 0).toLocaleString('id-ID')}\nLaba: Rp ${(comparison.this_month_laba || 0).toLocaleString('id-ID')}`
+        },
+        {
+          label: "Bulan Lalu",
+          value: comparison.last_month_qty || 0,
+          tooltip: `Bulan Lalu: ${comparison.last_month_qty || 0} tabung\nTotal: Rp ${(comparison.last_month_value || 0).toLocaleString('id-ID')}\nLaba: Rp ${(comparison.last_month_laba || 0).toLocaleString('id-ID')}`
+        }
+      ];
 
       setSeries(monthlyData);
-      setMonthlySummary({
-        totalQty: totalYearQty,
-        avgMonthlyQty: totalYearQty / 12
+      
+      // Hitung growth percentage
+      const lastMonthQty = comparison.last_month_qty || 1;
+      const growth = ((comparison.this_month_qty - lastMonthQty) / lastMonthQty) * 100;
+      
+      setSummary({
+        growth: growth,
+        currentValue: comparison.this_month_qty || 0,
+        previousValue: comparison.last_month_qty || 0,
+        laba: comparison.this_month_laba || 0,
+        type: "bulanan"
       });
     } catch (error) {
-      console.error("Error loading monthly yearly data:", error);
+      console.error("Error loading monthly comparison:", error);
       setSeries([]);
     }
   };
 
-  // Helper function untuk mendapatkan minggu dalam bulan
-  const getWeeksInMonth = (year, month) => {
-    const weeks = [];
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    
-    let currentWeekStart = new Date(firstDay);
-    
-    // Set ke hari Senin (1) jika bukan Senin
-    const dayOfWeek = currentWeekStart.getDay();
-    if (dayOfWeek !== 1) { // 1 = Senin
-      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      currentWeekStart.setDate(currentWeekStart.getDate() - diff);
-    }
-    
-    while (currentWeekStart <= lastDay) {
-      const weekEnd = new Date(currentWeekStart);
-      weekEnd.setDate(weekEnd.getDate() + 6);
-      
-      // Pastikan tidak melebihi akhir bulan
-      if (weekEnd > lastDay) {
-        weekEnd.setTime(lastDay.getTime());
-      }
-      
-      // Hanya tambahkan minggu yang memiliki hari dalam bulan yang dipilih
-      if (currentWeekStart <= lastDay) {
-        weeks.push({
-          start: new Date(currentWeekStart),
-          end: new Date(weekEnd)
-        });
-      }
-      
-      currentWeekStart.setDate(currentWeekStart.getDate() + 7);
-    }
-    
-    return weeks;
-  };
-
-  // Helper function untuk mendapatkan data penjualan
-  const getSalesForPeriod = async (startDate, endDate) => {
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
     try {
-      const fromISO = DataService.toISOStringWithOffset(startDate);
-      const toISO = DataService.toISOStringWithOffset(endDate);
-      
-      const sales = await DataService.loadSalesByDateRange(fromISO, toISO);
-      return sales.filter(sale => 
-        sale.status !== "DIBATALKAN" && 
-        (sale.method === "TUNAI" || sale.status === "LUNAS")
-      );
-    } catch (error) {
-      console.error("Error getting sales data:", error);
-      return [];
-    }
-  };
-
-  const formatDate = (date) => {
-    if (date instanceof Date) {
+      const date = new Date(dateString);
       return date.toLocaleDateString('id-ID', {
         day: 'numeric',
         month: 'short'
       });
+    } catch {
+      return String(dateString);
     }
-    return String(date);
   };
 
-  const formatDateLabel = (dateString, type, index) => {
-    if (type !== "7_hari") return dateString;
-    
+  const formatDateLabel = (dateString, index) => {
     try {
       const date = new Date(dateString);
       const today = new Date();
@@ -251,116 +191,110 @@ function WeeklyMonthlyChartCard({ loading = false }) {
         day: 'numeric',
         month: 'short'
       });
-    } catch (error) {
+    } catch {
       return `Day ${index + 1}`;
     }
   };
 
+  const getGrowthChip = (growth) => {
+    if (!growth && growth !== 0) return null;
+    
+    const isPositive = growth > 0;
+    const isNeutral = growth === 0;
+    
+    return (
+      <Chip
+        label={`${isPositive ? '+' : ''}${growth.toFixed(1)}%`}
+        color={isNeutral ? "default" : isPositive ? "success" : "error"}
+        variant="outlined"
+        size="small"
+        sx={{ ml: 1 }}
+      />
+    );
+  };
+
   const getCardTitle = () => {
     const currentType = chartTypes.find(type => type.value === chartType);
-    return currentType ? `${currentType.icon} ${currentType.label}` : "Grafik Perbandingan";
+    return currentType ? currentType.label : "Grafik Perbandingan";
   };
 
   const getCardSubtitle = () => {
     switch (chartType) {
       case "7_hari":
         return "Trend penjualan harian 7 hari terakhir";
-      case "mingguan_bulanan":
-        return `Perbandingan mingguan bulan ${months[selectedMonth]} ${selectedYear}`;
-      case "bulanan_tahunan":
-        return `Perbandingan bulanan tahun ${selectedYear}`;
+      case "mingguan":
+        return "Perbandingan penjualan minggu ini vs minggu lalu";
+      case "bulanan":
+        return "Perbandingan penjualan bulan ini vs bulan lalu";
       default:
         return "Data perbandingan penjualan";
     }
   };
 
   const getSummaryText = () => {
-    if (!monthlySummary) return null;
+    if (!summary) return null;
 
-    switch (chartType) {
-      case "mingguan_bulanan":
-        return (
-          <Box sx={{ mt: 2, p: 1, bgcolor: alpha(theme.palette.info.main, 0.05), borderRadius: 1 }}>
-            <Grid container spacing={1}>
-              <Grid item xs={6}>
-                <Typography variant="body2" color="text.secondary">
-                  Total Bulan:
-                </Typography>
-                <Typography variant="body1" fontWeight={600}>
-                  {monthlySummary.totalQty} tabung
-                </Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography variant="body2" color="text.secondary">
-                  Rata-rata/Minggu:
-                </Typography>
-                <Typography variant="body1" fontWeight={600}>
-                  {Math.round(monthlySummary.avgWeeklyQty)} tabung
-                </Typography>
-              </Grid>
-            </Grid>
-          </Box>
-        );
-      case "bulanan_tahunan":
-        return (
-          <Box sx={{ mt: 2, p: 1, bgcolor: alpha(theme.palette.success.main, 0.05), borderRadius: 1 }}>
-            <Typography variant="body2" color="text.secondary" align="center">
-              Total Tahun: <strong>{monthlySummary.totalQty} tabung</strong>
+    const { growth, currentValue, previousValue, laba, type } = summary;
+    const isPositive = growth > 0;
+    
+    if (type === "mingguan") {
+      return (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          {isPositive ? "📈 Meningkat" : "📉 Menurun"} {Math.abs(growth).toFixed(1)}% 
+          dari {previousValue} tabung minggu lalu
+        </Typography>
+      );
+    } else if (type === "bulanan") {
+      return (
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            {isPositive ? "📈 Meningkat" : "📉 Menurun"} {Math.abs(growth).toFixed(1)}% 
+            dari {previousValue} tabung bulan lalu
+          </Typography>
+          {laba && (
+            <Typography variant="body2" color="success.main" sx={{ fontWeight: 500 }}>
+              Laba: Rp {laba.toLocaleString('id-ID')}
             </Typography>
-            <Typography variant="body2" color="text.secondary" align="center">
-              Rata-rata/Bulan: <strong>{Math.round(monthlySummary.avgMonthlyQty)} tabung</strong>
-            </Typography>
-          </Box>
-        );
-      default:
-        return null;
+          )}
+        </Box>
+      );
     }
+    
+    return null;
   };
 
-  const getWeekDetails = () => {
-    if (chartType !== "mingguan_bulanan" || series.length === 0) return null;
-
-    return (
-      <Box sx={{ mt: 1 }}>
-        <Typography variant="caption" color="text.secondary">
-          Keterangan Minggu:
-        </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-          {series.map((week, index) => (
-            <Chip
-              key={index}
-              label={`M${week.weekNumber}: ${week.dateRange}`}
-              size="small"
-              variant="outlined"
-              sx={{ fontSize: '0.6rem' }}
-            />
-          ))}
-        </Box>
-      </Box>
-    );
+  const getIcon = () => {
+    switch (chartType) {
+      case "7_hari":
+        return <BarChartIcon color="info" />;
+      case "mingguan":
+        return <CompareArrowsIcon color="primary" />;
+      case "bulanan":
+        return <CalendarMonthIcon color="secondary" />;
+      default:
+        return <BarChartIcon color="info" />;
+    }
   };
 
   return (
     <Card sx={{
       background: `linear(135deg, ${alpha(theme.palette.info.main, 0.05)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
-      border: `1px solid ${alpha(theme.palette.info.main, 0.1)}`,
-      height: '100%'
+      border: `1px solid ${alpha(theme.palette.info.main, 0.1)}`
     }}>
       <CardHeader
         title={
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {chartType === "7_hari" ? <BarChartIcon color="info" /> : 
-             chartType === "mingguan_bulanan" ? <CalendarMonthIcon color="primary" /> : 
-             <CompareArrowsIcon color="secondary" />}
+            {getIcon()}
             <Typography variant="h6" fontWeight={700}>
               {getCardTitle()}
+              {summary && getGrowthChip(summary.growth)}
             </Typography>
           </Box>
         }
         subheader={getCardSubtitle()}
         action={
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            {(chartType === "mingguan_bulanan" || chartType === "bulanan_tahunan") && (
+            {(chartType === "mingguan" || chartType === "bulanan") && (
               <>
                 <FormControl size="small" sx={{ minWidth: 120 }}>
                   <InputLabel>Bulan</InputLabel>
@@ -368,7 +302,7 @@ function WeeklyMonthlyChartCard({ loading = false }) {
                     value={selectedMonth}
                     label="Bulan"
                     onChange={(e) => setSelectedMonth(e.target.value)}
-                    disabled={isLoading || chartType === "bulanan_tahunan"}
+                    disabled={isLoading}
                   >
                     {months.map((month, index) => (
                       <MenuItem key={index} value={index}>
@@ -417,14 +351,13 @@ function WeeklyMonthlyChartCard({ loading = false }) {
         <MiniBarChartLabeled 
           data={series} 
           loading={isLoading || loading}
-          height={chartType === "7_hari" ? 120 : 160}
+          height={chartType === "7_hari" ? 120 : 140}
           type={chartType}
         />
-        {getWeekDetails()}
         {getSummaryText()}
       </CardContent>
     </Card>
   );
 }
 
-export default WeeklyMonthlyChartCard;
+export default SevenDaysChartCard;
