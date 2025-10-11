@@ -1,3 +1,4 @@
+// src/components/views/Dashboard/sections/WeeklyMonthlyChartCard.jsx
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -16,12 +17,12 @@ import { alpha, useTheme } from "@mui/material/styles";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
-import MiniBarChartLabeled from "../ui/MiniBarChartLabeled.jsx";
-import { DataService } from "../../services/DataService";
+import MiniBarChartLabeled from "../../../../ui/MiniBarChartLabeled.jsx";
+import { DataService } from "../../../../services/DataService";
 
 function WeeklyMonthlyChartCard({ loading = false }) {
   const theme = useTheme();
-  const [chartType, setChartType] = useState("mingguan_bulanan"); // 7_hari, mingguan_bulanan, bulanan_tahunan
+  const [chartType, setChartType] = useState("7_hari"); // 7_hari, mingguan_bulanan, bulanan_tahunan
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [series, setSeries] = useState([]);
@@ -73,86 +74,101 @@ function WeeklyMonthlyChartCard({ loading = false }) {
   };
 
   const loadLast7Days = async () => {
-    const data = await DataService.getSevenDaySales();
-    const formattedData = (data || []).map((item, index) => ({
-      label: formatDateLabel(item.date, "7_hari", index),
-      value: item.qty || 0,
-      tooltip: `Tanggal: ${formatDate(item.date)}\nQty: ${item.qty || 0} tabung`
-    }));
-    setSeries(formattedData);
-    setMonthlySummary(null);
+    try {
+      const data = await DataService.getSevenDaySales();
+      const formattedData = (data || []).map((item, index) => ({
+        label: formatDateLabel(item.date, "7_hari", index),
+        value: item.qty || 0,
+        tooltip: `Tanggal: ${formatDate(item.date)}\nQty: ${item.qty || 0} tabung`
+      }));
+      setSeries(formattedData);
+      setMonthlySummary(null);
+    } catch (error) {
+      console.error("Error loading last 7 days:", error);
+      setSeries([]);
+    }
   };
 
   const loadWeeklyMonthly = async () => {
-    // Dapatkan rentang tanggal untuk bulan yang dipilih
-    const monthStart = new Date(selectedYear, selectedMonth, 1);
-    const monthEnd = new Date(selectedYear, selectedMonth + 1, 0);
-    
-    // Bagi bulan menjadi minggu-minggu
-    const weeks = getWeeksInMonth(selectedYear, selectedMonth);
-    
-    const weeklyData = [];
-    let totalMonthQty = 0;
-    let totalMonthValue = 0;
+    try {
+      // Dapatkan rentang tanggal untuk bulan yang dipilih
+      const monthStart = new Date(selectedYear, selectedMonth, 1);
+      const monthEnd = new Date(selectedYear, selectedMonth + 1, 0);
+      
+      // Bagi bulan menjadi minggu-minggu
+      const weeks = getWeeksInMonth(selectedYear, selectedMonth);
+      
+      const weeklyData = [];
+      let totalMonthQty = 0;
+      let totalMonthValue = 0;
 
-    for (let i = 0; i < weeks.length; i++) {
-      const week = weeks[i];
-      const weekSales = await getSalesForPeriod(week.start, week.end);
+      for (let i = 0; i < weeks.length; i++) {
+        const week = weeks[i];
+        const weekSales = await getSalesForPeriod(week.start, week.end);
+        
+        const weekQty = weekSales.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
+        const weekValue = weekSales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
+        
+        weeklyData.push({
+          label: `M${i + 1}`,
+          value: weekQty,
+          tooltip: `Minggu ${i + 1} (${formatDate(week.start)} - ${formatDate(week.end)})\nQty: ${weekQty} tabung\nTotal: Rp ${weekValue.toLocaleString('id-ID')}`,
+          weekNumber: i + 1,
+          dateRange: `${formatDate(week.start)} - ${formatDate(week.end)}`
+        });
+
+        totalMonthQty += weekQty;
+        totalMonthValue += weekValue;
+      }
+
+      setSeries(weeklyData);
       
-      const weekQty = weekSales.reduce((sum, sale) => sum + (sale.qty || 0), 0);
-      const weekValue = weekSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+      // Hitung rata-rata per minggu
+      const avgWeeklyQty = weeklyData.length > 0 ? totalMonthQty / weeklyData.length : 0;
       
-      weeklyData.push({
-        label: `M${i + 1}`,
-        value: weekQty,
-        tooltip: `Minggu ${i + 1} (${formatDate(week.start)} - ${formatDate(week.end)})\nQty: ${weekQty} tabung\nTotal: Rp ${weekValue.toLocaleString('id-ID')}`,
-        weekNumber: i + 1,
-        dateRange: `${formatDate(week.start)} - ${formatDate(week.end)}`
+      setMonthlySummary({
+        totalQty: totalMonthQty,
+        totalValue: totalMonthValue,
+        avgWeeklyQty: avgWeeklyQty,
+        weekCount: weeks.length
       });
-
-      totalMonthQty += weekQty;
-      totalMonthValue += weekValue;
+    } catch (error) {
+      console.error("Error loading weekly monthly data:", error);
+      setSeries([]);
     }
-
-    setSeries(weeklyData);
-    
-    // Hitung rata-rata per minggu
-    const avgWeeklyQty = weeklyData.length > 0 ? totalMonthQty / weeklyData.length : 0;
-    
-    setMonthlySummary({
-      totalQty: totalMonthQty,
-      totalValue: totalMonthValue,
-      avgWeeklyQty: avgWeeklyQty,
-      weekCount: weeks.length
-    });
   };
 
   const loadMonthlyYearly = async () => {
-    const monthlyData = [];
-    let totalYearQty = 0;
+    try {
+      const monthlyData = [];
+      let totalYearQty = 0;
 
-    for (let month = 0; month < 12; month++) {
-      const monthStart = new Date(selectedYear, month, 1);
-      const monthEnd = new Date(selectedYear, month + 1, 0);
-      
-      const monthSales = await getSalesForPeriod(monthStart, monthEnd);
-      const monthQty = monthSales.reduce((sum, sale) => sum + (sale.qty || 0), 0);
-      
-      monthlyData.push({
-        label: months[month].substring(0, 3),
-        value: monthQty,
-        tooltip: `${months[month]} ${selectedYear}\nQty: ${monthQty} tabung`,
-        month: months[month]
+      for (let month = 0; month < 12; month++) {
+        const monthStart = new Date(selectedYear, month, 1);
+        const monthEnd = new Date(selectedYear, month + 1, 0);
+        
+        const monthSales = await getSalesForPeriod(monthStart, monthEnd);
+        const monthQty = monthSales.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
+        
+        monthlyData.push({
+          label: months[month].substring(0, 3),
+          value: monthQty,
+          tooltip: `${months[month]} ${selectedYear}\nQty: ${monthQty} tabung`,
+          month: months[month]
+        });
+
+        totalYearQty += monthQty;
+      }
+
+      setSeries(monthlyData);
+      setMonthlySummary({
+        totalQty: totalYearQty,
+        avgMonthlyQty: totalYearQty / 12
       });
-
-      totalYearQty += monthQty;
+    } catch (error) {
+      console.error("Error loading monthly yearly data:", error);
+      setSeries([]);
     }
-
-    setSeries(monthlyData);
-    setMonthlySummary({
-      totalQty: totalYearQty,
-      avgMonthlyQty: totalYearQty / 12
-    });
   };
 
   // Helper function untuk mendapatkan minggu dalam bulan
@@ -211,26 +227,33 @@ function WeeklyMonthlyChartCard({ loading = false }) {
   };
 
   const formatDate = (date) => {
-    return date.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short'
-    });
+    if (date instanceof Date) {
+      return date.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short'
+      });
+    }
+    return String(date);
   };
 
   const formatDateLabel = (dateString, type, index) => {
     if (type !== "7_hari") return dateString;
     
-    const date = new Date(dateString);
-    const today = new Date();
-    const diffDays = Math.floor((today - date) / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return "Hari Ini";
-    if (diffDays === 1) return "Kemarin";
-    
-    return date.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short'
-    });
+    try {
+      const date = new Date(dateString);
+      const today = new Date();
+      const diffDays = Math.floor((today - date) / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 0) return "Hari Ini";
+      if (diffDays === 1) return "Kemarin";
+      
+      return date.toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short'
+      });
+    } catch (error) {
+      return `Day ${index + 1}`;
+    }
   };
 
   const getCardTitle = () => {
@@ -320,7 +343,8 @@ function WeeklyMonthlyChartCard({ loading = false }) {
   return (
     <Card sx={{
       background: `linear(135deg, ${alpha(theme.palette.info.main, 0.05)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
-      border: `1px solid ${alpha(theme.palette.info.main, 0.1)}`
+      border: `1px solid ${alpha(theme.palette.info.main, 0.1)}`,
+      height: '100%'
     }}>
       <CardHeader
         title={

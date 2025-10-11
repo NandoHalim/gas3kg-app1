@@ -1,4 +1,4 @@
-// ui/MiniBarChartLabeled.jsx - Enhanced Version
+// src/components/ui/MiniBarChartLabeled.jsx
 import React from "react";
 import { Box, Typography, useTheme, Tooltip } from "@mui/material";
 import { alpha } from "@mui/material/styles";
