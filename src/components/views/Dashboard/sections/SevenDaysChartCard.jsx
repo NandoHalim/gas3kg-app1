@@ -248,21 +248,33 @@ function SevenDaysChartCard({ loading = false }) {
     return weeks;
   };
 
-  // Helper function untuk mendapatkan data penjualan
+  // Helper function untuk mendapatkan data penjualan menggunakan fungsi yang ada di DataService
   const getSalesForPeriod = async (startDate, endDate) => {
     try {
+      // Gunakan fungsi getSalesHistory yang sudah tersedia di DataService
       const fromISO = DataService.toISOStringWithOffset(startDate);
       const toISO = DataService.toISOStringWithOffset(endDate);
       
       console.log("Mengambil data dari", fromISO, "sampai", toISO);
-      const sales = await DataService.loadSalesByDateRange(fromISO, toISO);
+      const sales = await DataService.getSalesHistory({
+        from: fromISO,
+        to: toISO,
+        method: "ALL",
+        status: "ALL",
+        limit: 10000
+      });
       console.log("Data penjualan:", sales);
       
-      // Filter hanya penjualan yang sudah dibayar
-      const paidSales = sales.filter(sale => 
-        sale.status !== "DIBATALKAN" && 
-        (sale.method === "TUNAI" || sale.status === "LUNAS")
-      );
+      // Filter hanya penjualan yang sudah dibayar (TUNAI atau LUNAS)
+      const paidSales = sales.filter(sale => {
+        const method = String(sale.method || '').toUpperCase();
+        const status = String(sale.status || '').toUpperCase();
+        
+        if (status === "DIBATALKAN") return false;
+        if (method === "TUNAI") return true;
+        if (status === "LUNAS") return true;
+        return false;
+      });
       
       console.log("Paid sales:", paidSales);
       return paidSales;
