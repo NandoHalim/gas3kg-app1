@@ -17,7 +17,7 @@ import BarChartIcon from "@mui/icons-material/BarChart";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import MiniBarChartLabeled from "../ui/MiniBarChartLabeled.jsx";
-import { DataService } from "../../services/DataService";
+import { DataService } from "../../../../services/DataService"; // PATH DIPERBAIKI
 
 function SevenDaysChartCard({ loading = false }) {
   const theme = useTheme();
