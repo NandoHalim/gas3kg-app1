@@ -1,106 +1,156 @@
+// ui/MiniBarChartLabeled.jsx - Enhanced Version
 import React from "react";
-import { Box, Typography, Skeleton, Stack } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
-import BarChartIcon from "@mui/icons-material/BarChart";
+import { Box, Typography, useTheme, Tooltip } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
-const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
-const isoDate = (d) => startOfDay(d).toISOString().slice(0,10);
-
-function MiniBarChartLabeled({ data = [], loading = false }) {
+function MiniBarChartLabeled({ data, loading = false, height = 120, type = "7_hari" }) {
   const theme = useTheme();
-  const max = Math.max(1, ...data.map((d) => Number(d.qty || 0)));
-  
-  const labelOf = (iso) => {
-    try {
-      const dt = new Date(iso);
-      const wk = dt.toLocaleDateString("id-ID", { weekday: "narrow" });
-      const dd = String(dt.getDate());
-      return `${wk} ${dd}`;
-    } catch {
-      return iso || "-";
-    }
-  };
 
-  if (loading) return <Skeleton height={160} />;
+  if (loading) {
+    return (
+      <Box sx={{ height, display: 'flex', alignItems: 'flex-end', gap: 1, p: 1 }}>
+        {[1, 2, 3, 4, 5, 6, 7].map((_, index) => (
+          <Box
+            key={index}
+            sx={{
+              flex: 1,
+              bgcolor: alpha(theme.palette.grey[300], 0.5),
+              borderRadius: 1,
+              animation: "pulse 1.5s ease-in-out infinite",
+              height: `${Math.random() * 80 + 20}%`
+            }}
+          />
+        ))}
+      </Box>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <Box sx={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography color="text.secondary">
+          Tidak ada data
+        </Typography>
+      </Box>
+    );
+  }
+
+  const values = data.map(item => item.value);
+  const maxValue = Math.max(...values, 1);
+  const isWeeklyMonthly = type === "mingguan_bulanan";
+  const isMonthlyYearly = type === "bulanan_tahunan";
 
   return (
-    <Box sx={{ px: 1, py: 2 }}>
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${Math.max(data.length, 1)}, 1fr)`,
-          alignItems: "end",
-          gap: 2,
-          height: 160,
-        }}
-      >
-        {data.map((d, i) => {
-          const h = Math.max(8, Math.round((Number(d.qty || 0) / max) * 100));
-          const isToday = isoDate(new Date()) === isoDate(new Date(d.date));
+    <Box sx={{ height }}>
+      <Box sx={{ 
+        height: height - 40, 
+        display: 'flex', 
+        alignItems: 'flex-end', 
+        gap: isWeeklyMonthly || isMonthlyYearly ? 2 : 1,
+        justifyContent: isWeeklyMonthly || isMonthlyYearly ? 'center' : 'space-between',
+        px: isWeeklyMonthly || isMonthlyYearly ? 2 : 0,
+        overflowX: 'auto'
+      }}>
+        {data.map((item, index) => {
+          const barHeight = maxValue > 0 ? (item.value / maxValue) * 80 : 0;
+          const isCurrentPeriod = isCurrentItem(item, type);
+          
           return (
-            <Stack key={i} alignItems="center" spacing={1}>
-              <Typography 
-                variant="caption" 
-                sx={{ 
-                  fontWeight: 700, 
-                  lineHeight: 1.1,
-                  color: isToday ? theme.palette.primary.main : 'text.primary'
-                }}
-              >
-                {d.qty}
-              </Typography>
+            <Tooltip key={index} title={item.tooltip || `${item.label}: ${item.value} tabung`} arrow>
               <Box
-                title={`${d.date} • ${d.qty} tabung`}
                 sx={{
-                  width: "75%",
-                  height: h,
-                  borderRadius: 1,
-                  background: isToday 
-                    ? `linear(0deg, ${theme.palette.primary.main}, ${theme.palette.primary.light})`
-                    : `linear(0deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.light})`,
-                  opacity: isToday ? 1 : 0.8,
-                  transition: "all 0.3s ease",
-                  "&:hover": { 
-                    opacity: 1, 
-                    transform: "translateY(-4px)",
-                    boxShadow: theme.shadows[2]
-                  },
-                }}
-              />
-              <Typography 
-                variant="caption" 
-                color={isToday ? "primary.main" : "text.secondary"} 
-                sx={{ 
-                  textAlign: "center", 
-                  lineHeight: 1.2,
-                  fontWeight: isToday ? 700 : 400,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  flex: isWeeklyMonthly || isMonthlyYearly ? '0 0 auto' : 1,
+                  minWidth: isWeeklyMonthly ? 50 : isMonthlyYearly ? 40 : 30
                 }}
               >
-                {labelOf(d.date)}
-              </Typography>
-            </Stack>
+                <Box
+                  sx={{
+                    width: isWeeklyMonthly ? 40 : isMonthlyYearly ? 35 : '100%',
+                    minWidth: 24,
+                    height: `${barHeight}%`,
+                    minHeight: 4,
+                    bgcolor: getBarColor(theme, isCurrentPeriod, index, type),
+                    borderRadius: 1,
+                    transition: 'all 0.3s ease',
+                    cursor: 'pointer',
+                    '&:hover': {
+                      opacity: 0.8,
+                      transform: 'translateY(-2px)'
+                    },
+                    position: 'relative'
+                  }}
+                />
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    mt: 1, 
+                    fontWeight: isCurrentPeriod ? 600 : 400,
+                    color: isCurrentPeriod ? 'primary.main' : 'text.secondary',
+                    textAlign: 'center',
+                    fontSize: isWeeklyMonthly ? '0.75rem' : '0.7rem'
+                  }}
+                >
+                  {item.label}
+                </Typography>
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    fontWeight: 600,
+                    color: 'text.primary',
+                    fontSize: '0.7rem'
+                  }}
+                >
+                  {item.value}
+                </Typography>
+              </Box>
+            </Tooltip>
           );
         })}
-        {!data.length && (
-          <Typography 
-            variant="body2" 
-            color="text.secondary" 
-            sx={{ 
-              gridColumn: "1 / -1", 
-              textAlign: "center",
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%'
-            }}
-          >
-            <BarChartIcon sx={{ mr: 1, opacity: 0.5 }} />
-            Belum ada data penjualan 7 hari terakhir
-          </Typography>
-        )}
       </Box>
     </Box>
   );
 }
+
+// Helper function untuk menentukan warna bar
+const getBarColor = (theme, isCurrent, index, type) => {
+  const colors = [
+    theme.palette.primary.main,
+    theme.palette.info.main,
+    theme.palette.success.main,
+    theme.palette.warning.main,
+    theme.palette.error.main,
+    theme.palette.secondary.main
+  ];
+  
+  if (isCurrent) return theme.palette.primary.main;
+  
+  if (type === "mingguan_bulanan" || type === "bulanan_tahunan") {
+    return colors[index % colors.length];
+  }
+  
+  return theme.palette.info.main;
+};
+
+// Helper function untuk menentukan item saat ini
+const isCurrentItem = (item, type) => {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  
+  if (type === "mingguan_bulanan") {
+    // Untuk mingguan, anggap minggu terakhir adalah current
+    return item.weekNumber === 4; // Atau logika yang lebih kompleks
+  }
+  
+  if (type === "bulanan_tahunan") {
+    return item.month && item.month.toLowerCase() === 
+      new Date().toLocaleString('id-ID', { month: 'long' }).toLowerCase();
+  }
+  
+  return false;
+};
 
 export default MiniBarChartLabeled;
