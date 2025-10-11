@@ -11,6 +11,7 @@ import {
   AccordionSummary,
   AccordionDetails,
   Typography,
+  Grid,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
@@ -22,12 +23,9 @@ import { fmtIDR, todayStr } from "../../../utils/helpers.js";
 // Sections
 import HeaderSection from "./sections/HeaderSection.jsx";
 import SummaryTiles from "./sections/SummaryTiles.jsx";
-import StockConditionCard from "./sections/StockConditionCard.jsx";
 import FinancialSummaryCard from "./sections/FinancialSummaryCard.jsx";
 import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
-import AnalyticsSection from "./sections/AnalyticsSection.jsx";
 import RecentTransactionsTable from "./sections/RecentTransactionsTable.jsx";
-import StockPredictionCard from "./sections/StockPredictionCard.jsx";
 import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx"; // <-- versi slim di file komponennya
 import KpiStrip from "./sections/KpiStrip.jsx";
 
@@ -82,15 +80,6 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const [stockPrediction, setStockPrediction] = useState(null);
   const [businessIntelligence, setBusinessIntelligence] = useState(null);
   const [advancedLoading, setAdvancedLoading] = useState(true);
-
-  // Analytics
-  const [analytics, setAnalytics] = useState({
-    topCustomers: [],
-    weekly: null,
-    monthly: null,
-    yoy: null,
-  });
-  const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
   // Modal
   const [openHist, setOpenHist] = useState(false);
@@ -237,53 +226,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
     return () => { alive = false; };
   }, [recent, today, stocks]);
 
-  // 6) Analytics
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        setAnalyticsLoading(true);
-        const [tops, comps] = await Promise.all([
-          DataService.getTopCustomersPeriod?.({ period: "this_month", limit: 5, onlyPaid: true }).catch(() => []),
-          DataService.getComparisonsSummary?.({ onlyPaid: true }).catch(() => ({})),
-        ]);
-        if (!alive) return;
-
-        const wk = comps?.weekly || null;
-        const weeklyGrowthPct = wk && wk.last_week_qty
-          ? ((Number(wk.this_week_qty || 0) - Number(wk.last_week_qty || 0)) / Number(wk.last_week_qty)) * 100
-          : null;
-
-        const mo = comps?.monthly || null;
-        const monthlyGrowthQty = mo && mo.last_month_qty
-          ? ((Number(mo.this_month_qty || 0) - Number(mo.last_month_qty || 0)) / Number(mo.last_month_qty)) * 100
-          : null;
-        const monthlyGrowthOmzet = mo && mo.last_month_value
-          ? ((Number(mo.this_month_value || 0) - Number(mo.last_month_value || 0)) / Number(mo.last_month_value)) * 100
-          : null;
-
-        const yy = comps?.yoy || null;
-        const yoyGrowthQty = yy && yy.last_year_qty
-          ? ((Number(yy.this_year_qty || 0) - Number(yy.last_year_qty || 0)) / Number(yy.last_year_qty)) * 100
-          : null;
-        const yoyGrowthOmzet = yy && yy.last_year_value
-          ? ((Number(yy.this_year_value || 0) - Number(yy.last_year_value || 0)) / Number(yy.last_year_value)) * 100
-          : null;
-
-        setAnalytics({
-          topCustomers: tops || [],
-          weekly: wk ? { ...wk, growthPct: weeklyGrowthPct } : null,
-          monthly: mo ? { ...mo, growthPctQty: monthlyGrowthQty, growthPctOmzet: monthlyGrowthOmzet } : null,
-          yoy: yy ? { ...yy, growthPctQty: yoyGrowthQty, growthPctOmzet: yoyGrowthOmzet } : null,
-        });
-      } finally {
-        setAnalyticsLoading(false);
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
-
-  // 7) Today
+  // 6) Today
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -351,65 +294,50 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
         />
 
         {/* Grid utama (responsive) */}
-        <Box
-          sx={{
-            display: "grid",
-            gap: 3,
-            gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr 1fr" },
-          }}
-        >
-          {/* Kolom kiri: JANGAN dihapus */}
-          <Stack spacing={3}>
-            <StockConditionCard isi={isi} kosong={kosong} loading={loading} />
-            <StockPredictionCard data={stockPrediction} loading={advancedLoading} />
-            <FinancialSummaryCard
-              omzet={financialSummary.omzet}
-              hpp={financialSummary.hpp}
-              laba={financialSummary.laba}
-              margin={financialSummary.margin}
-              transactionCount={financialSummary.transactionCount}
-              totalQty={financialSummary.totalQty}
-              loading={financialLoading}
-            />
-          </Stack>
+        <Grid container spacing={3}>
+          {/* Kolom kiri - untuk desktop, kolom penuh untuk mobile */}
+          <Grid item xs={12} lg={6}>
+            <Stack spacing={3}>
+              <FinancialSummaryCard
+                omzet={financialSummary.omzet}
+                hpp={financialSummary.hpp}
+                laba={financialSummary.laba}
+                margin={financialSummary.margin}
+                transactionCount={financialSummary.transactionCount}
+                totalQty={financialSummary.totalQty}
+                loading={financialLoading}
+              />
+              
+              <SevenDaysChartCard series={series7} loading={loading} />
+            </Stack>
+          </Grid>
 
-          {/* Kolom tengah */}
-          <Stack spacing={3}>
-            <SevenDaysChartCard series={series7} loading={loading} />
+          {/* Kolom kanan - untuk desktop, kolom penuh untuk mobile */}
+          <Grid item xs={12} lg={6}>
+            <Stack spacing={3}>
+              {/* Business Intelligence dengan accordion di mobile */}
+              {isMobile ? (
+                <Accordion elevation={1}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      Business Intelligence
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <BusinessIntelligenceCard data={businessIntelligence} loading={advancedLoading} />
+                  </AccordionDetails>
+                </Accordion>
+              ) : (
+                <BusinessIntelligenceCard data={businessIntelligence} loading={advancedLoading} />
+              )}
 
-            <AnalyticsSection
-              topCustomers={analytics.topCustomers}
-              weekly={analytics.weekly}
-              monthly={analytics.monthly}
-              loading={analyticsLoading}
-              onOpenCustomerHistory={openCustomerHistory}
-              isSmallMobile={isSmallMobile}
-            />
-
-            {/* Tabel transaksi dengan scroll-x lokal */}
-            <Box sx={{ mx: -2, px: 2, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-              <RecentTransactionsTable rows={recent} loading={loading} isSmallMobile={isSmallMobile} />
-            </Box>
-          </Stack>
-
-          {/* Kolom kanan: BI (slim) */}
-          <Stack spacing={3}>
-            {isMobile ? (
-              <Accordion elevation={0} disableGutters>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="subtitle1" fontWeight={700}>
-                    Business Intelligence
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <BusinessIntelligenceCard data={businessIntelligence} loading={advancedLoading} />
-                </AccordionDetails>
-              </Accordion>
-            ) : (
-              <BusinessIntelligenceCard data={businessIntelligence} loading={advancedLoading} />
-            )}
-          </Stack>
-        </Box>
+              {/* Tabel transaksi dengan scroll-x lokal */}
+              <Box sx={{ mx: { xs: -2, sm: 0 }, px: { xs: 2, sm: 0 }, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                <RecentTransactionsTable rows={recent} loading={loading} isSmallMobile={isSmallMobile} />
+              </Box>
+            </Stack>
+          </Grid>
+        </Grid>
 
         <CustomerHistoryModal
           open={openHist}

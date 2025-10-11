@@ -10,7 +10,8 @@ import {
   Select,
   MenuItem,
   Chip,
-  Grid
+  Grid,
+  Alert
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import BarChartIcon from "@mui/icons-material/BarChart";
@@ -28,6 +29,7 @@ function SevenDaysChartCard({ loading = false }) {
   const [series, setSeries] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [summary, setSummary] = useState(null);
+  const [error, setError] = useState(null);
 
   const chartTypes = [
     { value: "7_hari", label: "7 Hari Terakhir", icon: "📊" },
@@ -50,6 +52,7 @@ function SevenDaysChartCard({ loading = false }) {
 
   const loadChartData = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       switch (chartType) {
         case "7_hari":
@@ -66,6 +69,7 @@ function SevenDaysChartCard({ loading = false }) {
       }
     } catch (error) {
       console.error("Error loading chart data:", error);
+      setError(`Gagal memuat data: ${error.message}`);
       setSeries([]);
       setSummary(null);
     } finally {
@@ -75,28 +79,42 @@ function SevenDaysChartCard({ loading = false }) {
 
   const loadLast7Days = async () => {
     try {
+      console.log("Loading 7 hari terakhir...");
       const data = await DataService.getSevenDaySales();
+      console.log("Data 7 hari:", data);
+      
       const formattedData = (data || []).map((item, index) => ({
         label: formatDateLabel(item.date, index),
         value: item.qty || 0,
         tooltip: `Tanggal: ${formatDate(item.date)}\nQty: ${item.qty || 0} tabung`
       }));
+      
       setSeries(formattedData);
       setSummary(null);
+      
+      if (formattedData.length === 0) {
+        setError("Tidak ada data penjualan untuk 7 hari terakhir");
+      }
     } catch (error) {
       console.error("Error loading last 7 days:", error);
+      setError(`Gagal memuat data 7 hari: ${error.message}`);
       setSeries([]);
     }
   };
 
   const loadWeeklyMonthly = async () => {
     try {
+      console.log(`Loading mingguan untuk bulan ${selectedMonth + 1}/${selectedYear}...`);
+      
       // Dapatkan rentang tanggal untuk bulan yang dipilih
       const monthStart = new Date(selectedYear, selectedMonth, 1);
       const monthEnd = new Date(selectedYear, selectedMonth + 1, 0);
       
+      console.log("Rentang bulan:", monthStart, "sampai", monthEnd);
+      
       // Bagi bulan menjadi minggu-minggu
       const weeks = getWeeksInMonth(selectedYear, selectedMonth);
+      console.log("Minggu-minggu:", weeks);
       
       const weeklyData = [];
       let totalMonthQty = 0;
@@ -105,6 +123,7 @@ function SevenDaysChartCard({ loading = false }) {
       for (let i = 0; i < weeks.length; i++) {
         const week = weeks[i];
         const weekSales = await getSalesForPeriod(week.start, week.end);
+        console.log(`Minggu ${i + 1} sales:`, weekSales);
         
         const weekQty = weekSales.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
         const weekValue = weekSales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
@@ -121,6 +140,7 @@ function SevenDaysChartCard({ loading = false }) {
         totalMonthValue += weekValue;
       }
 
+      console.log("Weekly data final:", weeklyData);
       setSeries(weeklyData);
       
       // Hitung rata-rata per minggu
@@ -133,14 +153,20 @@ function SevenDaysChartCard({ loading = false }) {
         weekCount: weeks.length,
         type: "mingguan_bulan"
       });
+      
+      if (weeklyData.length === 0 || totalMonthQty === 0) {
+        setError(`Tidak ada data penjualan untuk bulan ${months[selectedMonth]} ${selectedYear}`);
+      }
     } catch (error) {
       console.error("Error loading weekly monthly data:", error);
+      setError(`Gagal memuat data mingguan: ${error.message}`);
       setSeries([]);
     }
   };
 
   const loadLast6Months = async () => {
     try {
+      console.log("Loading 6 bulan terakhir...");
       const monthlyData = [];
       let total6MonthsQty = 0;
       const currentDate = new Date();
@@ -150,12 +176,15 @@ function SevenDaysChartCard({ loading = false }) {
         const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
         const monthEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
         
+        console.log(`Loading bulan ${targetDate.getMonth() + 1}/${targetDate.getFullYear()}...`);
         const monthSales = await getSalesForPeriod(monthStart, monthEnd);
+        console.log(`Bulan ${targetDate.getMonth() + 1} sales:`, monthSales);
+        
         const monthQty = monthSales.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
         const monthValue = monthSales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
         
         monthlyData.push({
-          label: months[targetDate.getMonth()].substring(0, 3),
+          label: `${months[targetDate.getMonth()].substring(0, 3)}/${targetDate.getFullYear().toString().slice(-2)}`,
           value: monthQty,
           tooltip: `${months[targetDate.getMonth()]} ${targetDate.getFullYear()}\nQty: ${monthQty} tabung\nTotal: Rp ${monthValue.toLocaleString('id-ID')}`,
           month: months[targetDate.getMonth()],
@@ -165,6 +194,7 @@ function SevenDaysChartCard({ loading = false }) {
         total6MonthsQty += monthQty;
       }
 
+      console.log("6 bulan data final:", monthlyData);
       setSeries(monthlyData);
       
       // Hitung trend (bulan terakhir vs rata-rata 5 bulan sebelumnya)
@@ -179,45 +209,40 @@ function SevenDaysChartCard({ loading = false }) {
         lastMonthQty: lastMonthQty,
         type: "6_bulan"
       });
+      
+      if (monthlyData.length === 0 || total6MonthsQty === 0) {
+        setError("Tidak ada data penjualan untuk 6 bulan terakhir");
+      }
     } catch (error) {
       console.error("Error loading last 6 months data:", error);
+      setError(`Gagal memuat data 6 bulan: ${error.message}`);
       setSeries([]);
     }
   };
 
-  // Helper function untuk mendapatkan minggu dalam bulan
+  // Helper function untuk mendapatkan minggu dalam bulan (versi sederhana)
   const getWeeksInMonth = (year, month) => {
     const weeks = [];
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     
-    let currentWeekStart = new Date(firstDay);
+    let currentDate = new Date(firstDay);
     
-    // Set ke hari Senin (1) jika bukan Senin
-    const dayOfWeek = currentWeekStart.getDay();
-    if (dayOfWeek !== 1) {
-      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      currentWeekStart.setDate(currentWeekStart.getDate() - diff);
-    }
-    
-    while (currentWeekStart <= lastDay) {
-      const weekEnd = new Date(currentWeekStart);
+    while (currentDate <= lastDay) {
+      const weekStart = new Date(currentDate);
+      const weekEnd = new Date(currentDate);
       weekEnd.setDate(weekEnd.getDate() + 6);
       
-      // Pastikan tidak melebihi akhir bulan
       if (weekEnd > lastDay) {
         weekEnd.setTime(lastDay.getTime());
       }
       
-      // Hanya tambahkan minggu yang memiliki hari dalam bulan yang dipilih
-      if (currentWeekStart <= lastDay) {
-        weeks.push({
-          start: new Date(currentWeekStart),
-          end: new Date(weekEnd)
-        });
-      }
+      weeks.push({
+        start: new Date(weekStart),
+        end: new Date(weekEnd)
+      });
       
-      currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+      currentDate.setDate(currentDate.getDate() + 7);
     }
     
     return weeks;
@@ -229,11 +254,18 @@ function SevenDaysChartCard({ loading = false }) {
       const fromISO = DataService.toISOStringWithOffset(startDate);
       const toISO = DataService.toISOStringWithOffset(endDate);
       
+      console.log("Mengambil data dari", fromISO, "sampai", toISO);
       const sales = await DataService.loadSalesByDateRange(fromISO, toISO);
-      return sales.filter(sale => 
+      console.log("Data penjualan:", sales);
+      
+      // Filter hanya penjualan yang sudah dibayar
+      const paidSales = sales.filter(sale => 
         sale.status !== "DIBATALKAN" && 
         (sale.method === "TUNAI" || sale.status === "LUNAS")
       );
+      
+      console.log("Paid sales:", paidSales);
+      return paidSales;
     } catch (error) {
       console.error("Error getting sales data:", error);
       return [];
@@ -350,15 +382,15 @@ function SevenDaysChartCard({ loading = false }) {
                   {Math.round(summary.avgMonthlyQty)} tabung
                 </Typography>
               </Grid>
-              {summary.growth && (
+              {summary.growth !== undefined && (
                 <Grid item xs={12}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <TrendingUpIcon 
-                      color={summary.growth > 0 ? "success" : "error"} 
+                      color={summary.growth > 0 ? "success" : summary.growth < 0 ? "error" : "disabled"} 
                       fontSize="small" 
                     />
-                    <Typography variant="body2" color={summary.growth > 0 ? "success.main" : "error.main"}>
-                      {summary.growth > 0 ? "📈 Naik" : "📉 Turun"} {Math.abs(summary.growth).toFixed(1)}% vs rata-rata 5 bulan sebelumnya
+                    <Typography variant="body2" color={summary.growth > 0 ? "success.main" : summary.growth < 0 ? "error.main" : "text.secondary"}>
+                      {summary.growth > 0 ? "📈 Naik" : summary.growth < 0 ? "📉 Turun" : "➡️ Stabil"} {Math.abs(summary.growth).toFixed(1)}% vs rata-rata 5 bulan sebelumnya
                     </Typography>
                   </Box>
                 </Grid>
@@ -479,6 +511,11 @@ function SevenDaysChartCard({ loading = false }) {
         sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
       />
       <CardContent>
+        {error && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
         <MiniBarChartLabeled 
           data={series} 
           loading={isLoading || loading}
