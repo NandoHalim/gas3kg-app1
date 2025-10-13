@@ -10,7 +10,7 @@ import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import MiniBarChartLabeled from "../ui/MiniBarChartLabeled.jsx";
 
-// ✅ gunakan DataService dengan fungsi baru (sudah kamu patch)
+// ✅ pastikan path ini sesuai struktur project kamu
 import { DataService } from "../../../../services/DataService";
 
 function SevenDaysChartCard({ loading = false }) {
@@ -44,11 +44,11 @@ function SevenDaysChartCard({ loading = false }) {
     setIsLoading(true);
     setError(null);
     try {
-      if (chartType === "7_hari")       await loadLast7Days();
-      else if (chartType === "4_minggu") await loadLast4Weeks();
+      if (chartType === "7_hari")         await loadLast7Days();
+      else if (chartType === "4_minggu")  await loadLast4Weeks();
       else if (chartType === "mingguan_bulan") await loadWeeklyMonthly();
-      else if (chartType === "6_bulan") await loadLast6Months();
-      else                               await loadLast7Days();
+      else if (chartType === "6_bulan")   await loadLast6Months();
+      else                                await loadLast7Days();
     } catch (e) {
       setError(`Gagal memuat data: ${e?.message || e}`);
       setSeries([]); setSummary(null);
@@ -63,9 +63,7 @@ function SevenDaysChartCard({ loading = false }) {
     const formatted = rows.map(r => ({
       label: new Date(r.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
       value: r.qty || 0,
-      tooltip: `Tanggal: ${
-        new Date(r.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" })
-      }\nQty: ${r.qty || 0} tabung`
+      tooltip: `Tanggal: ${new Date(r.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}\nQty: ${r.qty || 0} tabung`
     }));
     setSeries(formatted);
     setSummary(null);
@@ -99,7 +97,7 @@ function SevenDaysChartCard({ loading = false }) {
     if (totalQty === 0) setError("Tidak ada data penjualan untuk 4 minggu terakhir");
   };
 
-  // === Mingguan per Bulan (mulai tgl 1, berakhir sesuai kalender) ===
+  // === Mingguan per Bulan (tgl 1 → akhir bulan) ===
   const loadWeeklyMonthly = async () => {
     const weekly = await DataService.getMonthlyWeeklyBreakdown(selectedYear, selectedMonth);
     let totalQty = 0, totalValue = 0;
@@ -206,7 +204,7 @@ function SevenDaysChartCard({ loading = false }) {
             : "Trend penjualan 6 bulan terakhir"
         }
         action={
-          <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+          <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
             {(chartType === "mingguan_bulan" || chartType === "6_bulan") && (
               <>
                 <FormControl size="small" sx={{ minWidth: 120 }}>
@@ -237,7 +235,7 @@ function SevenDaysChartCard({ loading = false }) {
                 </FormControl>
               </>
             )}
-            <FormControl size="small" sx={{ minWidth: 160 }}>
+            <FormControl size="small" sx={{ minWidth: 180 }}>
               <InputLabel>Tampilan</InputLabel>
               <Select
                 value={chartType}
@@ -255,48 +253,61 @@ function SevenDaysChartCard({ loading = false }) {
         }
         sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
       />
-      <CardContent>
+
+      <CardContent
+        sx={{
+          pb: 2, // ✅ ruang ekstra supaya ringkasan tidak 'menabrak'
+          backgroundColor: alpha(theme.palette.background.paper, 0.9),
+        }}
+      >
         {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
-        <MiniBarChartLabeled
-          data={series}
-          loading={isLoading || loading}
-          height={chartType === "7_hari" ? 120 : 160}
-          type={chartType}
-        />
-        {/* Ringkasan non-7hari */}
+
+        {/* ✅ Batasi overflow chart agar tidak dorong layout */}
+        <Box sx={{ overflowX: "hidden" }}>
+          <MiniBarChartLabeled
+            data={series}
+            loading={isLoading || loading}
+            height={chartType === "7_hari" ? 120 : 160}
+            type={chartType}
+          />
+        </Box>
+
+        {/* ✅ Ringkasan responsif */}
         {summary && chartType !== "7_hari" && (
           <Box sx={{ mt: 2, p: 1, bgcolor: alpha(theme.palette.info.main, 0.04), borderRadius: 1 }}>
             {chartType === "4_minggu" && (
               <Grid container spacing={1}>
-                <Grid item xs={6}>
+                <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">Total 4 Minggu:</Typography>
                   <Typography fontWeight={600}>{summary.totalQty} tabung</Typography>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">Rata-rata/Minggu:</Typography>
                   <Typography fontWeight={600}>{Math.round(summary.avgWeeklyQty)} tabung</Typography>
                 </Grid>
               </Grid>
             )}
+
             {chartType === "mingguan_bulan" && (
               <Grid container spacing={1}>
-                <Grid item xs={6}>
+                <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">Total Bulan:</Typography>
                   <Typography fontWeight={600}>{summary.totalQty} tabung</Typography>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">Rata-rata/Minggu:</Typography>
                   <Typography fontWeight={600}>{Math.round(summary.avgWeeklyQty)} tabung</Typography>
                 </Grid>
               </Grid>
             )}
+
             {chartType === "6_bulan" && (
               <Grid container spacing={1}>
-                <Grid item xs={6}>
+                <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">Total 6 Bulan:</Typography>
                   <Typography fontWeight={600}>{summary.totalQty} tabung</Typography>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid item xs={12} sm={6}>
                   <Typography variant="body2" color="text.secondary">Rata-rata/Bulan:</Typography>
                   <Typography fontWeight={600}>{Math.round(summary.avgMonthlyQty)} tabung</Typography>
                 </Grid>
