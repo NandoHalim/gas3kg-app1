@@ -15,22 +15,27 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import MiniBarChartLabeled from "../ui/MiniBarChartLabeled.jsx";
 import { DataService } from "../../../../services/DataService";
 
-// 🔄 New, modern & responsive card with the same information content.
-// Modes: 7_hari | 4_minggu | mingguan_bulan | 6_bulan
 export default function SevenDaysChartCard({ loading = false }) {
   const theme = useTheme();
 
   const [mode, setMode] = useState("7_hari");
   const [month, setMonth] = useState(new Date().getMonth());
-  const [year, setYear]   = useState(new Date().getFullYear());
+  const [year, setYear] = useState(new Date().getFullYear());
 
   const [series, setSeries] = useState([]);
   const [summary, setSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
-  const years  = [new Date().getFullYear()-1, new Date().getFullYear(), new Date().getFullYear()+1];
+  const months = [
+    "Januari","Februari","Maret","April","Mei","Juni",
+    "Juli","Agustus","September","Oktober","November","Desember"
+  ];
+  const years = [
+    new Date().getFullYear() - 1,
+    new Date().getFullYear(),
+    new Date().getFullYear() + 1
+  ];
 
   useEffect(() => { load(); }, [mode, month, year]);
 
@@ -72,11 +77,19 @@ export default function SevenDaysChartCard({ loading = false }) {
           return { label:w.label, value:w.value, tooltip:w.tooltip, weekNumber:w.weekNumber, dateRange:w.dateRange };
         });
         setSeries(formatted);
-        setSummary({ type:"mingguan_bulan", totalQty, totalValue, avgWeeklyQty: formatted.length? totalQty/formatted.length : 0, weekCount: formatted.length });
+        setSummary({
+          type:"mingguan_bulan",
+          totalQty,
+          totalValue,
+          avgWeeklyQty: formatted.length ? totalQty / formatted.length : 0,
+          weekCount: formatted.length
+        });
         if (totalQty===0) setError(`Tidak ada data penjualan pada ${months[month]} ${year}`);
       } else if (mode === "6_bulan") {
         const rows = await DataService.getLast6MonthsSales();
-        const formatted = rows.map(m => ({ label:m.label, value:m.value, tooltip:m.tooltip, month:m.month, year:m.year }));
+        const formatted = rows.map(m => ({
+          label:m.label, value:m.value, tooltip:m.tooltip, month:m.month, year:m.year
+        }));
         setSeries(formatted);
         const total = formatted.reduce((s,x)=>s+x.value,0);
         const last = formatted[5]?.value || 0;
@@ -104,12 +117,18 @@ export default function SevenDaysChartCard({ loading = false }) {
   }, [mode, month, year]);
 
   return (
-    <Card sx={{ borderRadius: 3, overflow: "hidden", border: `1px solid ${alpha(theme.palette.divider,0.1)}` }}>
-      {/* Header baru: title + toggle + meta */}
+    <Card
+      sx={{
+        borderRadius: 3,
+        overflow: "hidden",
+        border: `1px solid ${alpha(theme.palette.divider,0.1)}`,
+        backgroundColor: "#fff", // putih total
+      }}
+    >
       <CardHeader
         sx={{
           py: 1.5,
-          bgcolor: alpha(theme.palette.background.paper, 0.9),
+          bgcolor: "#fff",
           borderBottom: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
         }}
         title={
@@ -122,7 +141,10 @@ export default function SevenDaysChartCard({ loading = false }) {
               <Chip
                 size="small"
                 variant="outlined"
-                color={summary.growth > 0 ? "success" : summary.growth < 0 ? "error" : "default"}
+                color={
+                  summary.growth > 0 ? "success" :
+                  summary.growth < 0 ? "error" : "default"
+                }
                 label={`${summary.growth>0?"+":""}${(summary.growth||0).toFixed(1)}%`}
               />
             )}
@@ -139,7 +161,10 @@ export default function SevenDaysChartCard({ loading = false }) {
               exclusive
               value={mode}
               onChange={(_, v) => v && setMode(v)}
-              sx={{ backgroundColor: alpha(theme.palette.primary.main, 0.04), borderRadius: 2 }}
+              sx={{
+                backgroundColor: alpha(theme.palette.primary.main, 0.04),
+                borderRadius: 2
+              }}
             >
               <ToggleButton value="7_hari">7h</ToggleButton>
               <ToggleButton value="4_minggu">4w</ToggleButton>
@@ -149,15 +174,27 @@ export default function SevenDaysChartCard({ loading = false }) {
 
             {(mode === "mingguan_bulan" || mode === "6_bulan") && (
               <Stack direction="row" spacing={1}>
-                <FormControl size="small" sx={{ minWidth: 120 }} disabled={isLoading || mode==="6_bulan"}>
+                <FormControl
+                  size="small"
+                  sx={{ minWidth: 120 }}
+                  disabled={isLoading || mode==="6_bulan"}
+                >
                   <InputLabel>Bulan</InputLabel>
-                  <Select value={month} label="Bulan" onChange={(e)=>setMonth(e.target.value)}>
+                  <Select
+                    value={month}
+                    label="Bulan"
+                    onChange={(e)=>setMonth(e.target.value)}
+                  >
                     {months.map((m,i)=>(<MenuItem key={i} value={i}>{m}</MenuItem>))}
                   </Select>
                 </FormControl>
                 <FormControl size="small" sx={{ minWidth: 100 }} disabled={isLoading}>
                   <InputLabel>Tahun</InputLabel>
-                  <Select value={year} label="Tahun" onChange={(e)=>setYear(e.target.value)}>
+                  <Select
+                    value={year}
+                    label="Tahun"
+                    onChange={(e)=>setYear(e.target.value)}
+                  >
                     {years.map(y=>(<MenuItem key={y} value={y}>{y}</MenuItem>))}
                   </Select>
                 </FormControl>
@@ -168,75 +205,122 @@ export default function SevenDaysChartCard({ loading = false }) {
         subheader={headline}
       />
 
-      <CardContent sx={{ pt: 2, pb: 1.5 }}>
+      {/* Card content dibuat putih solid */}
+      <CardContent sx={{ pt: 2, pb: 1.5, backgroundColor: "#fff" }}>
         {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
 
-        {/* KPI strip */}
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
           <Chip
             icon={<BoltIcon />}
-            label={mode==="7_hari" ? "Realtime aktif" : mode==="4_minggu" ? "Rolling 28 hari" : mode==="mingguan_bulan" ? "Mulai tgl 1" : "Termasuk bulan berjalan"}
+            label={
+              mode==="7_hari" ? "Realtime aktif"
+              : mode==="4_minggu" ? "Rolling 28 hari"
+              : mode==="mingguan_bulan" ? "Mulai tgl 1"
+              : "Termasuk bulan berjalan"
+            }
             size="small"
-            sx={{ bgcolor: alpha(theme.palette.info.main, 0.08), color: theme.palette.info.main }}
+            sx={{
+              bgcolor: alpha(theme.palette.info.main, 0.08),
+              color: theme.palette.info.main
+            }}
           />
           <Chip
             icon={<TrendingUpIcon />}
-            label={mode==="4_minggu" ? `Rata2/Minggu: ${summary ? Math.round(summary.avgWeeklyQty) : "-"}` :
-                   mode==="mingguan_bulan" ? `Rata2/Minggu: ${summary ? Math.round(summary.avgWeeklyQty) : "-"}` :
-                   mode==="6_bulan" ? `Rata2/Bulan: ${summary ? Math.round(summary.avgMonthlyQty) : "-"}` : " "}
+            label={
+              mode==="4_minggu"
+                ? `Rata2/Minggu: ${summary ? Math.round(summary.avgWeeklyQty) : "-"}`
+                : mode==="mingguan_bulan"
+                ? `Rata2/Minggu: ${summary ? Math.round(summary.avgWeeklyQty) : "-"}`
+                : mode==="6_bulan"
+                ? `Rata2/Bulan: ${summary ? Math.round(summary.avgMonthlyQty) : "-"}`
+                : " "
+            }
             size="small"
-            sx={{ bgcolor: alpha(theme.palette.success.main, 0.08), color: theme.palette.success.main }}
+            sx={{
+              bgcolor: alpha(theme.palette.success.main, 0.08),
+              color: theme.palette.success.main
+            }}
           />
           {summary && (mode==="4_minggu" || mode==="6_bulan") && (
             <Chip
               icon={<CalendarMonthIcon />}
-              label={mode==="4_minggu" ? `Qty Minggu Terakhir: ${summary.lastWeekQty}` : `Qty Bulan Terakhir: ${summary.lastMonthQty}`}
+              label={
+                mode==="4_minggu"
+                  ? `Qty Minggu Terakhir: ${summary.lastWeekQty}`
+                  : `Qty Bulan Terakhir: ${summary.lastMonthQty}`
+              }
               size="small"
-              sx={{ bgcolor: alpha(theme.palette.warning.main, 0.08), color: theme.palette.warning.main }}
+              sx={{
+                bgcolor: alpha(theme.palette.warning.main, 0.08),
+                color: theme.palette.warning.main
+              }}
             />
           )}
         </Stack>
 
-        {/* Chart */}
         <Box sx={{ overflowX: "hidden" }}>
-          <MiniBarChartLabeled data={series} loading={isLoading || loading} height={mode==="7_hari" ? 140 : 170} type={mode} />
+          <MiniBarChartLabeled
+            data={series}
+            loading={isLoading || loading}
+            height={mode==="7_hari" ? 140 : 170}
+            type={mode}
+            animateOnMount={false}
+            scrollable={false}
+          />
         </Box>
 
-        {/* Footer stats row */}
         {summary && mode!=="7_hari" && (
           <>
             <Divider sx={{ my: 1.5 }} />
             <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap">
-              <Stat label={mode==="6_bulan" ? "Total 6 Bulan" : (mode==="4_minggu" ? "Total 4 Minggu" : "Total Bulan")}
-                    value={
-                      mode==="6_bulan" ? (summary.totalQty ?? 0)
-                      : mode==="4_minggu" ? (summary.totalQty ?? 0)
-                      : (summary.totalQty ?? 0)
-                    }
+              <Stat
+                label={
+                  mode==="6_bulan"
+                    ? "Total 6 Bulan"
+                    : mode==="4_minggu"
+                    ? "Total 4 Minggu"
+                    : "Total Bulan"
+                }
+                value={summary.totalQty ?? 0}
               />
-              <Stat label={mode==="6_bulan" ? "Rata-rata/Bulan" : "Rata-rata/Minggu"}
-                    value={
-                      mode==="6_bulan" ? Math.round(summary.avgMonthlyQty ?? 0)
-                      : Math.round(summary.avgWeeklyQty ?? 0)
-                    }
+              <Stat
+                label={mode==="6_bulan" ? "Rata-rata/Bulan" : "Rata-rata/Minggu"}
+                value={
+                  mode==="6_bulan"
+                    ? Math.round(summary.avgMonthlyQty ?? 0)
+                    : Math.round(summary.avgWeeklyQty ?? 0)
+                }
               />
-              <Stat label="Growth"
-                    value={`${summary.growth>0?"+":""}${(summary.growth||0).toFixed(1)}%`}
-                    color={summary.growth>0 ? "success" : summary.growth<0 ? "error" : "default"}
+              <Stat
+                label="Growth"
+                value={`${summary.growth>0?"+":""}${(summary.growth||0).toFixed(1)}%`}
+                color={
+                  summary.growth>0
+                    ? "success"
+                    : summary.growth<0
+                    ? "error"
+                    : "default"
+                }
               />
             </Stack>
           </>
         )}
       </CardContent>
 
-      <CardActions sx={{ px: 2, pb: 2, pt: 0, display: "flex", justifyContent: "space-between" }}>
+      <CardActions sx={{
+        px: 2, pb: 2, pt: 0,
+        display: "flex",
+        justifyContent: "space-between",
+        backgroundColor: "#fff"
+      }}>
         <Typography variant="caption" color="text.secondary">
           Data sinkron, kecuali status <b>DIBATALKAN</b>.
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {mode==="7_hari" ? "Per hari (T-6 s/d hari ini)" :
            mode==="4_minggu" ? "4 minggu bergulir" :
-           mode==="mingguan_bulan" ? "M1..M5 sesuai kalender" : "6 bulan termasuk bulan ini"}
+           mode==="mingguan_bulan" ? "M1..M5 sesuai kalender" :
+           "6 bulan termasuk bulan ini"}
         </Typography>
       </CardActions>
     </Card>

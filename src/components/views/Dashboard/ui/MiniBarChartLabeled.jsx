@@ -13,8 +13,8 @@ function MiniBarChartLabeled({
   showTotals = true,
   showPeak = true,
   compactLabels = "auto",
-  animateOnMount = false,   // 🆕 matikan animasi reload
-  scrollable = false,       // 🆕 sembunyikan scrollbar
+  animateOnMount = false,   // matikan animasi reload (default)
+  scrollable = false,       // sembunyikan scrollbar (default)
 }) {
   const theme = useTheme();
 
@@ -30,6 +30,7 @@ function MiniBarChartLabeled({
           borderRadius: 2,
           border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
           backgroundColor: "#fff !important",
+          backgroundImage: "none !important",
         }}
       >
         {Array.from({ length: 8 }).map((_, i) => (
@@ -66,6 +67,7 @@ function MiniBarChartLabeled({
           borderRadius: 2,
           border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
           backgroundColor: "#fff !important",
+          backgroundImage: "none !important",
         }}
       >
         <Typography color="text.secondary">Tidak ada data</Typography>
@@ -120,7 +122,10 @@ function MiniBarChartLabeled({
         </Stack>
       )}
 
+      {/* === Plot Area (dipaksa putih total) === */}
       <Box
+        className="chart-area"
+        style={{ backgroundColor: "#fff" }}   // inline style > CSS luar
         sx={{
           position: "relative",
           height: "100%",
@@ -130,14 +135,23 @@ function MiniBarChartLabeled({
           justifyContent: "space-between",
           px: 1,
           pb: 1.5,
-          backgroundColor: "#fff !important",
+          backgroundColor: "#ffffff !important",
+          backgroundImage: "none !important",  // potong gradien/overlay global
+          mixBlendMode: "normal",
           borderRadius: 2,
           boxShadow: "inset 0 0 6px rgba(0,0,0,0.05)",
           border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+
           overflowX: scrollable ? "auto" : "hidden",
           overflowY: "hidden",
           "&::-webkit-scrollbar": { display: "none" },
           scrollbarWidth: "none",
+
+          // Matikan pseudo-element overlay dari CSS global
+          "&::before, &::after": {
+            display: "none !important",
+            content: '""',
+          },
         }}
       >
         {gridLines.map((p) => (
@@ -166,7 +180,7 @@ function MiniBarChartLabeled({
           return (
             <Tooltip
               key={index}
-              title={`${item.label}: ${valueFormatter(raw)} ${unit}`}
+              title={item.tooltip || `${item.label}: ${valueFormatter(raw)} ${unit}`}
               arrow
               enterTouchDelay={20}
             >
@@ -186,9 +200,7 @@ function MiniBarChartLabeled({
                     minHeight: 6,
                     background: gradient,
                     borderRadius: 6,
-                    transition: animateOnMount
-                      ? "height 380ms ease"
-                      : "none",
+                    transition: animateOnMount ? "height 380ms ease" : "none",
                   }}
                 />
                 <Typography
