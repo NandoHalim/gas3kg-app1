@@ -1,323 +1,255 @@
 // src/components/views/Dashboard/sections/SevenDaysChartCard.jsx
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Card, CardHeader, CardContent, Box, Typography, FormControl,
-  InputLabel, Select, MenuItem, Chip, Grid, Alert
+  Card, CardHeader, CardContent, CardActions,
+  Box, Stack, Typography, Chip, Divider,
+  ToggleButtonGroup, ToggleButton,
+  FormControl, Select, MenuItem, InputLabel, Tooltip, Alert
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
-import BarChartIcon from "@mui/icons-material/BarChart";
+import TimelineIcon from "@mui/icons-material/Timeline";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import BoltIcon from "@mui/icons-material/Bolt";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import MiniBarChartLabeled from "../ui/MiniBarChartLabeled.jsx";
-
-// ✅ pastikan path ini sesuai struktur project kamu
 import { DataService } from "../../../../services/DataService";
 
-function SevenDaysChartCard({ loading = false }) {
+// 🔄 New, modern & responsive card with the same information content.
+// Modes: 7_hari | 4_minggu | mingguan_bulan | 6_bulan
+export default function SevenDaysChartCard({ loading = false }) {
   const theme = useTheme();
 
-  const [chartType, setChartType] = useState("7_hari");
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [mode, setMode] = useState("7_hari");
+  const [month, setMonth] = useState(new Date().getMonth());
+  const [year, setYear]   = useState(new Date().getFullYear());
 
   const [series, setSeries] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [summary, setSummary] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const months = [
-    "Januari","Februari","Maret","April","Mei","Juni",
-    "Juli","Agustus","September","Oktober","November","Desember"
-  ];
-  const years = [new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1];
+  const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+  const years  = [new Date().getFullYear()-1, new Date().getFullYear(), new Date().getFullYear()+1];
 
-  const chartTypes = [
-    { value: "7_hari", label: "7 Hari Terakhir", icon: "📊" },
-    { value: "4_minggu", label: "4 Minggu Terakhir", icon: "📅" },
-    { value: "mingguan_bulan", label: "Mingguan per Bulan", icon: "📅" },
-    { value: "6_bulan", label: "6 Bulan Terakhir", icon: "📈" }
-  ];
+  useEffect(() => { load(); }, [mode, month, year]);
 
-  useEffect(() => { loadChartData(); }, [chartType, selectedMonth, selectedYear]);
-
-  const loadChartData = async () => {
-    setIsLoading(true);
-    setError(null);
+  async function load() {
+    setIsLoading(true); setError(null);
     try {
-      if (chartType === "7_hari")         await loadLast7Days();
-      else if (chartType === "4_minggu")  await loadLast4Weeks();
-      else if (chartType === "mingguan_bulan") await loadWeeklyMonthly();
-      else if (chartType === "6_bulan")   await loadLast6Months();
-      else                                await loadLast7Days();
+      if (mode === "7_hari") {
+        const rows = await DataService.getSevenDaySalesRealtime();
+        const formatted = rows.map(r => ({
+          label: new Date(r.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+          value: r.qty || 0,
+          tooltip: `Tanggal: ${new Date(r.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}\nQty: ${r.qty||0} tabung`
+        }));
+        setSeries(formatted);
+        setSummary(null);
+        if (!formatted.length) setError("Tidak ada data penjualan untuk 7 hari terakhir");
+      } else if (mode === "4_minggu") {
+        const weekly = await DataService.getLast4WeeksSales();
+        let totalQty=0, totalValue=0;
+        const formatted = weekly.map(w => {
+          totalQty += w.value; totalValue += w.totalValue;
+          return {
+            label: w.label,
+            value: w.value,
+            tooltip: `Minggu ${w.weekNumber} (${w.dateRange})\nQty: ${w.value} tabung\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(w.totalValue)}`
+          };
+        });
+        setSeries(formatted);
+        const last = formatted[3]?.value || 0;
+        const prevAvg = formatted.slice(0,3).reduce((s,x)=>s+x.value,0)/3 || 0;
+        const growth = prevAvg>0 ? ((last-prevAvg)/prevAvg)*100 : 0;
+        setSummary({ type:"4_minggu", totalQty, totalValue, avgWeeklyQty: totalQty/4, growth, lastWeekQty:last });
+        if (totalQty===0) setError("Tidak ada data penjualan untuk 4 minggu terakhir");
+      } else if (mode === "mingguan_bulan") {
+        const weekly = await DataService.getMonthlyWeeklyBreakdown(year, month);
+        let totalQty=0, totalValue=0;
+        const formatted = weekly.map(w => {
+          totalQty += w.value; totalValue += w.totalValue;
+          return { label:w.label, value:w.value, tooltip:w.tooltip, weekNumber:w.weekNumber, dateRange:w.dateRange };
+        });
+        setSeries(formatted);
+        setSummary({ type:"mingguan_bulan", totalQty, totalValue, avgWeeklyQty: formatted.length? totalQty/formatted.length : 0, weekCount: formatted.length });
+        if (totalQty===0) setError(`Tidak ada data penjualan pada ${months[month]} ${year}`);
+      } else if (mode === "6_bulan") {
+        const rows = await DataService.getLast6MonthsSales();
+        const formatted = rows.map(m => ({ label:m.label, value:m.value, tooltip:m.tooltip, month:m.month, year:m.year }));
+        setSeries(formatted);
+        const total = formatted.reduce((s,x)=>s+x.value,0);
+        const last = formatted[5]?.value || 0;
+        const prevAvg = formatted.slice(0,5).reduce((s,x)=>s+x.value,0)/5 || 0;
+        const growth = prevAvg>0 ? ((last-prevAvg)/prevAvg)*100 : 0;
+        setSummary({ type:"6_bulan", totalQty: total, avgMonthlyQty: total/6, growth, lastMonthQty: last });
+        if (total===0) setError("Tidak ada data penjualan untuk 6 bulan terakhir");
+      }
     } catch (e) {
       setError(`Gagal memuat data: ${e?.message || e}`);
       setSeries([]); setSummary(null);
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
-  // === 7 Hari Terakhir (realtime) ===
-  const loadLast7Days = async () => {
-    const rows = await DataService.getSevenDaySalesRealtime();
-    const formatted = rows.map(r => ({
-      label: new Date(r.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
-      value: r.qty || 0,
-      tooltip: `Tanggal: ${new Date(r.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}\nQty: ${r.qty || 0} tabung`
-    }));
-    setSeries(formatted);
-    setSummary(null);
-    if (formatted.length === 0) setError("Tidak ada data penjualan untuk 7 hari terakhir");
-  };
-
-  // === 4 Minggu Terakhir (rolling) ===
-  const loadLast4Weeks = async () => {
-    const weekly = await DataService.getLast4WeeksSales();
-    let totalQty = 0, totalValue = 0;
-    const formatted = weekly.map(w => {
-      totalQty += w.value; totalValue += w.totalValue;
-      return {
-        label: w.label,
-        value: w.value,
-        tooltip: `Minggu ${w.weekNumber} (${w.dateRange})\nQty: ${w.value} tabung\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(w.totalValue)}`
-      };
-    });
-    setSeries(formatted);
-    const last = formatted[3]?.value || 0;
-    const prevAvg = formatted.slice(0, 3).reduce((s, x) => s + x.value, 0) / 3 || 0;
-    const growth = prevAvg > 0 ? ((last - prevAvg) / prevAvg) * 100 : 0;
-    setSummary({
-      type: "4_minggu",
-      totalQty,
-      totalValue,
-      avgWeeklyQty: totalQty / 4,
-      growth,
-      lastWeekQty: last
-    });
-    if (totalQty === 0) setError("Tidak ada data penjualan untuk 4 minggu terakhir");
-  };
-
-  // === Mingguan per Bulan (tgl 1 → akhir bulan) ===
-  const loadWeeklyMonthly = async () => {
-    const weekly = await DataService.getMonthlyWeeklyBreakdown(selectedYear, selectedMonth);
-    let totalQty = 0, totalValue = 0;
-    const formatted = weekly.map(w => {
-      totalQty += w.value; totalValue += w.totalValue;
-      return {
-        label: w.label,
-        value: w.value,
-        tooltip: w.tooltip,
-        weekNumber: w.weekNumber,
-        dateRange: w.dateRange
-      };
-    });
-    setSeries(formatted);
-    setSummary({
-      type: "mingguan_bulan",
-      totalQty,
-      totalValue,
-      avgWeeklyQty: formatted.length ? totalQty / formatted.length : 0,
-      weekCount: formatted.length
-    });
-    if (totalQty === 0) setError(`Tidak ada data penjualan pada ${months[selectedMonth]} ${selectedYear}`);
-  };
-
-  // === 6 Bulan Terakhir (termasuk bulan berjalan) ===
-  const loadLast6Months = async () => {
-    const rows = await DataService.getLast6MonthsSales();
-    const formatted = rows.map(m => ({
-      label: m.label,
-      value: m.value,
-      tooltip: m.tooltip,
-      month: m.month,
-      year: m.year
-    }));
-    setSeries(formatted);
-    const total = formatted.reduce((s, x) => s + x.value, 0);
-    const last = formatted[5]?.value || 0;
-    const prevAvg = formatted.slice(0, 5).reduce((s, x) => s + x.value, 0) / 5 || 0;
-    const growth = prevAvg > 0 ? ((last - prevAvg) / prevAvg) * 100 : 0;
-    setSummary({
-      type: "6_bulan",
-      totalQty: total,
-      avgMonthlyQty: total / 6,
-      growth,
-      lastMonthQty: last
-    });
-    if (total === 0) setError("Tidak ada data penjualan untuk 6 bulan terakhir");
-  };
-
-  const getIcon = () => {
-    switch (chartType) {
-      case "7_hari": return <BarChartIcon color="info" />;
-      case "4_minggu": return <CalendarMonthIcon color="warning" />;
-      case "mingguan_bulan": return <CalendarMonthIcon color="primary" />;
-      case "6_bulan": return <TrendingUpIcon color="success" />;
-      default: return <BarChartIcon color="info" />;
+  const headline = useMemo(() => {
+    switch (mode) {
+      case "7_hari": return "7 Hari Terakhir";
+      case "4_minggu": return "4 Minggu Terakhir";
+      case "mingguan_bulan": return `Mingguan • ${months[month]} ${year}`;
+      case "6_bulan": return "6 Bulan Terakhir";
+      default: return "Penjualan";
     }
-  };
-
-  const getGrowthChip = (growth) => {
-    if (growth === undefined || growth === null) return null;
-    const pos = growth > 0, neu = growth === 0;
-    return (
-      <Chip
-        label={`${pos ? "+" : ""}${growth.toFixed(1)}%`}
-        color={neu ? "default" : pos ? "success" : "error"}
-        variant="outlined"
-        size="small"
-        sx={{ ml: 1 }}
-      />
-    );
-  };
+  }, [mode, month, year]);
 
   return (
-    <Card
-      sx={{
-        background: `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.05)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
-        border: `1px solid ${alpha(theme.palette.info.main, 0.1)}`
-      }}
-    >
+    <Card sx={{ borderRadius: 3, overflow: "hidden", border: `1px solid ${alpha(theme.palette.divider,0.1)}` }}>
+      {/* Header baru: title + toggle + meta */}
       <CardHeader
+        sx={{
+          py: 1.5,
+          bgcolor: alpha(theme.palette.background.paper, 0.9),
+          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+        }}
         title={
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            {getIcon()}
-            <Typography variant="h6" fontWeight={700}>
-              {chartType === "7_hari"
-                ? "7 Hari Terakhir"
-                : chartType === "4_minggu"
-                ? "4 Minggu Terakhir"
-                : chartType === "mingguan_bulan"
-                ? "Mingguan per Bulan"
-                : "6 Bulan Terakhir"}
-              {summary?.growth !== undefined && getGrowthChip(summary.growth)}
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <TimelineIcon fontSize="small" color="primary" />
+            <Typography variant="subtitle1" fontWeight={700}>
+              Tren Penjualan
             </Typography>
-          </Box>
-        }
-        subheader={
-          chartType === "7_hari"
-            ? "Trend penjualan harian 7 hari terakhir"
-            : chartType === "4_minggu"
-            ? "Perbandingan penjualan 4 minggu terakhir"
-            : chartType === "mingguan_bulan"
-            ? `Perbandingan mingguan bulan ${months[selectedMonth]} ${selectedYear}`
-            : "Trend penjualan 6 bulan terakhir"
+            {summary?.growth !== undefined && (
+              <Chip
+                size="small"
+                variant="outlined"
+                color={summary.growth > 0 ? "success" : summary.growth < 0 ? "error" : "default"}
+                label={`${summary.growth>0?"+":""}${(summary.growth||0).toFixed(1)}%`}
+              />
+            )}
+            <Tooltip title="Update realtime, kalkulasi mengikuti kalender.">
+              <InfoOutlinedIcon fontSize="small" sx={{ color: "text.disabled" }} />
+            </Tooltip>
+          </Stack>
         }
         action={
-          <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
-            {(chartType === "mingguan_bulan" || chartType === "6_bulan") && (
-              <>
-                <FormControl size="small" sx={{ minWidth: 120 }}>
+          <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+            <ToggleButtonGroup
+              size="small"
+              color="primary"
+              exclusive
+              value={mode}
+              onChange={(_, v) => v && setMode(v)}
+              sx={{ backgroundColor: alpha(theme.palette.primary.main, 0.04), borderRadius: 2 }}
+            >
+              <ToggleButton value="7_hari">7h</ToggleButton>
+              <ToggleButton value="4_minggu">4w</ToggleButton>
+              <ToggleButton value="mingguan_bulan">Minggu/Bln</ToggleButton>
+              <ToggleButton value="6_bulan">6m</ToggleButton>
+            </ToggleButtonGroup>
+
+            {(mode === "mingguan_bulan" || mode === "6_bulan") && (
+              <Stack direction="row" spacing={1}>
+                <FormControl size="small" sx={{ minWidth: 120 }} disabled={isLoading || mode==="6_bulan"}>
                   <InputLabel>Bulan</InputLabel>
-                  <Select
-                    value={selectedMonth}
-                    label="Bulan"
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    disabled={isLoading || chartType === "6_bulan"}
-                  >
-                    {months.map((m, i) => (
-                      <MenuItem key={i} value={i}>{m}</MenuItem>
-                    ))}
+                  <Select value={month} label="Bulan" onChange={(e)=>setMonth(e.target.value)}>
+                    {months.map((m,i)=>(<MenuItem key={i} value={i}>{m}</MenuItem>))}
                   </Select>
                 </FormControl>
-                <FormControl size="small" sx={{ minWidth: 100 }}>
+                <FormControl size="small" sx={{ minWidth: 100 }} disabled={isLoading}>
                   <InputLabel>Tahun</InputLabel>
-                  <Select
-                    value={selectedYear}
-                    label="Tahun"
-                    onChange={(e) => setSelectedYear(e.target.value)}
-                    disabled={isLoading}
-                  >
-                    {years.map((y) => (
-                      <MenuItem key={y} value={y}>{y}</MenuItem>
-                    ))}
+                  <Select value={year} label="Tahun" onChange={(e)=>setYear(e.target.value)}>
+                    {years.map(y=>(<MenuItem key={y} value={y}>{y}</MenuItem>))}
                   </Select>
                 </FormControl>
-              </>
+              </Stack>
             )}
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <InputLabel>Tampilan</InputLabel>
-              <Select
-                value={chartType}
-                label="Tampilan"
-                onChange={(e) => setChartType(e.target.value)}
-                disabled={isLoading}
-              >
-                <MenuItem value="7_hari">📊 7 Hari Terakhir</MenuItem>
-                <MenuItem value="4_minggu">📅 4 Minggu Terakhir</MenuItem>
-                <MenuItem value="mingguan_bulan">📅 Mingguan per Bulan</MenuItem>
-                <MenuItem value="6_bulan">📈 6 Bulan Terakhir</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
+          </Stack>
         }
-        sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
+        subheader={headline}
       />
 
-      <CardContent
-        sx={{
-          pb: 2, // ✅ ruang ekstra supaya ringkasan tidak 'menabrak'
-          backgroundColor: alpha(theme.palette.background.paper, 0.9),
-        }}
-      >
+      <CardContent sx={{ pt: 2, pb: 1.5 }}>
         {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
 
-        {/* ✅ Batasi overflow chart agar tidak dorong layout */}
-        <Box sx={{ overflowX: "hidden" }}>
-          <MiniBarChartLabeled
-            data={series}
-            loading={isLoading || loading}
-            height={chartType === "7_hari" ? 120 : 160}
-            type={chartType}
+        {/* KPI strip */}
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
+          <Chip
+            icon={<BoltIcon />}
+            label={mode==="7_hari" ? "Realtime aktif" : mode==="4_minggu" ? "Rolling 28 hari" : mode==="mingguan_bulan" ? "Mulai tgl 1" : "Termasuk bulan berjalan"}
+            size="small"
+            sx={{ bgcolor: alpha(theme.palette.info.main, 0.08), color: theme.palette.info.main }}
           />
+          <Chip
+            icon={<TrendingUpIcon />}
+            label={mode==="4_minggu" ? `Rata2/Minggu: ${summary ? Math.round(summary.avgWeeklyQty) : "-"}` :
+                   mode==="mingguan_bulan" ? `Rata2/Minggu: ${summary ? Math.round(summary.avgWeeklyQty) : "-"}` :
+                   mode==="6_bulan" ? `Rata2/Bulan: ${summary ? Math.round(summary.avgMonthlyQty) : "-"}` : " "}
+            size="small"
+            sx={{ bgcolor: alpha(theme.palette.success.main, 0.08), color: theme.palette.success.main }}
+          />
+          {summary && (mode==="4_minggu" || mode==="6_bulan") && (
+            <Chip
+              icon={<CalendarMonthIcon />}
+              label={mode==="4_minggu" ? `Qty Minggu Terakhir: ${summary.lastWeekQty}` : `Qty Bulan Terakhir: ${summary.lastMonthQty}`}
+              size="small"
+              sx={{ bgcolor: alpha(theme.palette.warning.main, 0.08), color: theme.palette.warning.main }}
+            />
+          )}
+        </Stack>
+
+        {/* Chart */}
+        <Box sx={{ overflowX: "hidden" }}>
+          <MiniBarChartLabeled data={series} loading={isLoading || loading} height={mode==="7_hari" ? 140 : 170} type={mode} />
         </Box>
 
-        {/* ✅ Ringkasan responsif */}
-        {summary && chartType !== "7_hari" && (
-          <Box sx={{ mt: 2, p: 1, bgcolor: alpha(theme.palette.info.main, 0.04), borderRadius: 1 }}>
-            {chartType === "4_minggu" && (
-              <Grid container spacing={1}>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">Total 4 Minggu:</Typography>
-                  <Typography fontWeight={600}>{summary.totalQty} tabung</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">Rata-rata/Minggu:</Typography>
-                  <Typography fontWeight={600}>{Math.round(summary.avgWeeklyQty)} tabung</Typography>
-                </Grid>
-              </Grid>
-            )}
-
-            {chartType === "mingguan_bulan" && (
-              <Grid container spacing={1}>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">Total Bulan:</Typography>
-                  <Typography fontWeight={600}>{summary.totalQty} tabung</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">Rata-rata/Minggu:</Typography>
-                  <Typography fontWeight={600}>{Math.round(summary.avgWeeklyQty)} tabung</Typography>
-                </Grid>
-              </Grid>
-            )}
-
-            {chartType === "6_bulan" && (
-              <Grid container spacing={1}>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">Total 6 Bulan:</Typography>
-                  <Typography fontWeight={600}>{summary.totalQty} tabung</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" color="text.secondary">Rata-rata/Bulan:</Typography>
-                  <Typography fontWeight={600}>{Math.round(summary.avgMonthlyQty)} tabung</Typography>
-                </Grid>
-              </Grid>
-            )}
-          </Box>
+        {/* Footer stats row */}
+        {summary && mode!=="7_hari" && (
+          <>
+            <Divider sx={{ my: 1.5 }} />
+            <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap">
+              <Stat label={mode==="6_bulan" ? "Total 6 Bulan" : (mode==="4_minggu" ? "Total 4 Minggu" : "Total Bulan")}
+                    value={
+                      mode==="6_bulan" ? (summary.totalQty ?? 0)
+                      : mode==="4_minggu" ? (summary.totalQty ?? 0)
+                      : (summary.totalQty ?? 0)
+                    }
+              />
+              <Stat label={mode==="6_bulan" ? "Rata-rata/Bulan" : "Rata-rata/Minggu"}
+                    value={
+                      mode==="6_bulan" ? Math.round(summary.avgMonthlyQty ?? 0)
+                      : Math.round(summary.avgWeeklyQty ?? 0)
+                    }
+              />
+              <Stat label="Growth"
+                    value={`${summary.growth>0?"+":""}${(summary.growth||0).toFixed(1)}%`}
+                    color={summary.growth>0 ? "success" : summary.growth<0 ? "error" : "default"}
+              />
+            </Stack>
+          </>
         )}
       </CardContent>
+
+      <CardActions sx={{ px: 2, pb: 2, pt: 0, display: "flex", justifyContent: "space-between" }}>
+        <Typography variant="caption" color="text.secondary">
+          Data sinkron, kecuali status <b>DIBATALKAN</b>.
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {mode==="7_hari" ? "Per hari (T-6 s/d hari ini)" :
+           mode==="4_minggu" ? "4 minggu bergulir" :
+           mode==="mingguan_bulan" ? "M1..M5 sesuai kalender" : "6 bulan termasuk bulan ini"}
+        </Typography>
+      </CardActions>
     </Card>
   );
 }
 
-export default SevenDaysChartCard;
+function Stat({ label, value, color="primary" }) {
+  return (
+    <Stack direction="row" spacing={1} alignItems="center">
+      <Chip size="small" label={label} sx={{ bgcolor: alpha("#000", 0.04) }} />
+      <Typography variant="body2" fontWeight={700} color={`${color}.main`}>
+        {value}
+      </Typography>
+    </Stack>
+  );
+}
