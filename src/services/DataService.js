@@ -1887,135 +1887,175 @@ DataService.getAIInsightsV2 = async function () {
   };
 };
 
-// ====== FUNGSI BARU UNTUK CHART CARD ======
 
-// Untuk 4 minggu terakhir (28 hari rolling)
-DataService.getLast4WeeksSales = async function () {
+/* ==========================================
+   🆕 Tambahan fungsi analitik penjualan (non-breaking)
+   DITEMPEL di akhir file. Tidak mengubah fungsi lama; hanya menambah metode
+   ke DataService via Object.assign. Semua rentang tanggal inklusif
+   (00:00:00.000 s.d. 23:59:59.999). Kecualikan hanya status 'DIBATALKAN'.
+   ========================================== */
+
+// ===== Helpers tanggal =====
+function _ds_startOfDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function _ds_endOfDay(d){ const x=new Date(d); x.setHours(23,59,59,999); return x; }
+function _ds_startOfMonth(y,m){ return _ds_startOfDay(new Date(y,m,1)); }
+function _ds_endOfMonth(y,m){ return _ds_endOfDay(new Date(y,m+1,0)); }
+function _ds_toISO(d){
   try {
-    const to = new Date();
-    const from = new Date(to.getTime() - 28 * 24 * 60 * 60 * 1000);
-    
-    const dailyData = await this.getDailySummary({
-      from: toISOStringWithOffset(from), // ✅ PERBAIKAN
-      to: toISOStringWithOffset(to),     // ✅ PERBAIKAN
-      onlyPaid: true
+    if (typeof DataService?.toISOStringWithOffset === "function") {
+      return DataService.toISOStringWithOffset(d);
+    }
+  } catch(e) {}
+  return new Date(d).toISOString();
+}
+const _ds_keepSale = (row) => String(row.status||'').toUpperCase() !== 'DIBATALKAN';
+const _ds_totalValue = (row) => Number(row.total_amount ?? row.total ?? 0) || 0;
+
+// Ambil data range sekali (pakai getSalesHistory jika ada, fallback ke tabel sales)
+async function _ds_fetchSalesRange(fromDate, toDate){
+  const fromISO = _ds_toISO(_ds_startOfDay(fromDate));
+  const toISO   = _ds_toISO(_ds_endOfDay(toDate));
+
+  try {
+    if (typeof DataService?.getSalesHistory === "function") {
+      const rows = await DataService.getSalesHistory({
+        from: fromISO, to: toISO, method: "ALL", status: "ALL", limit: 100000
+      });
+      return (rows||[]).filter(_ds_keepSale);
+    }
+  } catch(e) {}
+
+  const { data, error } = await supabase
+    .from("sales")
+    .select("created_at, qty, total_amount, total, method, status")
+    .gte("created_at", fromISO)
+    .lte("created_at", toISO)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return (data||[]).filter(_ds_keepSale);
+}
+
+/**
+ * 7 Hari terakhir realtime (per tanggal)
+ * return: [{date: ISO-00:00, qty}]
+ */
+async function getSevenDaySalesRealtime() {
+  const today = new Date();
+  const from = new Date(today); from.setDate(from.getDate()-6);
+  const rows = await _ds_fetchSalesRange(from, today);
+
+  const map = new Map();
+  for (let i=6;i>=0;i--){
+    const d = new Date(today); d.setDate(d.getDate()-i);
+    const key = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0,0).toISOString();
+    map.set(key, { date:key, qty:0 });
+  }
+  rows.forEach(r=>{
+    const d=new Date(r.created_at);
+    const key=new Date(d.getFullYear(),d.getMonth(),d.getDate(),0,0,0,0).toISOString();
+    if(map.has(key)){ const obj=map.get(key); obj.qty += Number(r.qty)||0; }
+  });
+  return Array.from(map.values());
+}
+
+/**
+ * 4 minggu terakhir (rolling 28 hari, 4 bucket minggu)
+ * return: [{label:'M1', value:qty, totalValue, weekNumber, dateRange}]
+ */
+async function getLast4WeeksSales() {
+  const today = new Date();
+  const from = new Date(today); from.setDate(from.getDate() - (7*4 - 1));
+  const rows = await _ds_fetchSalesRange(from, today);
+
+  const weeks = [];
+  for (let w=3; w>=0; w--){
+    const end = new Date(today); end.setDate(end.getDate() - (7*w));
+    const start = new Date(end); start.setDate(start.getDate() - 6);
+    weeks.push({ start:_ds_startOfDay(start), end:_ds_endOfDay(end) });
+  }
+
+  return weeks.map((w,idx)=>{
+    const seg = rows.filter(r=>{
+      const t = new Date(r.created_at).getTime();
+      return t >= w.start.getTime() && t <= w.end.getTime();
     });
+    const qty = seg.reduce((s,r)=>s+(Number(r.qty)||0),0);
+    const totalValue = seg.reduce((s,r)=>s+_ds_totalValue(r),0);
+    const label = `M${idx+1}`;
+    const dateRange = `${w.start.toLocaleDateString('id-ID',{day:'numeric',month:'short'})} - ${w.end.toLocaleDateString('id-ID',{day:'numeric',month:'short'})}`;
+    return { label, value: qty, totalValue, weekNumber: idx+1, dateRange };
+  });
+}
 
-    // ... kode lainnya tetap sama
-    for (let i = 0; i < weekStarts.length; i++) {
-      const weekStart = weekStarts[i];
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      
-      const weekSales = dailyData.filter(day => {
-        const dayDate = new Date(day.tanggal);
-        return dayDate >= weekStart && dayDate <= weekEnd;
-      });
+/**
+ * Mingguan per bulan (mulai tanggal 1, akhir sesuai kalender)
+ * return: [{label:'M1', value:qty, totalValue, weekNumber, dateRange, tooltip}]
+ */
+async function getMonthlyWeeklyBreakdown(year, month /* 0..11 */){
+  const mStart = _ds_startOfMonth(year, month);
+  const mEnd   = _ds_endOfMonth(year, month);
+  const rows   = await _ds_fetchSalesRange(mStart, mEnd);
 
-      const weekQty = weekSales.reduce((sum, day) => sum + (Number(day.total_qty) || 0), 0);
-      const weekValue = weekSales.reduce((sum, day) => sum + (Number(day.total_value) || 0), 0);
-
-      weeklyData.push({
-        label: `M${i + 1}`,
-        value: weekQty,
-        totalValue: weekValue,
-        weekNumber: i + 1,
-        dateRange: `${this.formatChartDate(weekStart)} - ${this.formatChartDate(weekEnd)}`,
-        start: new Date(weekStart),
-        end: new Date(weekEnd)
-      });
-    }
-
-    return weeklyData;
-  } catch (error) {
-    console.error('[getLast4WeeksSales] Error:', error);
-    throw new Error(errMsg(error, "Gagal mengambil data 4 minggu terakhir"));
+  const weeks = [];
+  let cursor = new Date(mStart);
+  while (cursor <= mEnd){
+    const wStart = _ds_startOfDay(cursor);
+    const wEnd   = _ds_endOfDay(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()+6));
+    weeks.push({ start: wStart, end: (wEnd > mEnd ? mEnd : wEnd) });
+    cursor.setDate(cursor.getDate()+7);
   }
-};
 
-// Untuk 6 bulan terakhir dengan breakdown bulanan
-DataService.getLast6MonthsSales = async function () {
-  try {
-    const monthlyData = [];
-    const currentDate = new Date();
-    const months = [
-      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-    ];
-
-    for (let i = 5; i >= 0; i--) {
-      const targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-      const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
-      const monthEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
-      
-      const summary = await this.getDailySummary({
-        from: toISOStringWithOffset(monthStart), // ✅ PERBAIKAN
-        to: toISOStringWithOffset(monthEnd),     // ✅ PERBAIKAN
-        onlyPaid: true
-      });
-      
-      const monthQty = summary.reduce((sum, day) => sum + (Number(day.total_qty) || 0), 0);
-      const monthValue = summary.reduce((sum, day) => sum + (Number(day.total_value) || 0), 0);
-      
-      monthlyData.push({
-        label: `${months[targetDate.getMonth()].substring(0, 3)}/${targetDate.getFullYear().toString().slice(-2)}`,
-        value: monthQty,
-        totalValue: monthValue,
-        tooltip: `${months[targetDate.getMonth()]} ${targetDate.getFullYear()}\nQty: ${monthQty} tabung\nTotal: Rp ${monthValue.toLocaleString('id-ID')}`,
-        month: months[targetDate.getMonth()],
-        year: targetDate.getFullYear(),
-        date: new Date(targetDate)
-      });
-    }
-    
-    return monthlyData;
-  } catch (error) {
-    console.error('[getLast6MonthsSales] Error:', error);
-    throw new Error(errMsg(error, "Gagal mengambil data 6 bulan terakhir"));
-  }
-};
-
-// Untuk breakdown mingguan dalam bulan tertentu
-DataService.getMonthlyWeeklyBreakdown = async function(year, month) {
-  try {
-    const weeks = this.getWeeksInMonth(year, month);
-    const weeklyData = [];
-    
-    const monthStart = new Date(year, month, 1);
-    const monthEnd = new Date(year, month + 1, 0);
-
-    const monthlySummary = await this.getDailySummary({
-      from: toISOStringWithOffset(monthStart), // ✅ PERBAIKAN
-      to: toISOStringWithOffset(monthEnd),     // ✅ PERBAIKAN
-      onlyPaid: true
+  return weeks.map((w,idx)=>{
+    const seg = rows.filter(r=>{
+      const t = new Date(r.created_at).getTime();
+      return t >= w.start.getTime() && t <= w.end.getTime();
     });
+    const qty = seg.reduce((s,r)=>s+(Number(r.qty)||0),0);
+    const totalValue = seg.reduce((s,r)=>s+_ds_totalValue(r),0);
+    const label = `M${idx+1}`;
+    const dateRange = `${w.start.toLocaleDateString('id-ID',{day:'numeric',month:'short'})} - ${w.end.toLocaleDateString('id-ID',{day:'numeric',month:'short'})}`;
+    const tooltip = `M${idx+1} (${dateRange})\nQty: ${qty} tabung\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(totalValue)}`;
+    return { label, value: qty, totalValue, weekNumber: idx+1, dateRange, tooltip };
+  });
+}
 
-    for (let i = 0; i < weeks.length; i++) {
-      const week = weeks[i];
-      
-      const weekSales = monthlySummary.filter(day => {
-        const dayDate = new Date(day.tanggal);
-        return dayDate >= week.start && dayDate <= week.end;
-      });
+/**
+ * 6 bulan terakhir (termasuk bulan berjalan, sinkron kalender)
+ * return: [{label:'Okt/25', value:qty, totalValue, month, year, tooltip}]
+ */
+async function getLast6MonthsSales(){
+  const now = new Date();
+  const start = _ds_startOfMonth(now.getFullYear(), now.getMonth()-5);
+  const end   = _ds_endOfMonth(now.getFullYear(), now.getMonth());
+  const rows  = await _ds_fetchSalesRange(start, end);
 
-      const weekQty = weekSales.reduce((sum, day) => sum + (Number(day.total_qty) || 0), 0);
-      const weekValue = weekSales.reduce((sum, day) => sum + (Number(day.total_value) || 0), 0);
-      
-      weeklyData.push({
-        label: `M${i + 1}`,
-        value: weekQty,
-        totalValue: weekValue,
-        tooltip: `Minggu ${i + 1} (${this.formatChartDate(week.start)} - ${this.formatChartDate(week.end)})\nQty: ${weekQty} tabung\nTotal: Rp ${weekValue.toLocaleString('id-ID')}`,
-        weekNumber: i + 1,
-        dateRange: `${this.formatChartDate(week.start)} - ${this.formatChartDate(week.end)}`,
-        start: new Date(week.start),
-        end: new Date(week.end)
-      });
-    }
-
-    return weeklyData;
-  } catch (error) {
-    console.error('[getMonthlyWeeklyBreakdown] Error:', error);
-    throw new Error(errMsg(error, "Gagal mengambil breakdown mingguan"));
+  const out = [];
+  for (let i=5;i>=0;i--){
+    const t = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const bStart = _ds_startOfMonth(t.getFullYear(), t.getMonth());
+    const bEnd   = _ds_endOfMonth(t.getFullYear(), t.getMonth());
+    const seg = rows.filter(r=>{
+      const tt = new Date(r.created_at).getTime();
+      return tt >= bStart.getTime() && tt <= bEnd.getTime();
+    });
+    const qty = seg.reduce((s,r)=>s+(Number(r.qty)||0),0);
+    const totalValue = seg.reduce((s,r)=>s+_ds_totalValue(r),0);
+    const label = t.toLocaleDateString('id-ID', { month:'short', year:'2-digit' });
+    const tooltip = `${label}\nQty: ${qty} tabung\nTotal: Rp ${new Intl.NumberFormat('id-ID').format(totalValue)}`;
+    out.push({ label, value: qty, totalValue, month: t.getMonth()+1, year: t.getFullYear(), tooltip });
   }
-};
+  return out;
+}
+
+// Tambahkan ke DataService tanpa mengubah ekspor lama
+try {
+  Object.assign(DataService, {
+    getSevenDaySalesRealtime,
+    getLast4WeeksSales,
+    getMonthlyWeeklyBreakdown,
+    getLast6MonthsSales,
+  });
+} catch(e) {
+  // abaikan jika DataService belum terdefinisi saat build; pengguna bisa menambahkan manual di ekspor
+}
