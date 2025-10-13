@@ -33,6 +33,7 @@ function SevenDaysChartCard({ loading = false }) {
 
   const chartTypes = [
     { value: "7_hari", label: "7 Hari Terakhir", icon: "📊" },
+    { value: "4_minggu", label: "4 Minggu Terakhir", icon: "📅" },
     { value: "mingguan_bulan", label: "Mingguan per Bulan", icon: "📅" },
     { value: "6_bulan", label: "6 Bulan Terakhir", icon: "📈" }
   ];
@@ -57,6 +58,9 @@ function SevenDaysChartCard({ loading = false }) {
       switch (chartType) {
         case "7_hari":
           await loadLast7Days();
+          break;
+        case "4_minggu":
+          await loadLast4Weeks();
           break;
         case "mingguan_bulan":
           await loadWeeklyMonthly();
@@ -102,59 +106,95 @@ function SevenDaysChartCard({ loading = false }) {
     }
   };
 
+  // FUNGSI BARU: 4 Minggu Terakhir
+  const loadLast4Weeks = async () => {
+    try {
+      console.log("Loading 4 minggu terakhir...");
+      const weeklyData = await DataService.getLast4WeeksSales();
+      console.log("Data 4 minggu:", weeklyData);
+      
+      let total4WeeksQty = 0;
+      let total4WeeksValue = 0;
+
+      const formattedData = weeklyData.map(week => {
+        total4WeeksQty += week.value;
+        total4WeeksValue += week.totalValue;
+
+        return {
+          label: week.label,
+          value: week.value,
+          tooltip: `Minggu ${week.weekNumber} (${week.dateRange})\nQty: ${week.value} tabung\nTotal: Rp ${week.totalValue.toLocaleString('id-ID')}`,
+          weekNumber: week.weekNumber,
+          dateRange: week.dateRange
+        };
+      });
+
+      console.log("4 minggu data final:", formattedData);
+      setSeries(formattedData);
+      
+      // Hitung trend (minggu terakhir vs rata-rata 3 minggu sebelumnya)
+      const lastWeekQty = formattedData[3]?.value || 0;
+      const previousWeeksAvg = formattedData.slice(0, 3).reduce((sum, week) => sum + week.value, 0) / 3;
+      const growth = previousWeeksAvg > 0 ? ((lastWeekQty - previousWeeksAvg) / previousWeeksAvg) * 100 : 0;
+      
+      setSummary({
+        totalQty: total4WeeksQty,
+        totalValue: total4WeeksValue,
+        avgWeeklyQty: total4WeeksQty / 4,
+        growth: growth,
+        lastWeekQty: lastWeekQty,
+        type: "4_minggu"
+      });
+      
+      if (formattedData.length === 0 || total4WeeksQty === 0) {
+        setError("Tidak ada data penjualan untuk 4 minggu terakhir");
+      }
+    } catch (error) {
+      console.error("Error loading last 4 weeks:", error);
+      setError(`Gagal memuat data 4 minggu: ${error.message}`);
+      setSeries([]);
+    }
+  };
+
   const loadWeeklyMonthly = async () => {
     try {
       console.log(`Loading mingguan untuk bulan ${selectedMonth + 1}/${selectedYear}...`);
       
-      // Dapatkan rentang tanggal untuk bulan yang dipilih
-      const monthStart = new Date(selectedYear, selectedMonth, 1);
-      const monthEnd = new Date(selectedYear, selectedMonth + 1, 0);
+      // GUNAKAN FUNGSI BARU DARI DataService
+      const weeklyData = await DataService.getMonthlyWeeklyBreakdown(selectedYear, selectedMonth);
+      console.log("Weekly data dari DataService:", weeklyData);
       
-      console.log("Rentang bulan:", monthStart, "sampai", monthEnd);
-      
-      // Bagi bulan menjadi minggu-minggu
-      const weeks = getWeeksInMonth(selectedYear, selectedMonth);
-      console.log("Minggu-minggu:", weeks);
-      
-      const weeklyData = [];
       let totalMonthQty = 0;
       let totalMonthValue = 0;
 
-      for (let i = 0; i < weeks.length; i++) {
-        const week = weeks[i];
-        const weekSales = await getSalesForPeriod(week.start, week.end);
-        console.log(`Minggu ${i + 1} sales:`, weekSales);
-        
-        const weekQty = weekSales.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
-        const weekValue = weekSales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
-        
-        weeklyData.push({
-          label: `M${i + 1}`,
-          value: weekQty,
-          tooltip: `Minggu ${i + 1} (${formatDate(week.start)} - ${formatDate(week.end)})\nQty: ${weekQty} tabung\nTotal: Rp ${weekValue.toLocaleString('id-ID')}`,
-          weekNumber: i + 1,
-          dateRange: `${formatDate(week.start)} - ${formatDate(week.end)}`
-        });
+      const formattedWeeklyData = weeklyData.map(week => {
+        totalMonthQty += week.value;
+        totalMonthValue += week.totalValue;
 
-        totalMonthQty += weekQty;
-        totalMonthValue += weekValue;
-      }
+        return {
+          label: week.label,
+          value: week.value,
+          tooltip: week.tooltip,
+          weekNumber: week.weekNumber,
+          dateRange: week.dateRange
+        };
+      });
 
-      console.log("Weekly data final:", weeklyData);
-      setSeries(weeklyData);
+      console.log("Weekly data final:", formattedWeeklyData);
+      setSeries(formattedWeeklyData);
       
       // Hitung rata-rata per minggu
-      const avgWeeklyQty = weeklyData.length > 0 ? totalMonthQty / weeklyData.length : 0;
+      const avgWeeklyQty = formattedWeeklyData.length > 0 ? totalMonthQty / formattedWeeklyData.length : 0;
       
       setSummary({
         totalQty: totalMonthQty,
         totalValue: totalMonthValue,
         avgWeeklyQty: avgWeeklyQty,
-        weekCount: weeks.length,
+        weekCount: formattedWeeklyData.length,
         type: "mingguan_bulan"
       });
       
-      if (weeklyData.length === 0 || totalMonthQty === 0) {
+      if (formattedWeeklyData.length === 0 || totalMonthQty === 0) {
         setError(`Tidak ada data penjualan untuk bulan ${months[selectedMonth]} ${selectedYear}`);
       }
     } catch (error) {
@@ -167,39 +207,27 @@ function SevenDaysChartCard({ loading = false }) {
   const loadLast6Months = async () => {
     try {
       console.log("Loading 6 bulan terakhir...");
-      const monthlyData = [];
-      let total6MonthsQty = 0;
-      const currentDate = new Date();
       
-      for (let i = 5; i >= 0; i--) {
-        const targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-        const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
-        const monthEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
-        
-        console.log(`Loading bulan ${targetDate.getMonth() + 1}/${targetDate.getFullYear()}...`);
-        const monthSales = await getSalesForPeriod(monthStart, monthEnd);
-        console.log(`Bulan ${targetDate.getMonth() + 1} sales:`, monthSales);
-        
-        const monthQty = monthSales.reduce((sum, sale) => sum + (Number(sale.qty) || 0), 0);
-        const monthValue = monthSales.reduce((sum, sale) => sum + (Number(sale.total) || 0), 0);
-        
-        monthlyData.push({
-          label: `${months[targetDate.getMonth()].substring(0, 3)}/${targetDate.getFullYear().toString().slice(-2)}`,
-          value: monthQty,
-          tooltip: `${months[targetDate.getMonth()]} ${targetDate.getFullYear()}\nQty: ${monthQty} tabung\nTotal: Rp ${monthValue.toLocaleString('id-ID')}`,
-          month: months[targetDate.getMonth()],
-          year: targetDate.getFullYear()
-        });
+      // GUNAKAN FUNGSI BARU DARI DataService
+      const monthlyData = await DataService.getLast6MonthsSales();
+      console.log("6 bulan data dari DataService:", monthlyData);
+      
+      const total6MonthsQty = monthlyData.reduce((sum, month) => sum + month.value, 0);
+      
+      const formattedMonthlyData = monthlyData.map(month => ({
+        label: month.label,
+        value: month.value,
+        tooltip: month.tooltip,
+        month: month.month,
+        year: month.year
+      }));
 
-        total6MonthsQty += monthQty;
-      }
-
-      console.log("6 bulan data final:", monthlyData);
-      setSeries(monthlyData);
+      console.log("6 bulan data final:", formattedMonthlyData);
+      setSeries(formattedMonthlyData);
       
       // Hitung trend (bulan terakhir vs rata-rata 5 bulan sebelumnya)
-      const lastMonthQty = monthlyData[5]?.value || 0;
-      const previousMonthsAvg = monthlyData.slice(0, 5).reduce((sum, month) => sum + month.value, 0) / 5;
+      const lastMonthQty = formattedMonthlyData[5]?.value || 0;
+      const previousMonthsAvg = formattedMonthlyData.slice(0, 5).reduce((sum, month) => sum + month.value, 0) / 5;
       const growth = previousMonthsAvg > 0 ? ((lastMonthQty - previousMonthsAvg) / previousMonthsAvg) * 100 : 0;
       
       setSummary({
@@ -210,77 +238,13 @@ function SevenDaysChartCard({ loading = false }) {
         type: "6_bulan"
       });
       
-      if (monthlyData.length === 0 || total6MonthsQty === 0) {
+      if (formattedMonthlyData.length === 0 || total6MonthsQty === 0) {
         setError("Tidak ada data penjualan untuk 6 bulan terakhir");
       }
     } catch (error) {
       console.error("Error loading last 6 months data:", error);
       setError(`Gagal memuat data 6 bulan: ${error.message}`);
       setSeries([]);
-    }
-  };
-
-  // Helper function untuk mendapatkan minggu dalam bulan (versi sederhana)
-  const getWeeksInMonth = (year, month) => {
-    const weeks = [];
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    
-    let currentDate = new Date(firstDay);
-    
-    while (currentDate <= lastDay) {
-      const weekStart = new Date(currentDate);
-      const weekEnd = new Date(currentDate);
-      weekEnd.setDate(weekEnd.getDate() + 6);
-      
-      if (weekEnd > lastDay) {
-        weekEnd.setTime(lastDay.getTime());
-      }
-      
-      weeks.push({
-        start: new Date(weekStart),
-        end: new Date(weekEnd)
-      });
-      
-      currentDate.setDate(currentDate.getDate() + 7);
-    }
-    
-    return weeks;
-  };
-
-  // Helper function untuk mendapatkan data penjualan menggunakan fungsi yang ada di DataService
-  const getSalesForPeriod = async (startDate, endDate) => {
-    try {
-      // Gunakan fungsi getSalesHistory yang sudah tersedia di DataService
-      const fromISO = DataService.toISOStringWithOffset(startDate);
-      const toISO = DataService.toISOStringWithOffset(endDate);
-      
-      console.log("Mengambil data dari", fromISO, "sampai", toISO);
-      const sales = await DataService.getSalesHistory({
-        from: fromISO,
-        to: toISO,
-        method: "ALL",
-        status: "ALL",
-        limit: 10000
-      });
-      console.log("Data penjualan:", sales);
-      
-      // Filter hanya penjualan yang sudah dibayar (TUNAI atau LUNAS)
-      const paidSales = sales.filter(sale => {
-        const method = String(sale.method || '').toUpperCase();
-        const status = String(sale.status || '').toUpperCase();
-        
-        if (status === "DIBATALKAN") return false;
-        if (method === "TUNAI") return true;
-        if (status === "LUNAS") return true;
-        return false;
-      });
-      
-      console.log("Paid sales:", paidSales);
-      return paidSales;
-    } catch (error) {
-      console.error("Error getting sales data:", error);
-      return [];
     }
   };
 
@@ -338,6 +302,8 @@ function SevenDaysChartCard({ loading = false }) {
     switch (chartType) {
       case "7_hari":
         return "Trend penjualan harian 7 hari terakhir";
+      case "4_minggu":
+        return "Perbandingan penjualan 4 minggu terakhir";
       case "mingguan_bulan":
         return `Perbandingan mingguan bulan ${months[selectedMonth]} ${selectedYear}`;
       case "6_bulan":
@@ -351,6 +317,42 @@ function SevenDaysChartCard({ loading = false }) {
     if (!summary) return null;
 
     switch (summary.type) {
+      case "4_minggu":
+        return (
+          <Box sx={{ mt: 2, p: 1, bgcolor: alpha(theme.palette.warning.main, 0.05), borderRadius: 1 }}>
+            <Grid container spacing={1}>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Total 4 Minggu:
+                </Typography>
+                <Typography variant="body1" fontWeight={600}>
+                  {summary.totalQty} tabung
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Rata-rata/Minggu:
+                </Typography>
+                <Typography variant="body1" fontWeight={600}>
+                  {Math.round(summary.avgWeeklyQty)} tabung
+                </Typography>
+              </Grid>
+              {summary.growth !== undefined && (
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <TrendingUpIcon 
+                      color={summary.growth > 0 ? "success" : summary.growth < 0 ? "error" : "disabled"} 
+                      fontSize="small" 
+                    />
+                    <Typography variant="body2" color={summary.growth > 0 ? "success.main" : summary.growth < 0 ? "error.main" : "text.secondary"}>
+                      {summary.growth > 0 ? "📈 Naik" : summary.growth < 0 ? "📉 Turun" : "➡️ Stabil"} {Math.abs(summary.growth).toFixed(1)}% vs rata-rata 3 minggu sebelumnya
+                    </Typography>
+                  </Box>
+                </Grid>
+              )}
+            </Grid>
+          </Box>
+        );
       case "mingguan_bulan":
         return (
           <Box sx={{ mt: 2, p: 1, bgcolor: alpha(theme.palette.info.main, 0.05), borderRadius: 1 }}>
@@ -416,32 +418,35 @@ function SevenDaysChartCard({ loading = false }) {
   };
 
   const getWeekDetails = () => {
-    if (chartType !== "mingguan_bulan" || series.length === 0) return null;
-
-    return (
-      <Box sx={{ mt: 1 }}>
-        <Typography variant="caption" color="text.secondary">
-          Keterangan Minggu:
-        </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-          {series.map((week, index) => (
-            <Chip
-              key={index}
-              label={`M${week.weekNumber}: ${week.dateRange}`}
-              size="small"
-              variant="outlined"
-              sx={{ fontSize: '0.6rem' }}
-            />
-          ))}
+    if ((chartType === "mingguan_bulan" || chartType === "4_minggu") && series.length > 0) {
+      return (
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="caption" color="text.secondary">
+            Keterangan Minggu:
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+            {series.map((week, index) => (
+              <Chip
+                key={index}
+                label={`M${week.weekNumber}: ${week.dateRange}`}
+                size="small"
+                variant="outlined"
+                sx={{ fontSize: '0.6rem' }}
+              />
+            ))}
+          </Box>
         </Box>
-      </Box>
-    );
+      );
+    }
+    return null;
   };
 
   const getIcon = () => {
     switch (chartType) {
       case "7_hari":
         return <BarChartIcon color="info" />;
+      case "4_minggu":
+        return <CalendarMonthIcon color="warning" />;
       case "mingguan_bulan":
         return <CalendarMonthIcon color="primary" />;
       case "6_bulan":

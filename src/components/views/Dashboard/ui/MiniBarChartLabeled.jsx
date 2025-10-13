@@ -38,6 +38,7 @@ function MiniBarChartLabeled({ data, loading = false, height = 120, type = "7_ha
   const values = data.map(item => item.value);
   const maxValue = Math.max(...values, 1);
   const isWeeklyMonthly = type === "mingguan_bulan";
+  const isFourWeeks = type === "4_minggu";
   const isSixMonths = type === "6_bulan";
 
   return (
@@ -46,9 +47,9 @@ function MiniBarChartLabeled({ data, loading = false, height = 120, type = "7_ha
         height: height - 40, 
         display: 'flex', 
         alignItems: 'flex-end', 
-        gap: isWeeklyMonthly ? 2 : isSixMonths ? 1 : 1,
-        justifyContent: isWeeklyMonthly ? 'center' : 'space-between',
-        px: isWeeklyMonthly ? 2 : 0,
+        gap: isWeeklyMonthly || isFourWeeks ? 2 : isSixMonths ? 1 : 1,
+        justifyContent: isWeeklyMonthly || isFourWeeks ? 'center' : 'space-between',
+        px: isWeeklyMonthly || isFourWeeks ? 2 : 0,
         overflowX: 'auto'
       }}>
         {data.map((item, index) => {
@@ -62,13 +63,13 @@ function MiniBarChartLabeled({ data, loading = false, height = 120, type = "7_ha
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  flex: isWeeklyMonthly ? '0 0 auto' : isSixMonths ? 1 : 1,
-                  minWidth: isWeeklyMonthly ? 50 : isSixMonths ? 40 : 30
+                  flex: isWeeklyMonthly || isFourWeeks ? '0 0 auto' : isSixMonths ? 1 : 1,
+                  minWidth: isWeeklyMonthly || isFourWeeks ? 50 : isSixMonths ? 40 : 30
                 }}
               >
                 <Box
                   sx={{
-                    width: isWeeklyMonthly ? 40 : isSixMonths ? 35 : '100%',
+                    width: isWeeklyMonthly || isFourWeeks ? 40 : isSixMonths ? 35 : '100%',
                     minWidth: 24,
                     height: `${barHeight}%`,
                     minHeight: 4,
@@ -91,7 +92,7 @@ function MiniBarChartLabeled({ data, loading = false, height = 120, type = "7_ha
                     fontWeight: isCurrent ? 600 : 400,
                     color: isCurrent ? 'primary.main' : 'text.secondary',
                     textAlign: 'center',
-                    fontSize: isWeeklyMonthly ? '0.75rem' : '0.7rem'
+                    fontSize: isWeeklyMonthly || isFourWeeks ? '0.75rem' : '0.7rem'
                   }}
                 >
                   {item.label}
@@ -128,7 +129,7 @@ const getBarColor = (theme, isCurrent, index, type) => {
   
   if (isCurrent) return theme.palette.primary.main;
   
-  if (type === "mingguan_bulan" || type === "6_bulan") {
+  if (type === "mingguan_bulan" || type === "4_minggu" || type === "6_bulan") {
     return colors[index % colors.length];
   }
   
@@ -139,7 +140,7 @@ const getBarColor = (theme, isCurrent, index, type) => {
 const isCurrentItem = (item, type, index, totalLength) => {
   const now = new Date();
   
-  if (type === "mingguan_bulan") {
+  if (type === "mingguan_bulan" || type === "4_minggu") {
     // Untuk mingguan, anggap minggu terakhir adalah current
     return index === totalLength - 1;
   }
