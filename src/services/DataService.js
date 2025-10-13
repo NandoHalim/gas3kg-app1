@@ -1886,3 +1886,185 @@ DataService.getAIInsightsV2 = async function () {
     generated_at: new Date().toISOString(),
   };
 };
+
+// ====== FUNGSI BARU UNTUK CHART CARD ======
+
+// Untuk 4 minggu terakhir (28 hari rolling)
+DataService.getLast4WeeksSales = async function () {
+  try {
+    const to = new Date();
+    const from = new Date(to.getTime() - 28 * 24 * 60 * 60 * 1000);
+    
+    const dailyData = await this.getDailySummary({
+      from: this.toISOStringWithOffset(from),
+      to: this.toISOStringWithOffset(to),
+      onlyPaid: true
+    });
+
+    // Group by week
+    const weeklyData = [];
+    const weekStarts = [];
+    
+    // Generate week starts (last 4 weeks)
+    for (let i = 3; i >= 0; i--) {
+      const weekStart = new Date(to);
+      weekStart.setDate(to.getDate() - (i * 7) - 6); // Start from Monday
+      weekStarts.push(new Date(weekStart));
+    }
+
+    for (let i = 0; i < weekStarts.length; i++) {
+      const weekStart = weekStarts[i];
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      
+      const weekSales = dailyData.filter(day => {
+        const dayDate = new Date(day.tanggal);
+        return dayDate >= weekStart && dayDate <= weekEnd;
+      });
+
+      const weekQty = weekSales.reduce((sum, day) => sum + (Number(day.total_qty) || 0), 0);
+      const weekValue = weekSales.reduce((sum, day) => sum + (Number(day.total_value) || 0), 0);
+
+      weeklyData.push({
+        label: `M${i + 1}`,
+        value: weekQty,
+        totalValue: weekValue,
+        weekNumber: i + 1,
+        dateRange: `${this.formatChartDate(weekStart)} - ${this.formatChartDate(weekEnd)}`,
+        start: new Date(weekStart),
+        end: new Date(weekEnd)
+      });
+    }
+
+    return weeklyData;
+  } catch (error) {
+    console.error('[getLast4WeeksSales] Error:', error);
+    throw new Error(errMsg(error, "Gagal mengambil data 4 minggu terakhir"));
+  }
+};
+
+// Untuk 6 bulan terakhir dengan breakdown bulanan
+DataService.getLast6MonthsSales = async function () {
+  try {
+    const monthlyData = [];
+    const currentDate = new Date();
+    const months = [
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    ];
+
+    for (let i = 5; i >= 0; i--) {
+      const targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+      const monthEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+      
+      const summary = await this.getDailySummary({
+        from: this.toISOStringWithOffset(monthStart),
+        to: this.toISOStringWithOffset(monthEnd),
+        onlyPaid: true
+      });
+      
+      const monthQty = summary.reduce((sum, day) => sum + (Number(day.total_qty) || 0), 0);
+      const monthValue = summary.reduce((sum, day) => sum + (Number(day.total_value) || 0), 0);
+      
+      monthlyData.push({
+        label: `${months[targetDate.getMonth()].substring(0, 3)}/${targetDate.getFullYear().toString().slice(-2)}`,
+        value: monthQty,
+        totalValue: monthValue,
+        tooltip: `${months[targetDate.getMonth()]} ${targetDate.getFullYear()}\nQty: ${monthQty} tabung\nTotal: Rp ${monthValue.toLocaleString('id-ID')}`,
+        month: months[targetDate.getMonth()],
+        year: targetDate.getFullYear(),
+        date: new Date(targetDate)
+      });
+    }
+    
+    return monthlyData;
+  } catch (error) {
+    console.error('[getLast6MonthsSales] Error:', error);
+    throw new Error(errMsg(error, "Gagal mengambil data 6 bulan terakhir"));
+  }
+};
+
+// Helper untuk format tanggal chart (tidak mengganggu fungsi existing)
+DataService.formatChartDate = function(date) {
+  if (date instanceof Date) {
+    return date.toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short'
+    });
+  }
+  return String(date);
+};
+
+// Helper untuk mendapatkan minggu dalam bulan
+DataService.getWeeksInMonth = function(year, month) {
+  const weeks = [];
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  
+  let currentDate = new Date(firstDay);
+  
+  while (currentDate <= lastDay) {
+    const weekStart = new Date(currentDate);
+    const weekEnd = new Date(currentDate);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    
+    if (weekEnd > lastDay) {
+      weekEnd.setTime(lastDay.getTime());
+    }
+    
+    weeks.push({
+      start: new Date(weekStart),
+      end: new Date(weekEnd)
+    });
+    
+    currentDate.setDate(currentDate.getDate() + 7);
+  }
+  
+  return weeks;
+};
+
+// Untuk breakdown mingguan dalam bulan tertentu
+DataService.getMonthlyWeeklyBreakdown = async function(year, month) {
+  try {
+    const weeks = this.getWeeksInMonth(year, month);
+    const weeklyData = [];
+    
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0);
+
+    const monthlySummary = await this.getDailySummary({
+      from: this.toISOStringWithOffset(monthStart),
+      to: this.toISOStringWithOffset(monthEnd),
+      onlyPaid: true
+    });
+
+    for (let i = 0; i < weeks.length; i++) {
+      const week = weeks[i];
+      
+      const weekSales = monthlySummary.filter(day => {
+        const dayDate = new Date(day.tanggal);
+        return dayDate >= week.start && dayDate <= week.end;
+      });
+
+      const weekQty = weekSales.reduce((sum, day) => sum + (Number(day.total_qty) || 0), 0);
+      const weekValue = weekSales.reduce((sum, day) => sum + (Number(day.total_value) || 0), 0);
+      
+      weeklyData.push({
+        label: `M${i + 1}`,
+        value: weekQty,
+        totalValue: weekValue,
+        tooltip: `Minggu ${i + 1} (${this.formatChartDate(week.start)} - ${this.formatChartDate(week.end)})\nQty: ${weekQty} tabung\nTotal: Rp ${weekValue.toLocaleString('id-ID')}`,
+        weekNumber: i + 1,
+        dateRange: `${this.formatChartDate(week.start)} - ${this.formatChartDate(week.end)}`,
+        start: new Date(week.start),
+        end: new Date(week.end)
+      });
+    }
+
+    return weeklyData;
+  } catch (error) {
+    console.error('[getMonthlyWeeklyBreakdown] Error:', error);
+    throw new Error(errMsg(error, "Gagal mengambil breakdown mingguan"));
+  }
+};
