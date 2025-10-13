@@ -4,8 +4,8 @@ import { Box, Typography, useTheme, Tooltip, Chip, Stack } from "@mui/material";
 import { alpha, darken } from "@mui/material/styles";
 
 /**
- * MiniBarChartLabeled (clean + modern)
- * Backward-compatible props:
+ * MiniBarChartLabeled (clean + modern, dark-mode safe)
+ * Props (compatible):
  *  - data: [{label, value, tooltip?}]
  *  - loading: boolean
  *  - height: number
@@ -41,8 +41,12 @@ function MiniBarChartLabeled({
           alignItems: "flex-end",
           gap: 1.25,
           overflow: "hidden",
-          bgcolor: alpha(theme.palette.background.paper, 0.95),
+          bgcolor:
+            theme.palette.mode === "dark"
+              ? alpha("#f9fafb", 0.95)
+              : alpha(theme.palette.background.paper, 0.95),
           borderRadius: 2,
+          border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
         }}
         aria-busy
         aria-live="polite"
@@ -73,7 +77,20 @@ function MiniBarChartLabeled({
 
   if (!data || data.length === 0) {
     return (
-      <Box sx={{ height, display: "grid", placeItems: "center", p: 2, bgcolor: alpha(theme.palette.background.paper, 0.95), borderRadius: 2 }}>
+      <Box
+        sx={{
+          height,
+          display: "grid",
+          placeItems: "center",
+          p: 2,
+          bgcolor:
+            theme.palette.mode === "dark"
+              ? alpha("#f9fafb", 0.95)
+              : alpha(theme.palette.background.paper, 0.95),
+          borderRadius: 2,
+          border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+        }}
+      >
         <Typography color="text.secondary">Tidak ada data</Typography>
       </Box>
     );
@@ -146,6 +163,7 @@ function MiniBarChartLabeled({
         </Stack>
       )}
 
+      {/* Plot area */}
       <Box
         sx={{
           position: "relative",
@@ -160,8 +178,13 @@ function MiniBarChartLabeled({
           overflowY: "hidden",
           scrollBehavior: "smooth",
           borderRadius: 2,
-          bgcolor: alpha(theme.palette.background.paper, 0.95), // ✅ cerah
-          boxShadow: `inset 0 0 4px ${alpha(theme.palette.grey[300], 0.6)}`,
+          pb: 1.5, // ruang untuk label
+          bgcolor:
+            theme.palette.mode === "dark"
+              ? alpha("#f9fafb", 0.95) // ✅ fallback terang untuk dark mode
+              : alpha(theme.palette.background.paper, 0.95),
+          boxShadow: "inset 0 0 6px rgba(0,0,0,0.05)",
+          border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
         }}
       >
         {/* Grid */}
@@ -174,7 +197,7 @@ function MiniBarChartLabeled({
               inset: 0,
               top: `${(1 - p) * 80 + 10}%`,
               height: 1,
-              bgcolor: alpha(theme.palette.divider, 0.8),
+              bgcolor: alpha(theme.palette.divider, 0.75),
             }}
           />
         ))}
@@ -182,15 +205,15 @@ function MiniBarChartLabeled({
         {/* Bars */}
         {data.map((item, index) => {
           const raw = Number(item.value || 0);
-          const barHeight = maxValue > 0 ? (raw / maxValue) * 80 : 0; // use 80% plot area
+          const barHeight = maxValue > 0 ? (raw / maxValue) * 80 : 0; // 80% area
           const isCurrent = index === currentIndex;
           const isPeak = index === peakIndex;
 
           const color = getBarColor(index);
-          // ✅ light gradient
-          const gradient = `linear-gradient(180deg, ${alpha(color, 0.7)} 0%, ${alpha(
-            darken(color, 0.1),
-            0.6
+          // ✅ light & solid gradient (lebih jelas di dark mode)
+          const gradient = `linear-gradient(180deg, ${alpha(color, 0.85)} 0%, ${alpha(
+            darken(color, 0.05),
+            0.75
           )} 100%)`;
 
           const labelText = item.label;
@@ -225,7 +248,9 @@ function MiniBarChartLabeled({
                     transition: "height 380ms ease, transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease",
                     cursor: "pointer",
                     transform: isCurrent ? "translateY(-1px)" : "translateY(0)",
-                    boxShadow: isCurrent ? `0 6px 16px ${alpha(color, 0.25)}` : `0 4px 12px ${alpha(color, 0.18)}`,
+                    boxShadow: isCurrent
+                      ? `0 6px 16px ${alpha(color, 0.25)}`
+                      : `0 4px 12px ${alpha(color, 0.18)}`,
                     "&:hover": {
                       opacity: 0.95,
                       transform: "translateY(-3px)",
