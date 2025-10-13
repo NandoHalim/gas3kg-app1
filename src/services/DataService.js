@@ -1896,22 +1896,12 @@ DataService.getLast4WeeksSales = async function () {
     const from = new Date(to.getTime() - 28 * 24 * 60 * 60 * 1000);
     
     const dailyData = await this.getDailySummary({
-      from: this.toISOStringWithOffset(from),
-      to: this.toISOStringWithOffset(to),
+      from: toISOStringWithOffset(from), // ✅ PERBAIKAN
+      to: toISOStringWithOffset(to),     // ✅ PERBAIKAN
       onlyPaid: true
     });
 
-    // Group by week
-    const weeklyData = [];
-    const weekStarts = [];
-    
-    // Generate week starts (last 4 weeks)
-    for (let i = 3; i >= 0; i--) {
-      const weekStart = new Date(to);
-      weekStart.setDate(to.getDate() - (i * 7) - 6); // Start from Monday
-      weekStarts.push(new Date(weekStart));
-    }
-
+    // ... kode lainnya tetap sama
     for (let i = 0; i < weekStarts.length; i++) {
       const weekStart = weekStarts[i];
       const weekEnd = new Date(weekStart);
@@ -1959,8 +1949,8 @@ DataService.getLast6MonthsSales = async function () {
       const monthEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
       
       const summary = await this.getDailySummary({
-        from: this.toISOStringWithOffset(monthStart),
-        to: this.toISOStringWithOffset(monthEnd),
+        from: toISOStringWithOffset(monthStart), // ✅ PERBAIKAN
+        to: toISOStringWithOffset(monthEnd),     // ✅ PERBAIKAN
         onlyPaid: true
       });
       
@@ -1985,45 +1975,6 @@ DataService.getLast6MonthsSales = async function () {
   }
 };
 
-// Helper untuk format tanggal chart (tidak mengganggu fungsi existing)
-DataService.formatChartDate = function(date) {
-  if (date instanceof Date) {
-    return date.toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'short'
-    });
-  }
-  return String(date);
-};
-
-// Helper untuk mendapatkan minggu dalam bulan
-DataService.getWeeksInMonth = function(year, month) {
-  const weeks = [];
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  
-  let currentDate = new Date(firstDay);
-  
-  while (currentDate <= lastDay) {
-    const weekStart = new Date(currentDate);
-    const weekEnd = new Date(currentDate);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    
-    if (weekEnd > lastDay) {
-      weekEnd.setTime(lastDay.getTime());
-    }
-    
-    weeks.push({
-      start: new Date(weekStart),
-      end: new Date(weekEnd)
-    });
-    
-    currentDate.setDate(currentDate.getDate() + 7);
-  }
-  
-  return weeks;
-};
-
 // Untuk breakdown mingguan dalam bulan tertentu
 DataService.getMonthlyWeeklyBreakdown = async function(year, month) {
   try {
@@ -2034,8 +1985,8 @@ DataService.getMonthlyWeeklyBreakdown = async function(year, month) {
     const monthEnd = new Date(year, month + 1, 0);
 
     const monthlySummary = await this.getDailySummary({
-      from: this.toISOStringWithOffset(monthStart),
-      to: this.toISOStringWithOffset(monthEnd),
+      from: toISOStringWithOffset(monthStart), // ✅ PERBAIKAN
+      to: toISOStringWithOffset(monthEnd),     // ✅ PERBAIKAN
       onlyPaid: true
     });
 
