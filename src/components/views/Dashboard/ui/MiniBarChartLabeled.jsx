@@ -4,18 +4,8 @@ import { Box, Typography, useTheme, Tooltip, Chip, Stack } from "@mui/material";
 import { alpha, darken } from "@mui/material/styles";
 
 /**
- * MiniBarChartLabeled (clean + modern, dark-mode safe)
- * Props (compatible):
- *  - data: [{label, value, tooltip?}]
- *  - loading: boolean
- *  - height: number
- *  - type: "7_hari" | "4_minggu" | "mingguan_bulan" | "6_bulan"
- * Optional:
- *  - unit: string (default: "tabung")
- *  - valueFormatter: (n) => string
- *  - showTotals: boolean
- *  - showPeak: boolean
- *  - compactLabels: "auto" | boolean
+ * MiniBarChartLabeled (clean + modern, hard-forced light plot area)
+ * - Memaksa area plot selalu terang walau tema global dark/override CSS lain.
  */
 function MiniBarChartLabeled({
   data,
@@ -41,12 +31,9 @@ function MiniBarChartLabeled({
           alignItems: "flex-end",
           gap: 1.25,
           overflow: "hidden",
-          bgcolor:
-            theme.palette.mode === "dark"
-              ? alpha("#f9fafb", 0.95)
-              : alpha(theme.palette.background.paper, 0.95),
           borderRadius: 2,
           border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+          backgroundColor: '#ffffff !important', // hard-white
         }}
         aria-busy
         aria-live="polite"
@@ -83,12 +70,9 @@ function MiniBarChartLabeled({
           display: "grid",
           placeItems: "center",
           p: 2,
-          bgcolor:
-            theme.palette.mode === "dark"
-              ? alpha("#f9fafb", 0.95)
-              : alpha(theme.palette.background.paper, 0.95),
           borderRadius: 2,
           border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+          backgroundColor: '#ffffff !important', // hard-white
         }}
       >
         <Typography color="text.secondary">Tidak ada data</Typography>
@@ -163,7 +147,7 @@ function MiniBarChartLabeled({
         </Stack>
       )}
 
-      {/* Plot area */}
+      {/* Plot area (hard white) */}
       <Box
         sx={{
           position: "relative",
@@ -178,11 +162,8 @@ function MiniBarChartLabeled({
           overflowY: "hidden",
           scrollBehavior: "smooth",
           borderRadius: 2,
-          pb: 1.5, // ruang untuk label
-          bgcolor:
-            theme.palette.mode === "dark"
-              ? alpha("#f9fafb", 0.95) // ✅ fallback terang untuk dark mode
-              : alpha(theme.palette.background.paper, 0.95),
+          pb: 1.5,
+          backgroundColor: '#ffffff !important', // force light even if global dark
           boxShadow: "inset 0 0 6px rgba(0,0,0,0.05)",
           border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
         }}
@@ -210,7 +191,7 @@ function MiniBarChartLabeled({
           const isPeak = index === peakIndex;
 
           const color = getBarColor(index);
-          // ✅ light & solid gradient (lebih jelas di dark mode)
+          // Light & solid gradient
           const gradient = `linear-gradient(180deg, ${alpha(color, 0.85)} 0%, ${alpha(
             darken(color, 0.05),
             0.75
