@@ -307,8 +307,9 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                 totalQty={financialSummary.totalQty}
                 loading={financialLoading}
               />
-              
-              <SevenDaysChartCard series={series7} loading={loading} />
+
+              {/* FIX: hilangkan prop `series` agar komponen load data sendiri */}
+              <SevenDaysChartCard loading={loading} />
             </Stack>
           </Grid>
 
@@ -331,9 +332,23 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                 <BusinessIntelligenceCard data={businessIntelligence} loading={advancedLoading} />
               )}
 
-              {/* Tabel transaksi dengan scroll-x lokal */}
-              <Box sx={{ mx: { xs: -2, sm: 0 }, px: { xs: 2, sm: 0 }, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-                <RecentTransactionsTable rows={recent} loading={loading} isSmallMobile={isSmallMobile} />
+              {/* FIX: Tabel transaksi dengan scroll-x lokal (tanpa margin negatif) */}
+              <Box
+                sx={{
+                  overflowX: "auto",
+                  width: "100%",
+                  WebkitOverflowScrolling: "touch",
+                  "&::-webkit-scrollbar": { height: 8 },
+                  scrollbarWidth: "thin",
+                }}
+              >
+                <RecentTransactionsTable
+                  rows={recent}
+                  loading={loading}
+                  isSmallMobile={isSmallMobile}
+                  // jika tabel mendukung prop sx/minWidth, bisa aktifkan:
+                  // sx={{ minWidth: 720 }}
+                />
               </Box>
             </Stack>
           </Grid>
