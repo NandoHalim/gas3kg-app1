@@ -4,14 +4,18 @@ import { Box, Typography, useTheme, Tooltip, Chip, Stack } from "@mui/material";
 import { alpha, darken } from "@mui/material/styles";
 
 /**
- * MiniBarChartLabeled (modern)
- * - Backward compatible props: data, loading, height, type
- * - Extra props (optional):
- *   - unit = "tabung"
- *   - valueFormatter = (n) => new Intl.NumberFormat('id-ID').format(n)
- *   - showTotals = true (tampilkan total & rata2)
- *   - showPeak = true (tandai bar tertinggi)
- *   - compactLabels = auto (auto/true/false)
+ * MiniBarChartLabeled (clean + modern)
+ * Backward-compatible props:
+ *  - data: [{label, value, tooltip?}]
+ *  - loading: boolean
+ *  - height: number
+ *  - type: "7_hari" | "4_minggu" | "mingguan_bulan" | "6_bulan"
+ * Optional:
+ *  - unit: string (default: "tabung")
+ *  - valueFormatter: (n) => string
+ *  - showTotals: boolean
+ *  - showPeak: boolean
+ *  - compactLabels: "auto" | boolean
  */
 function MiniBarChartLabeled({
   data,
@@ -26,7 +30,7 @@ function MiniBarChartLabeled({
 }) {
   const theme = useTheme();
 
-  // ====== Loading skeleton ======
+  // ========== Loading Skeleton ==========
   if (loading) {
     return (
       <Box
@@ -37,6 +41,8 @@ function MiniBarChartLabeled({
           alignItems: "flex-end",
           gap: 1.25,
           overflow: "hidden",
+          bgcolor: alpha(theme.palette.background.paper, 0.95),
+          borderRadius: 2,
         }}
         aria-busy
         aria-live="polite"
@@ -49,13 +55,13 @@ function MiniBarChartLabeled({
               minWidth: 22,
               height: `${30 + (i * 7) % 60}%`,
               borderRadius: 1,
-              background: `linear-gradient(180deg, ${alpha(theme.palette.grey[300], 0.7)} 0%, ${alpha(
+              background: `linear-gradient(180deg, ${alpha(theme.palette.grey[300], 0.9)} 0%, ${alpha(
                 theme.palette.grey[200],
-                0.5
+                0.6
               )} 100%)`,
               animation: "pulse 1.6s ease-in-out infinite",
               "@keyframes pulse": {
-                "0%, 100%": { opacity: 0.4 },
+                "0%, 100%": { opacity: 0.5 },
                 "50%": { opacity: 1 },
               },
             }}
@@ -67,13 +73,13 @@ function MiniBarChartLabeled({
 
   if (!data || data.length === 0) {
     return (
-      <Box sx={{ height, display: "grid", placeItems: "center", p: 2 }}>
+      <Box sx={{ height, display: "grid", placeItems: "center", p: 2, bgcolor: alpha(theme.palette.background.paper, 0.95), borderRadius: 2 }}>
         <Typography color="text.secondary">Tidak ada data</Typography>
       </Box>
     );
   }
 
-  // ====== Computations ======
+  // ========== Compute ==========
   const values = data.map((d) => Number(d.value || 0));
   const maxValue = Math.max(...values, 1);
   const total = values.reduce((s, n) => s + n, 0);
@@ -94,7 +100,7 @@ function MiniBarChartLabeled({
       ? (isSixMonths && data.length > 6) || (!isSixMonths && data.length > 8)
       : !!compactLabels;
 
-  // ====== Colors ======
+  // ========== Colors ==========
   const paletteSet = [
     theme.palette.primary.main,
     theme.palette.info.main,
@@ -105,25 +111,21 @@ function MiniBarChartLabeled({
   ];
 
   const getBarColor = (index) => {
-    if (index === currentIndex) {
-      // current period bar (today / last week / last month)
-      return theme.palette.primary.main;
-    }
+    if (index === currentIndex) return theme.palette.primary.main; // current period
     if (!isDaily && (isWeeklyMonthly || isFourWeeks || isSixMonths)) {
       return paletteSet[index % paletteSet.length];
     }
     return theme.palette.info.main;
   };
 
-  // ====== Grid lines (25/50/75%) ======
+  // ========== Gridlines (25/50/75%) ==========
   const gridLines = [0.25, 0.5, 0.75];
 
-  // ====== Render ======
   return (
     <Box role="img" aria-label="Grafik batang ringkas" sx={{ height, display: "flex", flexDirection: "column", gap: 1 }}>
-      {/* Totals header */}
+      {/* Totals */}
       {showTotals && (
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 0.5 }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 0.5, flexWrap: "wrap" }}>
           <Chip
             size="small"
             label={`Total: ${valueFormatter(total)} ${unit}`}
@@ -138,7 +140,7 @@ function MiniBarChartLabeled({
             <Chip
               size="small"
               label={`Puncak: ${data[peakIndex]?.label ?? "–"} (${valueFormatter(values[peakIndex])} ${unit})`}
-              sx={{ bgcolor: alpha(theme.palette.success.main, 0.08), color: theme.palette.success.main }}
+              sx={{ bgcolor: alpha(theme.palette.success.main, 0.1), color: theme.palette.success.main }}
             />
           )}
         </Stack>
@@ -156,12 +158,13 @@ function MiniBarChartLabeled({
           px: isWeeklyMonthly || isFourWeeks ? 1.5 : 0,
           overflowX: "auto",
           overflowY: "hidden",
-          // smooth scroll for mobile
           scrollBehavior: "smooth",
-          borderRadius: 1,
+          borderRadius: 2,
+          bgcolor: alpha(theme.palette.background.paper, 0.95), // ✅ cerah
+          boxShadow: `inset 0 0 4px ${alpha(theme.palette.grey[300], 0.6)}`,
         }}
       >
-        {/* Horizontal grid */}
+        {/* Grid */}
         {gridLines.map((p) => (
           <Box
             key={p}
@@ -169,9 +172,9 @@ function MiniBarChartLabeled({
             sx={{
               position: "absolute",
               inset: 0,
-              top: `${(1 - p) * 80 + 10}%`, // bars occupy ~80% of height, keep 10% headroom
+              top: `${(1 - p) * 80 + 10}%`,
               height: 1,
-              bgcolor: alpha(theme.palette.divider, 0.6),
+              bgcolor: alpha(theme.palette.divider, 0.8),
             }}
           />
         ))}
@@ -179,14 +182,15 @@ function MiniBarChartLabeled({
         {/* Bars */}
         {data.map((item, index) => {
           const raw = Number(item.value || 0);
-          const barHeight = maxValue > 0 ? (raw / maxValue) * 80 : 0; // use 80% area for bars
+          const barHeight = maxValue > 0 ? (raw / maxValue) * 80 : 0; // use 80% plot area
           const isCurrent = index === currentIndex;
           const isPeak = index === peakIndex;
 
           const color = getBarColor(index);
-          const gradient = `linear-gradient(180deg, ${alpha(color, 0.95)} 0%, ${alpha(
-            darken(color, 0.08),
-            0.95
+          // ✅ light gradient
+          const gradient = `linear-gradient(180deg, ${alpha(color, 0.7)} 0%, ${alpha(
+            darken(color, 0.1),
+            0.6
           )} 100%)`;
 
           const labelText = item.label;
@@ -218,14 +222,14 @@ function MiniBarChartLabeled({
                     minHeight: 6,
                     background: gradient,
                     borderRadius: 8,
-                    transition: "height 380ms ease, transform 180ms ease, box-shadow 180ms ease",
+                    transition: "height 380ms ease, transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease",
                     cursor: "pointer",
                     transform: isCurrent ? "translateY(-1px)" : "translateY(0)",
-                    boxShadow: isCurrent ? 3 : 1,
+                    boxShadow: isCurrent ? `0 6px 16px ${alpha(color, 0.25)}` : `0 4px 12px ${alpha(color, 0.18)}`,
                     "&:hover": {
-                      opacity: 0.9,
+                      opacity: 0.95,
                       transform: "translateY(-3px)",
-                      boxShadow: 4,
+                      boxShadow: `0 8px 18px ${alpha(color, 0.3)}`,
                     },
                     position: "relative",
                     outline: isPeak && showPeak ? `2px dashed ${alpha(theme.palette.success.main, 0.9)}` : "none",
@@ -234,7 +238,7 @@ function MiniBarChartLabeled({
                   aria-label={`${item.label} ${valueFormatter(raw)} ${unit}${isCurrent ? " (terkini)" : ""}${isPeak ? " (tertinggi)" : ""}`}
                 />
 
-                {/* Label bawah */}
+                {/* Label */}
                 <Typography
                   variant="caption"
                   sx={{
@@ -250,7 +254,7 @@ function MiniBarChartLabeled({
                   {displayLabel}
                 </Typography>
 
-                {/* Value bawah */}
+                {/* Value */}
                 <Typography
                   variant="caption"
                   sx={{
@@ -268,9 +272,9 @@ function MiniBarChartLabeled({
         })}
       </Box>
 
-      {/* Legend kecil untuk mode berwarna */}
+      {/* Legend */}
       {!isDaily && (
-        <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 0.5, px: 0.5, gap: 1 }}>
+        <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 0.5, px: 0.5, gap: 1, flexWrap: "wrap" }}>
           <Legend swatch={theme.palette.primary.main} label="Periode terkini" />
           {showPeak && <Legend swatch={theme.palette.success.main} dashed label="Nilai tertinggi" />}
         </Box>
@@ -300,11 +304,9 @@ function Legend({ swatch, label, dashed = false }) {
 
 function compactifyLabel(text) {
   if (!text) return text;
-  // ex: "Minggu 1 (1–7 Okt)" -> "M1", "Okt/25" tetap
   const m = text.match(/^M(inggu)?\s?(\d+)/i);
   if (m) return `M${m[2]}`;
   if (text.includes("/")) return text; // e.g., "Okt/25"
-  // ambil 4-5 karakter pertama biar rapih
   return text.length > 5 ? `${text.slice(0, 5)}…` : text;
 }
 
