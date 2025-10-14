@@ -1,5 +1,5 @@
 // =======================================================
-// DashboardContainer (restore layout baik + BI slim)
+// DashboardContainer (mobile-first + no scroll)
 // =======================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -26,7 +26,7 @@ import SummaryTiles from "./sections/SummaryTiles.jsx";
 import FinancialSummaryCard from "./sections/FinancialSummaryCard.jsx";
 import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
 import RecentTransactionsTable from "./sections/RecentTransactionsTable.jsx";
-import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx"; // <-- versi slim di file komponennya
+import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx";
 import KpiStrip from "./sections/KpiStrip.jsx";
 
 import CustomerHistoryModal from "./modals/CustomerHistoryModal.jsx";
@@ -264,19 +264,32 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   return (
     <Box
       sx={{
-        width: "100%",
+        width: "100vw",
         maxWidth: "100%",
-        overflowX: "hidden",
+        overflow: "hidden", // 🔥 PREVENT SCROLLING
         minHeight: "100vh",
         backgroundColor: theme.palette.background.default,
+        position: "relative",
+        // Prevent body scroll
+        touchAction: "pan-y",
+        WebkitOverflowScrolling: "touch",
       }}
     >
-      <Stack spacing={3} sx={{ p: { xs: 2, md: 3 } }}>
+      <Stack 
+        spacing={{ xs: 2, md: 3 }} 
+        sx={{ 
+          p: { xs: 1.5, sm: 2, md: 3 },
+          width: "100%",
+          maxWidth: "100%",
+          overflow: "hidden",
+          boxSizing: "border-box",
+        }}
+      >
         <HeaderSection />
 
         {err && <ErrorBanner message={err} />}
 
-        {/* KPI Strip (tetap) */}
+        {/* KPI Strip */}
         <KpiStrip
           financialData={financialSummary}
           stockPrediction={stockPrediction}
@@ -284,20 +297,21 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           loading={loading || advancedLoading}
         />
 
+        {/* SummaryTiles - Mobile First */}
         <SummaryTiles
           isi={isi}
           kosong={kosong}
           todayQty={today.qty}
-          todayMoney={fmtIDR(today.money)}
-          receivablesTotal={fmtIDR(piutang)}
+          todayMoney={today.money} // Kirim number, biar di SummaryTiles yang format
+          receivablesTotal={piutang} // Kirim number, biar di SummaryTiles yang format
           loading={loading}
         />
 
-        {/* Grid utama (responsive) */}
-        <Grid container spacing={3}>
-          {/* Kolom kiri - untuk desktop, kolom penuh untuk mobile */}
+        {/* Grid utama - MOBILE FIRST */}
+        <Grid container spacing={{ xs: 2, md: 3 }}>
+          {/* Kolom kiri - full width di mobile, 6 di desktop */}
           <Grid item xs={12} lg={6}>
-            <Stack spacing={3}>
+            <Stack spacing={{ xs: 2, md: 3 }}>
               <FinancialSummaryCard
                 omzet={financialSummary.omzet}
                 hpp={financialSummary.hpp}
@@ -308,46 +322,81 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                 loading={financialLoading}
               />
 
-              {/* FIX: hilangkan prop `series` agar komponen load data sendiri */}
               <SevenDaysChartCard loading={loading} />
             </Stack>
           </Grid>
 
-          {/* Kolom kanan - untuk desktop, kolom penuh untuk mobile */}
+          {/* Kolom kanan - full width di mobile, 6 di desktop */}
           <Grid item xs={12} lg={6}>
-            <Stack spacing={3}>
+            <Stack spacing={{ xs: 2, md: 3 }}>
               {/* Business Intelligence dengan accordion di mobile */}
               {isMobile ? (
-                <Accordion elevation={1}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Accordion 
+                  elevation={1}
+                  sx={{
+                    '&.MuiAccordion-root': {
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                    }
+                  }}
+                >
+                  <AccordionSummary 
+                    expandIcon={<ExpandMoreIcon />}
+                    sx={{
+                      minHeight: { xs: 48, sm: 56 },
+                      '& .MuiAccordionSummary-content': {
+                        my: 1
+                      }
+                    }}
+                  >
                     <Typography variant="subtitle1" fontWeight={700}>
                       Business Intelligence
                     </Typography>
                   </AccordionSummary>
-                  <AccordionDetails>
-                    <BusinessIntelligenceCard data={businessIntelligence} loading={advancedLoading} />
+                  <AccordionDetails sx={{ p: 0 }}>
+                    <BusinessIntelligenceCard 
+                      data={businessIntelligence} 
+                      loading={advancedLoading} 
+                      compact
+                    />
                   </AccordionDetails>
                 </Accordion>
               ) : (
-                <BusinessIntelligenceCard data={businessIntelligence} loading={advancedLoading} />
+                <BusinessIntelligenceCard 
+                  data={businessIntelligence} 
+                  loading={advancedLoading} 
+                />
               )}
 
-              {/* FIX: Tabel transaksi dengan scroll-x lokal (tanpa margin negatif) */}
+              {/* Recent Transactions dengan scroll lokal */}
               <Box
                 sx={{
-                  overflowX: "auto",
                   width: "100%",
+                  maxWidth: "100%",
+                  overflowX: "auto",
+                  overflowY: "hidden",
                   WebkitOverflowScrolling: "touch",
-                  "&::-webkit-scrollbar": { height: 8 },
+                  "&::-webkit-scrollbar": { 
+                    height: 6,
+                    backgroundColor: theme.palette.grey[100],
+                  },
+                  "&::-webkit-scrollbar-thumb": {
+                    backgroundColor: theme.palette.grey[400],
+                    borderRadius: 3,
+                  },
                   scrollbarWidth: "thin",
+                  // Prevent horizontal page scroll
+                  overscrollBehaviorX: "contain",
                 }}
               >
                 <RecentTransactionsTable
                   rows={recent}
                   loading={loading}
                   isSmallMobile={isSmallMobile}
-                  // jika tabel mendukung prop sx/minWidth, bisa aktifkan:
-                  // sx={{ minWidth: 720 }}
+                  sx={{ 
+                    minWidth: { xs: 600, sm: 720 },
+                    width: "100%",
+                  }}
                 />
               </Box>
             </Stack>
