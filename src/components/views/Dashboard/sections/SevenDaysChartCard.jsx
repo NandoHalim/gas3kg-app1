@@ -6,7 +6,7 @@ import {
   ToggleButtonGroup, ToggleButton,
   FormControl, Select, MenuItem, InputLabel, Tooltip, Alert,
   Table, TableHead, TableRow, TableCell, TableBody, useMediaQuery,
-  Button, Skeleton
+  Button, Skeleton, IconButton
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import TimelineIcon from "@mui/icons-material/Timeline";
@@ -18,6 +18,7 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import DownloadIcon from "@mui/icons-material/Download";
 import CloseIcon from "@mui/icons-material/Close";
+import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import { DataService } from "../../../../services/DataService";
 
 // ---------- Constants & Helpers ----------
@@ -42,13 +43,13 @@ const computeTrendData = (rows) => {
 // ---------- Optimized Components ----------
 const Spark = React.memo(function Spark({ values = [] }) {
   const max = Math.max(...values, 1);
-  const w = 56, h = 20, gap = 2;
+  const w = 40, h = 16, gap = 1;
   const bw = (w - gap * (values.length - 1)) / Math.max(values.length, 1);
   
   return (
     <svg width={w} height={h} aria-hidden focusable="false">
       {values.map((v, i) => {
-        const bh = Math.max(2, (v / max) * (h - 2));
+        const bh = Math.max(1, (v / max) * (h - 2));
         return (
           <rect
             key={i}
@@ -56,7 +57,7 @@ const Spark = React.memo(function Spark({ values = [] }) {
             y={h - bh}
             width={bw}
             height={bh}
-            rx="2"
+            rx="1"
             fill="#2f7eea"
             opacity={i === values.length - 1 ? 1 : 0.6}
           />
@@ -69,31 +70,32 @@ const Spark = React.memo(function Spark({ values = [] }) {
 const TableRowMemo = React.memo(function TableRowMemo({ row, showTrend }) {
   return (
     <TableRow hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-      <TableCell>
-        <Typography variant="body2" fontWeight="medium">
+      <TableCell sx={{ py: 1 }}>
+        <Typography variant="body2" fontSize="0.8rem">
           {row.label}
         </Typography>
       </TableCell>
-      <TableCell align="right">
-        <Typography variant="body2" fontWeight="bold" color="primary">
+      <TableCell align="right" sx={{ py: 1 }}>
+        <Typography variant="body2" fontWeight="bold" color="primary" fontSize="0.8rem">
           {fmt.format(row.value)}
         </Typography>
       </TableCell>
-      <TableCell align="right">
-        <Typography variant="body2">
+      <TableCell align="right" sx={{ py: 1 }}>
+        <Typography variant="body2" fontSize="0.75rem">
           {fmtRp(row.total)}
         </Typography>
       </TableCell>
-      <TableCell align="center">
+      <TableCell align="center" sx={{ py: 1 }}>
         <Chip
           size="small"
           color={row.delta > 0 ? "success" : row.delta < 0 ? "error" : "default"}
           variant="outlined"
           label={pct(row.delta)}
+          sx={{ height: 20, fontSize: '0.7rem' }}
         />
       </TableCell>
       {showTrend && (
-        <TableCell align="center">
+        <TableCell align="center" sx={{ py: 1 }}>
           <Tooltip title={`Tren: ${row.trendSlice.join(", ")}`} enterTouchDelay={20}>
             <span>
               <Spark values={row.trendSlice} />
@@ -107,18 +109,23 @@ const TableRowMemo = React.memo(function TableRowMemo({ row, showTrend }) {
 
 const MobileCardItem = React.memo(function MobileCardItem({ row }) {
   return (
-    <Card variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+    <Box sx={{ 
+      p: 1, 
+      borderRadius: 1, 
+      border: `1px solid #f0f0f0`,
+      backgroundColor: '#fafafa'
+    }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
         <Box>
-          <Typography variant="body2" fontWeight="medium" color="text.primary">
+          <Typography variant="body2" fontWeight="medium" fontSize="0.8rem">
             {row.label}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" fontSize="0.75rem">
             {fmtRp(row.total)}
           </Typography>
         </Box>
-        <Stack alignItems="flex-end" spacing={0.5}>
-          <Typography variant="body2" fontWeight="bold" color="primary">
+        <Stack alignItems="flex-end" spacing={0.3}>
+          <Typography variant="body2" fontWeight="bold" color="primary" fontSize="0.8rem">
             {fmt.format(row.value)}
           </Typography>
           <Chip
@@ -126,10 +133,11 @@ const MobileCardItem = React.memo(function MobileCardItem({ row }) {
             color={row.delta > 0 ? "success" : row.delta < 0 ? "error" : "default"}
             variant="outlined"
             label={pct(row.delta)}
+            sx={{ height: 18, fontSize: '0.65rem' }}
           />
         </Stack>
       </Stack>
-    </Card>
+    </Box>
   );
 });
 
@@ -143,17 +151,17 @@ const DataTable = React.memo(function DataTable({ rows }) {
   // Virtual scrolling untuk data banyak
   const visibleRows = useMemo(() => {
     // Batasi tampilan untuk performa
-    return isMobile ? processedRows.slice(0, 50) : processedRows.slice(0, 100);
+    return isMobile ? processedRows.slice(0, 30) : processedRows.slice(0, 50);
   }, [processedRows, isMobile]);
 
   if (isMobile) {
     return (
-      <Stack spacing={1}>
+      <Stack spacing={0.5}>
         {visibleRows.map((row, i) => (
           <MobileCardItem key={`${row.label}-${i}`} row={row} />
         ))}
         {processedRows.length > visibleRows.length && (
-          <Typography variant="caption" color="text.secondary" textAlign="center" sx={{ py: 1 }}>
+          <Typography variant="caption" color="text.secondary" textAlign="center" sx={{ py: 0.5 }}>
             Menampilkan {visibleRows.length} dari {processedRows.length} data
           </Typography>
         )}
@@ -162,25 +170,34 @@ const DataTable = React.memo(function DataTable({ rows }) {
   }
 
   return (
-    <Box sx={{ overflowX: "auto", maxHeight: 400, overflowY: "auto" }}>
+    <Box sx={{ overflowX: "auto", maxHeight: 300, overflowY: "auto" }}>
       <Table 
         size="small" 
         stickyHeader
         sx={{ 
-          minWidth: 560,
-          border: "1px solid #eee", 
-          borderRadius: 2,
-          '& .MuiTableCell-root': { py: 1.5 },
-          '& .MuiTableHead-root': { position: 'sticky', top: 0, zIndex: 1 }
+          minWidth: 500,
+          border: "1px solid #f0f0f0", 
+          borderRadius: 1,
+          '& .MuiTableCell-root': { py: 1 },
+          '& .MuiTableHead-root': { 
+            position: 'sticky', 
+            top: 0, 
+            zIndex: 1,
+            '& .MuiTableCell-root': {
+              backgroundColor: '#f8f9fa',
+              py: 1,
+              fontSize: '0.75rem'
+            }
+          }
         }}
       >
         <TableHead>
-          <TableRow sx={{ bgcolor: "#f9fafb" }}>
-            <TableCell><Typography variant="subtitle2">Periode</Typography></TableCell>
-            <TableCell align="right"><Typography variant="subtitle2">Qty</Typography></TableCell>
-            <TableCell align="right"><Typography variant="subtitle2">Omzet</Typography></TableCell>
-            <TableCell align="center"><Typography variant="subtitle2">Δ% (prev)</Typography></TableCell>
-            <TableCell align="center"><Typography variant="subtitle2">Tren</Typography></TableCell>
+          <TableRow>
+            <TableCell><Typography variant="subtitle2" fontSize="0.75rem">Periode</Typography></TableCell>
+            <TableCell align="right"><Typography variant="subtitle2" fontSize="0.75rem">Qty</Typography></TableCell>
+            <TableCell align="right"><Typography variant="subtitle2" fontSize="0.75rem">Omzet</Typography></TableCell>
+            <TableCell align="center"><Typography variant="subtitle2" fontSize="0.75rem">Δ%</Typography></TableCell>
+            <TableCell align="center"><Typography variant="subtitle2" fontSize="0.75rem">Tren</Typography></TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -194,7 +211,7 @@ const DataTable = React.memo(function DataTable({ rows }) {
         </TableBody>
       </Table>
       {processedRows.length > visibleRows.length && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', py: 1 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', py: 0.5 }}>
           Menampilkan {visibleRows.length} dari {processedRows.length} data
         </Typography>
       )}
@@ -208,9 +225,9 @@ function TableSkeleton() {
   
   if (isMobile) {
     return (
-      <Stack spacing={1}>
+      <Stack spacing={0.5}>
         {[1, 2, 3, 4, 5].map((item) => (
-          <Skeleton key={item} variant="rectangular" height={80} sx={{ borderRadius: 2 }} />
+          <Skeleton key={item} variant="rectangular" height={60} sx={{ borderRadius: 1 }} />
         ))}
       </Stack>
     );
@@ -218,9 +235,9 @@ function TableSkeleton() {
 
   return (
     <Box>
-      <Skeleton variant="rectangular" height={40} sx={{ mb: 1, borderRadius: 1 }} />
-      {[1, 2, 3, 4, 5, 6, 7].map((item) => (
-        <Skeleton key={item} variant="rectangular" height={50} sx={{ mb: 0.5, borderRadius: 1 }} />
+      <Skeleton variant="rectangular" height={32} sx={{ mb: 0.5, borderRadius: 1 }} />
+      {[1, 2, 3, 4, 5, 6].map((item) => (
+        <Skeleton key={item} variant="rectangular" height={38} sx={{ mb: 0.3, borderRadius: 0.5 }} />
       ))}
     </Box>
   );
@@ -229,12 +246,12 @@ function TableSkeleton() {
 // Empty State Component
 function EmptyState() {
   return (
-    <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
-      <TimelineIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
-      <Typography variant="h6" gutterBottom>
+    <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+      <TimelineIcon sx={{ fontSize: 36, mb: 1, opacity: 0.3 }} />
+      <Typography variant="body2" gutterBottom>
         Tidak Ada Data
       </Typography>
-      <Typography variant="body2">
+      <Typography variant="caption">
         Tidak ada data penjualan untuk periode yang dipilih
       </Typography>
     </Box>
@@ -243,7 +260,7 @@ function EmptyState() {
 
 // Helper function untuk process data
 function processDataBasedOnMode(data, mode, month, year) {
-  const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+  const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Ags","Sep","Okt","Nov","Des"];
   
   if (!data || data.length === 0) {
     return { series: [], summary: null };
@@ -333,7 +350,7 @@ function processDataBasedOnMode(data, mode, month, year) {
   return { series, summary };
 }
 
-// ---------- Main Optimized Card ----------
+// ---------- Main Compact Card ----------
 export default function SevenDaysChartCard({ loading = false }) {
   const theme = useTheme();
   const [mode, setMode] = useState("7_hari");
@@ -344,7 +361,7 @@ export default function SevenDaysChartCard({ loading = false }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+  const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Ags","Sep","Okt","Nov","Des"];
   const years = useMemo(() => [year - 1, year, year + 1], [year]);
 
   // ✅ FIXED: Simple useEffect tanpa infinite loop
@@ -460,30 +477,34 @@ export default function SevenDaysChartCard({ loading = false }) {
 
   return (
     <Card sx={{ 
-      borderRadius: 3,
+      borderRadius: 2,
       border: `1px solid ${theme.palette.divider}`,
-      background: `linear-gradient(135deg, ${theme.palette.background.paper} 0%, ${alpha(theme.palette.background.default, 0.5)} 100%)`,
-      boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-      overflow: "hidden"
+      background: theme.palette.background.paper,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+      overflow: "hidden",
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column'
     }}>
       <CardHeader
         sx={{ 
-          py: 2, 
+          py: 1.5, 
+          px: 2,
           bgcolor: "background.paper", 
-          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.12)}` 
+          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}` 
         }}
         title={
-          <Stack direction="row" alignItems="center" spacing={1.5}>
+          <Stack direction="row" alignItems="center" spacing={1}>
             <Box sx={{ 
               p: 0.5, 
-              borderRadius: 1, 
+              borderRadius: 0.5, 
               bgcolor: alpha(theme.palette.primary.main, 0.1) 
             }}>
               <TimelineIcon fontSize="small" color="primary" />
             </Box>
-            <Box>
-              <Typography variant="h6" fontWeight={700}>Tren Penjualan</Typography>
-              <Typography variant="caption" color="text.secondary">
+            <Box flex={1}>
+              <Typography variant="subtitle1" fontWeight={600} fontSize="0.9rem">Tren Penjualan</Typography>
+              <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
                 {headline}
               </Typography>
             </Box>
@@ -493,15 +514,13 @@ export default function SevenDaysChartCard({ loading = false }) {
                 color={summary.growth > 0 ? "success" : summary.growth < 0 ? "error" : "default"}
                 icon={summary.growth > 0 ? <TrendingUpIcon /> : <TrendingDownIcon />}
                 label={pct(summary.growth)} 
+                sx={{ height: 20, fontSize: '0.7rem' }}
               />
             )}
-            <Tooltip title="Update realtime, kalkulasi mengikuti kalender.">
-              <InfoOutlinedIcon fontSize="small" sx={{ color: "text.secondary" }} />
-            </Tooltip>
           </Stack>
         }
         action={
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="flex-start">
+          <Stack direction="row" spacing={0.5} alignItems="center">
             <ToggleButtonGroup 
               size="small" 
               color="primary" 
@@ -510,54 +529,79 @@ export default function SevenDaysChartCard({ loading = false }) {
               onChange={handleModeChange}
               sx={{ 
                 backgroundColor: alpha(theme.palette.primary.main, 0.04), 
-                borderRadius: 2 
+                borderRadius: 1,
+                '& .MuiToggleButton-root': {
+                  px: 1,
+                  py: 0.5,
+                  fontSize: '0.7rem'
+                }
               }}
             >
               <ToggleButton value="7_hari">7h</ToggleButton>
               <ToggleButton value="4_minggu">4w</ToggleButton>
-              <ToggleButton value="mingguan_bulan">Minggu/Bln</ToggleButton>
+              <ToggleButton value="mingguan_bulan">M/B</ToggleButton>
               <ToggleButton value="6_bulan">6m</ToggleButton>
             </ToggleButtonGroup>
 
-            {(mode === "mingguan_bulan" || mode === "6_bulan") && (
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                <FormControl size="small" sx={{ minWidth: 120 }} disabled={isLoading || mode==="6_bulan"}>
-                  <InputLabel>Bulan</InputLabel>
-                  <Select value={month} label="Bulan" onChange={handleMonthChange}>
-                    {months.map((m,i) => (
-                      <MenuItem key={i} value={i}>{m}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl size="small" sx={{ minWidth: 100 }} disabled={isLoading}>
-                  <InputLabel>Tahun</InputLabel>
-                  <Select value={year} label="Tahun" onChange={handleYearChange}>
-                    {years.map(y => (
-                      <MenuItem key={y} value={y}>{y}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                {(month !== new Date().getMonth() || year !== new Date().getFullYear()) && (
-                  <Chip 
-                    size="small"
-                    variant="filled"
-                    label={`${months[month]} ${year}`}
-                    onDelete={handleResetFilter}
-                    deleteIcon={<CloseIcon />}
-                    sx={{ mt: 0.5 }}
-                  />
-                )}
-              </Stack>
-            )}
+            <Tooltip title="Info tren penjualan">
+              <IconButton size="small">
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Stack>
         }
       />
 
-      <CardContent sx={{ backgroundColor: "background.paper", pt: 2 }}>
+      <CardContent sx={{ 
+        backgroundColor: "background.paper", 
+        pt: 1, 
+        pb: 1, 
+        px: 2,
+        flex: 1,
+        overflow: 'auto'
+      }}>
         {error && (
-          <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+          <Alert severity="warning" sx={{ mb: 1, borderRadius: 1, py: 0 }} size="small">
             {error}
           </Alert>
+        )}
+
+        {/* Filter controls untuk mode tertentu */}
+        {(mode === "mingguan_bulan" || mode === "6_bulan") && (
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center">
+            <FormControl size="small" sx={{ minWidth: 80 }} disabled={isLoading || mode==="6_bulan"}>
+              <Select 
+                value={month} 
+                onChange={handleMonthChange}
+                sx={{ fontSize: '0.75rem', height: '32px' }}
+              >
+                {months.map((m,i) => (
+                  <MenuItem key={i} value={i} sx={{ fontSize: '0.75rem' }}>{m}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 80 }} disabled={isLoading}>
+              <Select 
+                value={year} 
+                onChange={handleYearChange}
+                sx={{ fontSize: '0.75rem', height: '32px' }}
+              >
+                {years.map(y => (
+                  <MenuItem key={y} value={y} sx={{ fontSize: '0.75rem' }}>{y}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {(month !== new Date().getMonth() || year !== new Date().getFullYear()) && (
+              <Chip 
+                size="small"
+                variant="filled"
+                label={`${months[month]} ${year}`}
+                onDelete={handleResetFilter}
+                deleteIcon={<CloseIcon />}
+                sx={{ height: 24, fontSize: '0.7rem' }}
+              />
+            )}
+          </Stack>
         )}
 
         {isLoading ? (
@@ -566,50 +610,53 @@ export default function SevenDaysChartCard({ loading = false }) {
           <EmptyState />
         ) : (
           <>
-            {/* KPI strip */}
-            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+            {/* KPI strip - lebih kompak */}
+            <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
               <Chip 
-                icon={<BoltIcon />} 
                 size="small"
                 label={
-                  mode==="7_hari" ? "Realtime aktif" : 
-                  mode==="4_minggu" ? "Rolling 28 hari" : 
+                  mode==="7_hari" ? "Realtime" : 
+                  mode==="4_minggu" ? "28 hari" : 
                   mode==="mingguan_bulan" ? "Mulai tgl 1" : 
-                  "Termasuk bulan berjalan"
+                  "Bulan berjalan"
                 }
                 sx={{ 
                   bgcolor: alpha(theme.palette.info.main, 0.08), 
                   color: theme.palette.info.main,
-                  fontWeight: 500
+                  fontWeight: 500,
+                  height: 20,
+                  fontSize: '0.65rem'
                 }} 
               />
               <Chip 
-                icon={<TrendingUpIcon />} 
                 size="small"
                 label={
                   mode==="6_bulan"
-                    ? `Rata2/Bulan: ${summary ? fmt.format(Math.round(summary.avgMonthlyQty||0)) : "-"}`
-                    : `Rata2/Minggu: ${summary ? fmt.format(Math.round(summary.avgWeeklyQty||0)) : "-"}`
+                    ? `Rata2/Bln: ${summary ? fmt.format(Math.round(summary.avgMonthlyQty||0)) : "-"}`
+                    : `Rata2/Mgg: ${summary ? fmt.format(Math.round(summary.avgWeeklyQty||0)) : "-"}`
                 }
                 sx={{ 
                   bgcolor: alpha(theme.palette.success.main, 0.08), 
                   color: theme.palette.success.main,
-                  fontWeight: 500
+                  fontWeight: 500,
+                  height: 20,
+                  fontSize: '0.65rem'
                 }} 
               />
               {summary && (mode==="4_minggu" || mode==="6_bulan") && (
                 <Chip 
-                  icon={<CalendarMonthIcon />} 
                   size="small"
                   label={
                     mode==="4_minggu" ? 
-                    `Total 4 Minggu: ${fmt.format(summary.totalQty)}` : 
-                    `Total 6 Bulan: ${fmt.format(summary.totalQty)}`
+                    `Total: ${fmt.format(summary.totalQty)}` : 
+                    `Total: ${fmt.format(summary.totalQty)}`
                   }
                   sx={{ 
                     bgcolor: alpha(theme.palette.warning.main, 0.08), 
                     color: theme.palette.warning.main,
-                    fontWeight: 500
+                    fontWeight: 500,
+                    height: 20,
+                    fontSize: '0.65rem'
                   }} 
                 />
               )}
@@ -618,26 +665,24 @@ export default function SevenDaysChartCard({ loading = false }) {
             {/* OPTIMIZED TABLE */}
             <DataTable rows={series} />
 
-            {/* Summary footer */}
+            {/* Summary footer - lebih minimalis */}
             {summary && (
               <>
-                <Divider sx={{ my: 2 }} />
-                <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap">
-                  <Chip 
-                    size="small" 
-                    variant="outlined"
-                    label={`Total: ${fmt.format(summary.totalQty || 0)}`} 
-                  />
-                  <Chip 
-                    size="small" 
-                    variant="outlined"
-                    label={`Rata-rata: ${fmt.format(Math.round(summary.avgWeeklyQty || summary.avgMonthlyQty || 0))}`} 
-                  />
-                  <Chip 
-                    size="small" 
-                    color={summary.growth > 0 ? "success" : summary.growth < 0 ? "error" : "default"} 
-                    label={`Growth: ${pct(summary.growth || 0)}`} 
-                  />
+                <Divider sx={{ my: 1 }} />
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                  <Typography variant="caption" fontWeight="medium">
+                    Total: {fmt.format(summary.totalQty || 0)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Rata: {fmt.format(Math.round(summary.avgWeeklyQty || summary.avgMonthlyQty || 0))}
+                  </Typography>
+                  <Typography 
+                    variant="caption" 
+                    color={summary.growth > 0 ? "success.main" : summary.growth < 0 ? "error.main" : "text.secondary"}
+                    fontWeight="medium"
+                  >
+                    Growth: {pct(summary.growth || 0)}
+                  </Typography>
                 </Stack>
               </>
             )}
@@ -646,36 +691,31 @@ export default function SevenDaysChartCard({ loading = false }) {
       </CardContent>
 
       <CardActions sx={{ 
-        px: 2, 
-        pb: 2, 
-        pt: 0, 
-        display: "flex", 
-        justifyContent: "space-between", 
-        alignItems: "center",
+        px: 1.5, 
+        py: 1,
         backgroundColor: "background.paper",
-        flexWrap: 'wrap',
-        gap: 1
+        borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}`
       }}>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" color="text.secondary" fontSize="0.7rem" flex={1}>
           Data sinkron, kecuali status <b>DIBATALKAN</b>.
         </Typography>
         
-        <Stack direction="row" spacing={1}>
-          <Button 
+        <Stack direction="row" spacing={0.5}>
+          <IconButton 
             size="small" 
-            startIcon={<RefreshIcon />} 
             onClick={handleManualRefresh}
             disabled={isLoading}
+            sx={{ width: 32, height: 32 }}
           >
-            Refresh
-          </Button>
-          <Button 
-            size="small" 
-            startIcon={<DownloadIcon />}
+            <RefreshIcon fontSize="small" />
+          </IconButton>
+          <IconButton 
+            size="small"
             disabled={series.length === 0 || isLoading}
+            sx={{ width: 32, height: 32 }}
           >
-            Export
-          </Button>
+            <DownloadIcon fontSize="small" />
+          </IconButton>
         </Stack>
       </CardActions>
     </Card>
