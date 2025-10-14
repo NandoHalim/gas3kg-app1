@@ -1,5 +1,5 @@
 // =======================================================
-// DashboardContainer (STRICT WIDTH CONTAINMENT - DASHBOARD ONLY)
+// DashboardContainer (dashboard-only width containment)
 // =======================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -27,7 +27,8 @@ import FinancialSummaryCard from "./sections/FinancialSummaryCard.jsx";
 import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
 import RecentTransactionsTable from "./sections/RecentTransactionsTable.jsx";
 import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx";
-import KpiStripMobile from "./sections/KpiStripMobile.jsx";
+import KpiStrip from "./sections/KpiStrip.jsx";
+// 🔥 FALLBACK: Jika KpiStripMobile tidak ada, gunakan KpiStrip biasa
 
 import CustomerHistoryModal from "./modals/CustomerHistoryModal.jsx";
 import ErrorBanner from "./ui/ErrorBanner.jsx";
@@ -57,11 +58,11 @@ function buildLast7DaysSeries(rows = []) {
   return series;
 }
 
-// 🔥 DASHBOARD-SPECIFIC STYLES
+// 🔥 DASHBOARD-ONLY STYLES - Tidak mempengaruhi halaman lain
 const DashboardStyles = () => (
   <style>
     {`
-      /* 🔥 DASHBOARD ONLY: Strict width containment */
+      /* 🔥 HANYA berlaku untuk dashboard container */
       .dashboard-container * {
         box-sizing: border-box !important;
       }
@@ -77,10 +78,10 @@ const DashboardStyles = () => (
         max-width: 100% !important;
       }
       
-      /* Allow horizontal scroll ONLY in designated containers */
-      .dashboard-container .scroll-container {
-        overflow-x: auto;
-        overflow-y: hidden;
+      /* Izinkan scroll horizontal HANYA di container khusus */
+      .dashboard-container .table-scroll-container {
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
       }
     `}
   </style>
@@ -92,7 +93,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const isSmallMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { settings } = useSettings();
 
-  // State (tetap sama...)
+  // State
   const [stocks, setStocks] = useState(stocksFromApp);
   const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
@@ -292,12 +293,12 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
 
   return (
     <>
-      {/* 🔥 DASHBOARD-ONLY STYLES */}
+      {/* 🔥 DASHBOARD-ONLY STYLES - Tidak mempengaruhi halaman lain */}
       <DashboardStyles />
       
-      {/* 🔥 MAIN DASHBOARD CONTAINER dengan class khusus */}
+      {/* 🔥 MAIN CONTAINER dengan class khusus untuk dashboard */}
       <Box
-        className="dashboard-container" // 🔥 CRITICAL: Dashboard-specific class
+        className="dashboard-container" // 🔥 CRITICAL: Scoped containment
         sx={{
           width: "100vw",
           maxWidth: "100vw",
@@ -327,7 +328,8 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
 
           {err && <ErrorBanner message={err} />}
 
-          {/* KPI Strip */}
+          {/* 🔥 SIMPLIFIED: Gunakan KpiStrip biasa untuk semua device */}
+          {/* (KpiStripMobile dihapus untuk menghindari build error) */}
           <Box sx={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}>
             <KpiStrip
               financialData={financialSummary}
@@ -349,7 +351,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
             />
           </Box>
 
-          {/* Grid utama */}
+          {/* Grid utama dengan strict containment */}
           <Grid 
             container 
             spacing={{ xs: 2, md: 3 }} 
@@ -446,7 +448,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
 
                 {/* Recent Transactions - 🔥 ALLOWED SCROLL AREA */}
                 <Box
-                  className="scroll-container" // 🔥 SPECIAL: Allowed to scroll horizontally
+                  className="table-scroll-container" // 🔥 SPECIAL: Allowed to scroll horizontally
                   sx={{
                     width: "100%",
                     maxWidth: "100%",
