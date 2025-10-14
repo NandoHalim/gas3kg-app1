@@ -19,7 +19,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import DownloadIcon from "@mui/icons-material/Download";
 import CloseIcon from "@mui/icons-material/Close";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-import { DataService } from "../../../../services/DataService";
+import { ChartsDataService } from "../../../../services/ChartsDataService";
 
 // ---------- Constants & Helpers ----------
 const fmt = new Intl.NumberFormat("id-ID");
@@ -401,7 +401,7 @@ export default function SevenDaysChartCard({ loading = false }) {
   const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Ags","Sep","Okt","Nov","Des"];
   const years = useMemo(() => [year - 1, year, year + 1], [year]);
 
-  // ✅ FIXED: Simple useEffect tanpa infinite loop
+  // ✅ FIXED: Layout-stable useEffect dengan ChartsDataService
   useEffect(() => {
     const loadData = async () => {
       if (isLoading) return;
@@ -413,16 +413,16 @@ export default function SevenDaysChartCard({ loading = false }) {
         let result;
         switch (mode) {
           case "7_hari":
-            result = await DataService.getSevenDaySalesRealtime();
+            result = await ChartsDataService.getSevenDaySalesRealtime();
             break;
           case "4_minggu":
-            result = await DataService.getLast4WeeksSales();
+            result = await ChartsDataService.getLast4WeeksSales();
             break;
           case "mingguan_bulan":
-            result = await DataService.getMonthlyWeeklyBreakdown(year, month);
+            result = await ChartsDataService.getMonthlyWeeklyBreakdown(year, month);
             break;
           case "6_bulan":
-            result = await DataService.getLast6MonthsSales();
+            result = await ChartsDataService.getLast6MonthsSales();
             break;
           default:
             result = [];
@@ -455,9 +455,16 @@ export default function SevenDaysChartCard({ loading = false }) {
     }
   }, [mode, month, year, months]);
 
-  // Optimized handlers
+  // Optimized handlers dengan layout stability
   const handleModeChange = useCallback((_, newMode) => {
-    if (newMode) setMode(newMode);
+    if (newMode) {
+      setMode(newMode);
+      // Reset filter ketika ganti mode untuk konsistensi layout
+      if (newMode !== "mingguan_bulan") {
+        setMonth(new Date().getMonth());
+        setYear(new Date().getFullYear());
+      }
+    }
   }, []);
 
   const handleMonthChange = useCallback((event) => {
@@ -473,7 +480,7 @@ export default function SevenDaysChartCard({ loading = false }) {
     setYear(new Date().getFullYear());
   }, []);
 
-  // Manual refresh function
+  // Manual refresh function dengan ChartsDataService
   const handleManualRefresh = useCallback(async () => {
     if (isLoading) return;
     
@@ -484,16 +491,16 @@ export default function SevenDaysChartCard({ loading = false }) {
       let result;
       switch (mode) {
         case "7_hari":
-          result = await DataService.getSevenDaySalesRealtime();
+          result = await ChartsDataService.getSevenDaySalesRealtime();
           break;
         case "4_minggu":
-          result = await DataService.getLast4WeeksSales();
+          result = await ChartsDataService.getLast4WeeksSales();
           break;
         case "mingguan_bulan":
-          result = await DataService.getMonthlyWeeklyBreakdown(year, month);
+          result = await ChartsDataService.getMonthlyWeeklyBreakdown(year, month);
           break;
         case "6_bulan":
-          result = await DataService.getLast6MonthsSales();
+          result = await ChartsDataService.getLast6MonthsSales();
           break;
         default:
           result = [];
@@ -515,6 +522,7 @@ export default function SevenDaysChartCard({ loading = false }) {
   return (
     <Card sx={{ 
       width: '100%',
+      maxWidth: '100%',
       borderRadius: 2,
       border: `1px solid ${theme.palette.divider}`,
       background: theme.palette.background.paper,
@@ -523,6 +531,7 @@ export default function SevenDaysChartCard({ loading = false }) {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
+      boxSizing: 'border-box'
     }}>
       <CardHeader
         sx={{ 
@@ -530,7 +539,8 @@ export default function SevenDaysChartCard({ loading = false }) {
           px: 2,
           bgcolor: "background.paper", 
           borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-          width: '100%'
+          width: '100%',
+          boxSizing: 'border-box'
         }}
         title={
           <Stack direction="row" alignItems="center" spacing={1} sx={{ width: '100%' }}>
@@ -562,7 +572,13 @@ export default function SevenDaysChartCard({ loading = false }) {
           </Stack>
         }
         action={
-          <Box sx={{ flexShrink: 0 }}>
+          <Box sx={{ 
+            flexShrink: 0,
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: { xs: 0.5, sm: 0.5 },
+            alignItems: { xs: 'flex-end', sm: 'center' }
+          }}>
             <Stack direction="row" spacing={0.5} alignItems="center">
               <ToggleButtonGroup 
                 size="small" 
@@ -577,7 +593,12 @@ export default function SevenDaysChartCard({ loading = false }) {
                     px: 1,
                     py: 0.5,
                     fontSize: '0.7rem',
-                    minWidth: 'auto'
+                    minWidth: 'auto',
+                    border: '1px solid transparent',
+                    '&.Mui-selected': {
+                      backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                      border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`
+                    }
                   }
                 }}
               >
@@ -599,12 +620,14 @@ export default function SevenDaysChartCard({ loading = false }) {
 
       <CardContent sx={{ 
         width: '100%',
+        maxWidth: '100%',
         backgroundColor: "background.paper", 
         pt: 1, 
         pb: 1, 
         px: 2,
         flex: 1,
-        overflow: 'auto'
+        overflow: 'auto',
+        boxSizing: 'border-box'
       }}>
         {error && (
           <Alert severity="warning" sx={{ mb: 1, borderRadius: 1, py: 0, width: '100%' }} size="small">
@@ -612,10 +635,10 @@ export default function SevenDaysChartCard({ loading = false }) {
           </Alert>
         )}
 
-        {/* Filter controls untuk mode tertentu */}
+        {/* Filter controls untuk mode tertentu - FIXED LAYOUT */}
         {(mode === "mingguan_bulan" || mode === "6_bulan") && (
-          <Stack direction="row" spacing={1} sx={{ mb: 1.5, width: '100%' }} alignItems="center">
-            <FormControl size="small" sx={{ minWidth: 80 }} disabled={isLoading || mode==="6_bulan"}>
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5, width: '100%' }} alignItems="center" flexWrap="wrap">
+            <FormControl size="small" sx={{ minWidth: 80, flex: 1 }} disabled={isLoading || mode==="6_bulan"}>
               <Select 
                 value={month} 
                 onChange={handleMonthChange}
@@ -626,7 +649,7 @@ export default function SevenDaysChartCard({ loading = false }) {
                 ))}
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 80 }} disabled={isLoading}>
+            <FormControl size="small" sx={{ minWidth: 80, flex: 1 }} disabled={isLoading}>
               <Select 
                 value={year} 
                 onChange={handleYearChange}
@@ -655,7 +678,7 @@ export default function SevenDaysChartCard({ loading = false }) {
         ) : series.length === 0 ? (
           <EmptyState />
         ) : (
-          <Box sx={{ width: '100%' }}>
+          <Box sx={{ width: '100%', maxWidth: '100%' }}>
             {/* KPI strip - lebih kompak */}
             <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap" sx={{ mb: 1.5, width: '100%' }}>
               <Chip 
@@ -740,8 +763,10 @@ export default function SevenDaysChartCard({ loading = false }) {
         px: 1.5, 
         py: 1,
         width: '100%',
+        maxWidth: '100%',
         backgroundColor: "background.paper",
-        borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}`
+        borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+        boxSizing: 'border-box'
       }}>
         <Typography variant="caption" color="text.secondary" fontSize="0.7rem" flex={1} noWrap>
           Data sinkron, kecuali status <b>DIBATALKAN</b>.
