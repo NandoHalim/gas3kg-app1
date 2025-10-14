@@ -29,29 +29,35 @@ const formatCompactNumber = (num) => {
 
 const getStockStatus = (stockCount, isFilledStock = true) => {
   const count = Number(stockCount) || 0;
+  
   if (count <= CRITICAL_STOCK_THRESHOLD) {
     return { 
       message: "Kritis", 
       shortMessage: "Kritis",
-      color: "error",
+      color: "error", // Valid MUI color
       icon: <ErrorOutlineIcon />
     };
   }
+  
   if (count <= LOW_STOCK_THRESHOLD) {
     return { 
       message: "Stok menipis", 
       shortMessage: "Menipis",
-      color: "warning",
+      color: "warning", // Valid MUI color
       icon: <WarningIcon />
     };
   }
+  
   return { 
     message: isFilledStock ? "Siap jual" : "Tabung kembali", 
     shortMessage: isFilledStock ? "Ready" : "Isi",
-    color: "success",
+    color: "success", // Valid MUI color
     icon: null
   };
 };
+
+// Safe number converter
+const safeNumber = (value) => Math.max(0, Number(value) || 0);
 
 function SummaryTiles({ 
   isi = 0, 
@@ -63,37 +69,41 @@ function SummaryTiles({
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Validasi dan safe values
-  const safeIsi = Math.max(0, Number(isi) || 0);
-  const safeKosong = Math.max(0, Number(kosong) || 0);
-  const safeTodayQty = Math.max(0, Number(todayQty) || 0);
-  const safeTodayMoney = Math.max(0, Number(todayMoney) || 0);
-  const safeReceivables = Math.max(0, Number(receivablesTotal) || 0);
+  // Validasi input dengan safeNumber
+  const safeIsi = safeNumber(isi);
+  const safeKosong = safeNumber(kosong);
+  const safeTodayQty = safeNumber(todayQty);
+  const safeTodayMoney = safeNumber(todayMoney);
+  const safeReceivables = safeNumber(receivablesTotal);
 
   // Get stock status
   const filledStockStatus = getStockStatus(safeIsi, true);
   const emptyStockStatus = getStockStatus(safeKosong, false);
 
-  // MOBILE-FIRST: Nilai untuk mobile dulu, desktop kemudian
+  // Tentukan color untuk Stok Kosong - LOGIC YANG BENAR
+  const emptyStockColor = safeKosong >= 10 ? "error" : 
+                         safeKosong >= 5 ? "warning" : "success";
+
+  // Mobile-optimized values
   const displayIsi = isMobile ? formatCompactNumber(safeIsi) : safeIsi;
   const displayKosong = isMobile ? formatCompactNumber(safeKosong) : safeKosong;
   const displayTodayQty = isMobile ? formatCompactNumber(safeTodayQty) : safeTodayQty;
   const displayReceivables = isMobile ? formatCompactNumber(safeReceivables) : formatCurrency(safeReceivables);
   
-  // MOBILE-FIRST: Konten yang dioptimalkan untuk mobile
+  // Mobile-optimized content
   const stockSubtitle = isMobile ? filledStockStatus.shortMessage : filledStockStatus.message;
-  const emptyStockSubtitle = isMobile ? emptyStockStatus.shortMessage : emptyStockStatus.message;
+  const emptyStockSubtitle = isMobile ? 
+    (safeKosong >= 5 ? "Banyak" : "Normal") : 
+    (safeKosong >= 5 ? "Perlu diisi" : "Stok normal");
+  
   const salesSubtitle = isMobile ? 
     (safeTodayMoney > 0 ? formatCompactNumber(safeTodayMoney) : "Rp 0") : 
     formatCurrency(safeTodayMoney);
+  
   const receivablesSubtitle = isMobile ? 
     (safeReceivables > 0 ? "Belum lunas" : "Lunas") : 
     (safeReceivables > 0 ? "Belum lunas" : "Semua lunas");
-
-  // MOBILE-FIRST: Grid spacing
-  const gridSpacing = { xs: 1.5, sm: 2, md: 3 };
 
   return (
     <Box 
@@ -104,23 +114,15 @@ function SummaryTiles({
         background: theme.palette.background.paper,
         boxShadow: { xs: '0 1px 3px rgba(0,0,0,0.1)', sm: '0 2px 8px rgba(0,0,0,0.05)' },
         overflow: 'hidden',
-        // MOBILE-FIRST: Padding scaling
         p: { xs: 1.5, sm: 2, md: 3 },
       }}
     >
       <Grid 
         container 
-        spacing={gridSpacing}
+        spacing={{ xs: 1.5, sm: 2 }}
         alignItems="stretch"
-        sx={{
-          width: '100%',
-          margin: 0,
-          '& .MuiGrid-item': {
-            display: 'flex',
-          }
-        }}
       >
-        {/* Stok Isi - MOBILE-FIRST: xs=6 untuk 2x2 grid di mobile */}
+        {/* Stok Isi */}
         <Grid item xs={6} md={3}>
           <StatTile
             title="Stok Isi"
@@ -132,14 +134,14 @@ function SummaryTiles({
           />
         </Grid>
 
-        {/* Stok Kosong */}
+        {/* Stok Kosong - FIXED COLOR LOGIC */}
         <Grid item xs={6} md={3}>
           <StatTile
             title="Stok Kosong"
             value={displayKosong}
             subtitle={emptyStockSubtitle}
-            color={emptyStockStatus.color}
-            icon={emptyStockStatus.icon || <Inventory2Icon />}
+            color={emptyStockColor} // Gunakan logic yang fixed
+            icon={<Inventory2Icon />}
             loading={loading}
           />
         </Grid>
@@ -150,7 +152,7 @@ function SummaryTiles({
             title={isMobile ? "Hari Ini" : "Penjualan Hari Ini"}
             value={displayTodayQty}
             subtitle={salesSubtitle}
-            color="info"
+            color="info" // Valid MUI color
             icon={<ShoppingCartIcon />}
             loading={loading}
           />
@@ -162,7 +164,7 @@ function SummaryTiles({
             title="Piutang"
             value={displayReceivables}
             subtitle={receivablesSubtitle}
-            color={safeReceivables > 0 ? "warning" : "success"}
+            color={safeReceivables > 0 ? "warning" : "success"} // Valid MUI colors
             icon={<ReceiptLongIcon />}
             loading={loading}
           />
