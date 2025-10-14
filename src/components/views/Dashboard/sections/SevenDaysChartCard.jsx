@@ -174,9 +174,12 @@ const DataTable = React.memo(function DataTable({ rows }) {
   return (
     <Box sx={{ 
       width: '100%', 
-      overflowX: "auto", 
-      maxHeight: 300, 
-      overflowY: "auto" 
+      overflowX: "auto",
+      overflowY: "auto",
+      '& .MuiTable-root': {
+        minWidth: '100%',
+        tableLayout: 'fixed'
+      }
     }}>
       <Table 
         size="small" 
@@ -184,7 +187,7 @@ const DataTable = React.memo(function DataTable({ rows }) {
         sx={{ 
           width: '100%',
           minWidth: 500,
-          tableLayout: 'fixed', // ✅ FIX: Gunakan fixed layout
+          tableLayout: 'fixed',
           border: "1px solid #f0f0f0", 
           borderRadius: 1,
           '& .MuiTableCell-root': { 
@@ -511,7 +514,7 @@ export default function SevenDaysChartCard({ loading = false }) {
 
   return (
     <Card sx={{ 
-      width: '100%', // ✅ FIX: Lebar tetap 100%
+      width: '100%',
       borderRadius: 2,
       border: `1px solid ${theme.palette.divider}`,
       background: theme.palette.background.paper,
@@ -520,7 +523,6 @@ export default function SevenDaysChartCard({ loading = false }) {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      minWidth: 300 // ✅ FIX: Minimum width agar tidak terlalu kecil
     }}>
       <CardHeader
         sx={{ 
@@ -528,7 +530,7 @@ export default function SevenDaysChartCard({ loading = false }) {
           px: 2,
           bgcolor: "background.paper", 
           borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-          width: '100%' // ✅ FIX: Lebar penuh
+          width: '100%'
         }}
         title={
           <Stack direction="row" alignItems="center" spacing={1} sx={{ width: '100%' }}>
@@ -596,7 +598,7 @@ export default function SevenDaysChartCard({ loading = false }) {
       />
 
       <CardContent sx={{ 
-        width: '100%', // ✅ FIX: Lebar penuh
+        width: '100%',
         backgroundColor: "background.paper", 
         pt: 1, 
         pb: 1, 
@@ -653,7 +655,7 @@ export default function SevenDaysChartCard({ loading = false }) {
         ) : series.length === 0 ? (
           <EmptyState />
         ) : (
-          <Box sx={{ width: '100%' }}> {/* ✅ FIX: Container dengan lebar tetap */}
+          <Box sx={{ width: '100%' }}>
             {/* KPI strip - lebih kompak */}
             <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap" sx={{ mb: 1.5, width: '100%' }}>
               <Chip 
@@ -737,7 +739,7 @@ export default function SevenDaysChartCard({ loading = false }) {
       <CardActions sx={{ 
         px: 1.5, 
         py: 1,
-        width: '100%', // ✅ FIX: Lebar penuh
+        width: '100%',
         backgroundColor: "background.paper",
         borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}`
       }}>

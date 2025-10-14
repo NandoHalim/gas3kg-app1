@@ -1,4 +1,4 @@
-// KpiStripMobile.jsx - Versi mobile-first yang lebih robust
+// KpiStrip.jsx - Versi mobile-first yang lebih robust
 import React from 'react';
 import {
   Box,
@@ -20,7 +20,7 @@ import {
   ShowChart
 } from '@mui/icons-material';
 
-const KpiStripMobile = ({ 
+const KpiStrip = ({ 
   financialData = {}, 
   stockPrediction = {}, 
   businessIntel = {}, 
@@ -210,11 +210,11 @@ const KpiStripMobile = ({
 };
 
 // Default props untuk safety
-KpiStripMobile.defaultProps = {
+KpiStrip.defaultProps = {
   financialData: {},
   stockPrediction: {},
   businessIntel: {},
   loading: false
 };
 
-export default React.memo(KpiStripMobile);
+export default React.memo(KpiStrip);

@@ -119,6 +119,7 @@ function SummaryTiles({
     <Box 
       sx={{
         width: '100%',
+        maxWidth: '100%',
         borderRadius: { xs: 2, sm: 3 },
         border: `1px solid ${theme.palette.divider}`,
         background: theme.palette.background.paper,

@@ -28,7 +28,6 @@ import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
 import RecentTransactionsTable from "./sections/RecentTransactionsTable.jsx";
 import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx";
 import KpiStrip from "./sections/KpiStrip.jsx";
-// 🔥 FALLBACK: Jika KpiStripMobile tidak ada, gunakan KpiStrip biasa
 
 import CustomerHistoryModal from "./modals/CustomerHistoryModal.jsx";
 import ErrorBanner from "./ui/ErrorBanner.jsx";
@@ -58,30 +57,46 @@ function buildLast7DaysSeries(rows = []) {
   return series;
 }
 
-// 🔥 DASHBOARD-ONLY STYLES - Tidak mempengaruhi halaman lain
+// 🔥 DASHBOARD-ONLY STYLES - IMPROVED CONTAINMENT
 const DashboardStyles = () => (
   <style>
     {`
-      /* 🔥 HANYA berlaku untuk dashboard container */
-      .dashboard-container * {
+      /* 🔥 STRICT DASHBOARD CONTAINMENT */
+      .dashboard-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: hidden !important;
         box-sizing: border-box !important;
       }
       
-      .dashboard-container {
-        width: 100vw !important;
-        max-width: 100vw !important;
-        overflow-x: hidden !important;
-      }
-      
-      .dashboard-container .MuiGrid-item,
-      .dashboard-container .MuiGrid-container {
+      .dashboard-container * {
+        box-sizing: border-box !important;
         max-width: 100% !important;
       }
       
-      /* Izinkan scroll horizontal HANYA di container khusus */
+      /* Force all cards to be contained */
+      .dashboard-container .MuiCard-root {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: hidden !important;
+      }
+      
+      /* Allow horizontal scroll ONLY for tables with this class */
       .dashboard-container .table-scroll-container {
         overflow-x: auto !important;
         overflow-y: hidden !important;
+      }
+      
+      /* Block horizontal scroll for everything else */
+      .dashboard-container > *:not(.table-scroll-container) {
+        overflow-x: hidden !important;
+      }
+      
+      /* Grid containment */
+      .dashboard-container .MuiGrid-item,
+      .dashboard-container .MuiGrid-container {
+        max-width: 100% !important;
+        width: 100% !important;
       }
     `}
   </style>
@@ -293,23 +308,20 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
 
   return (
     <>
-      {/* 🔥 DASHBOARD-ONLY STYLES - Tidak mempengaruhi halaman lain */}
+      {/* 🔥 DASHBOARD-ONLY STYLES - IMPROVED */}
       <DashboardStyles />
       
-      {/* 🔥 MAIN CONTAINER dengan class khusus untuk dashboard */}
+      {/* 🔥 MAIN CONTAINER dengan strict containment */}
       <Box
-        className="dashboard-container" // 🔥 CRITICAL: Scoped containment
+        className="dashboard-container"
         sx={{
-          width: "100vw",
-          maxWidth: "100vw",
+          width: "100%",
+          maxWidth: "100%",
           overflowX: "hidden",
           overflowY: "auto",
           minHeight: "100vh",
           backgroundColor: theme.palette.background.default,
           boxSizing: "border-box",
-          WebkitOverflowScrolling: "touch",
-          overscrollBehavior: "contain",
-          touchAction: "pan-y",
           position: "relative",
         }}
       >
@@ -321,15 +333,13 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
             maxWidth: "100%",
             boxSizing: "border-box",
             minHeight: "fit-content",
-            overflow: "hidden",
           }}
         >
           <HeaderSection />
 
           {err && <ErrorBanner message={err} />}
 
-          {/* 🔥 SIMPLIFIED: Gunakan KpiStrip biasa untuk semua device */}
-          {/* (KpiStripMobile dihapus untuk menghindari build error) */}
+          {/* KpiStrip */}
           <Box sx={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}>
             <KpiStrip
               financialData={financialSummary}
@@ -362,7 +372,11 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
               "& .MuiGrid-item": {
                 width: "100%",
                 maxWidth: "100%",
-                overflow: "hidden"
+                overflow: "hidden",
+                "& > *": {
+                  width: "100% !important",
+                  maxWidth: "100% !important"
+                }
               }
             }}
           >
@@ -386,10 +400,6 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                   width: "100%", 
                   maxWidth: "100%",
                   overflow: "hidden",
-                  "& .MuiCard-root": {
-                    width: "100%",
-                    maxWidth: "100%",
-                  }
                 }}>
                   <SevenDaysChartCard loading={loading} />
                 </Box>
@@ -448,7 +458,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
 
                 {/* Recent Transactions - 🔥 ALLOWED SCROLL AREA */}
                 <Box
-                  className="table-scroll-container" // 🔥 SPECIAL: Allowed to scroll horizontally
+                  className="table-scroll-container"
                   sx={{
                     width: "100%",
                     maxWidth: "100%",
@@ -478,7 +488,6 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                     sx={{ 
                       minWidth: { xs: 600, sm: 720 },
                       width: "100%",
-                      maxWidth: "100%",
                     }}
                   />
                 </Box>

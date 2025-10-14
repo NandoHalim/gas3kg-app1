@@ -57,7 +57,7 @@ export default function BusinessIntelligenceCard() {
 
   if (loading) {
     return (
-      <Card>
+      <Card sx={{ width: '100%', maxWidth: '100%' }}>
         <CardContent>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
             <Typography variant="h6">Business Intelligence (AI)</Typography>
@@ -71,7 +71,7 @@ export default function BusinessIntelligenceCard() {
 
   if (error) {
     return (
-      <Card>
+      <Card sx={{ width: '100%', maxWidth: '100%' }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>Business Intelligence (AI)</Typography>
           <Alert severity="error">{error?.message || "Gagal memuat AI insights"}</Alert>
@@ -82,7 +82,7 @@ export default function BusinessIntelligenceCard() {
 
   if (!data) {
     return (
-      <Card>
+      <Card sx={{ width: '100%', maxWidth: '100%' }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>Business Intelligence (AI)</Typography>
           <Alert severity="info">Data AI tidak tersedia.</Alert>
@@ -92,7 +92,7 @@ export default function BusinessIntelligenceCard() {
   }
 
   return (
-    <Card>
+    <Card sx={{ width: '100%', maxWidth: '100%' }}>
       <CardContent>
         <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
           <Box>

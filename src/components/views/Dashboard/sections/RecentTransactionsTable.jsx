@@ -11,7 +11,10 @@ function RecentTransactionsTable({ rows, loading = false, isSmallMobile = false 
   return (
     <Card sx={{
       background: `linear(135deg, ${alpha(theme.palette.primary.main, 0.03)} 0%, ${alpha(theme.palette.info.main, 0.03)} 100%)`,
-      border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
+      border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+      width: '100%',
+      maxWidth: '100%',
+      overflow: 'hidden'
     }}>
       <CardHeader
         title={
@@ -22,9 +25,9 @@ function RecentTransactionsTable({ rows, loading = false, isSmallMobile = false 
         }
         sx={{ pb: 2, borderBottom: 1, borderColor: "divider" }}
       />
-      <CardContent>
+      <CardContent sx={{ p: 0 }}>
         {loading ? (
-          <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2 }}>
+          <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, width: '100%' }}>
             <Table>
               <TableBody>
                 {[...Array(5)].map((_, i) => (
@@ -44,7 +47,12 @@ function RecentTransactionsTable({ rows, loading = false, isSmallMobile = false 
             sx={{ 
               border: `1px solid ${theme.palette.divider}`,
               borderRadius: 2,
-              maxHeight: 400
+              maxHeight: 400,
+              width: '100%',
+              overflowX: 'auto',
+              '& .MuiTable-root': {
+                minWidth: 650,
+              }
             }}
           >
             <Table stickyHeader size={isSmallMobile ? "small" : "medium"}>

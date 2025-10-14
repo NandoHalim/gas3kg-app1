@@ -11,7 +11,10 @@ function FinancialSummaryCard({ omzet, hpp, laba, margin, transactionCount, tota
   return (
     <Card sx={{
       background: `linear(135deg, ${alpha(theme.palette.success.main, 0.05)} 0%, ${alpha(theme.palette.info.main, 0.05)} 100%)`,
-      border: `1px solid ${alpha(theme.palette.success.main, 0.1)}`
+      border: `1px solid ${alpha(theme.palette.success.main, 0.1)}`,
+      width: '100%',
+      maxWidth: '100%',
+      overflow: 'hidden'
     }}>
       <CardHeader
         title={
