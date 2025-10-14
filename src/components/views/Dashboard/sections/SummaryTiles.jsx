@@ -4,8 +4,6 @@ import StatTile from "../ui/StatTile";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import WarningIcon from "@mui/icons-material/Warning";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 
 const LOW_STOCK_THRESHOLD = 5;
 const CRITICAL_STOCK_THRESHOLD = 2;
@@ -27,37 +25,78 @@ const formatCompactNumber = (num) => {
   return number.toString();
 };
 
-const getStockStatus = (stockCount, isFilledStock = true) => {
-  const count = Number(stockCount) || 0;
-  
-  if (count <= CRITICAL_STOCK_THRESHOLD) {
-    return { 
-      message: "Kritis", 
-      shortMessage: "Kritis",
-      color: "error", // Valid MUI color
-      icon: <ErrorOutlineIcon />
-    };
-  }
-  
-  if (count <= LOW_STOCK_THRESHOLD) {
-    return { 
-      message: "Stok menipis", 
-      shortMessage: "Menipis",
-      color: "warning", // Valid MUI color
-      icon: <WarningIcon />
-    };
-  }
-  
-  return { 
-    message: isFilledStock ? "Siap jual" : "Tabung kembali", 
-    shortMessage: isFilledStock ? "Ready" : "Isi",
-    color: "success", // Valid MUI color
-    icon: null
-  };
-};
-
 // Safe number converter
 const safeNumber = (value) => Math.max(0, Number(value) || 0);
+
+// Simple color logic - hanya gunakan valid MUI colors
+const getTileConfig = (type, value, isMobile = false) => {
+  const numValue = safeNumber(value);
+  
+  switch (type) {
+    case 'stok-isi':
+      let stokIsiColor = 'success';
+      let stokIsiSubtitle = 'Siap jual';
+      
+      if (numValue <= CRITICAL_STOCK_THRESHOLD) {
+        stokIsiColor = 'error';
+        stokIsiSubtitle = isMobile ? 'Kritis' : 'Stok kritis';
+      } else if (numValue <= LOW_STOCK_THRESHOLD) {
+        stokIsiColor = 'warning';
+        stokIsiSubtitle = isMobile ? 'Menipis' : 'Stok menipis';
+      }
+      
+      return {
+        color: stokIsiColor,
+        subtitle: stokIsiSubtitle,
+        icon: <Inventory2Icon />,
+        displayValue: isMobile ? formatCompactNumber(numValue) : numValue
+      };
+
+    case 'stok-kosong':
+      let stokKosongColor = 'success';
+      let stokKosongSubtitle = 'Normal';
+      
+      if (numValue >= 10) {
+        stokKosongColor = 'error';
+        stokKosongSubtitle = isMobile ? 'Banyak' : 'Banyak kosong';
+      } else if (numValue >= 5) {
+        stokKosongColor = 'warning';
+        stokKosongSubtitle = isMobile ? 'Perlu isi' : 'Perlu diisi';
+      }
+      
+      return {
+        color: stokKosongColor,
+        subtitle: stokKosongSubtitle,
+        icon: <Inventory2Icon />,
+        displayValue: isMobile ? formatCompactNumber(numValue) : numValue
+      };
+
+    case 'penjualan':
+      return {
+        color: 'info',
+        subtitle: isMobile ? formatCompactNumber(safeNumber(value)) : formatCurrency(safeNumber(value)),
+        icon: <ShoppingCartIcon />,
+        displayValue: isMobile ? formatCompactNumber(numValue) : numValue
+      };
+
+    case 'piutang':
+      const hasReceivables = numValue > 0;
+      return {
+        color: hasReceivables ? 'warning' : 'success',
+        subtitle: hasReceivables ? 'Belum lunas' : 'Lunas',
+        icon: <ReceiptLongIcon />,
+        displayValue: isMobile ? formatCompactNumber(numValue) : formatCurrency(numValue)
+      };
+
+    default:
+      return {
+        color: 'primary',
+        subtitle: '',
+        icon: <Inventory2Icon />,
+        displayValue: numValue
+      };
+  }
+};
 
 function SummaryTiles({ 
   isi = 0, 
@@ -70,40 +109,11 @@ function SummaryTiles({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // Validasi input dengan safeNumber
-  const safeIsi = safeNumber(isi);
-  const safeKosong = safeNumber(kosong);
-  const safeTodayQty = safeNumber(todayQty);
-  const safeTodayMoney = safeNumber(todayMoney);
-  const safeReceivables = safeNumber(receivablesTotal);
-
-  // Get stock status
-  const filledStockStatus = getStockStatus(safeIsi, true);
-  const emptyStockStatus = getStockStatus(safeKosong, false);
-
-  // Tentukan color untuk Stok Kosong - LOGIC YANG BENAR
-  const emptyStockColor = safeKosong >= 10 ? "error" : 
-                         safeKosong >= 5 ? "warning" : "success";
-
-  // Mobile-optimized values
-  const displayIsi = isMobile ? formatCompactNumber(safeIsi) : safeIsi;
-  const displayKosong = isMobile ? formatCompactNumber(safeKosong) : safeKosong;
-  const displayTodayQty = isMobile ? formatCompactNumber(safeTodayQty) : safeTodayQty;
-  const displayReceivables = isMobile ? formatCompactNumber(safeReceivables) : formatCurrency(safeReceivables);
-  
-  // Mobile-optimized content
-  const stockSubtitle = isMobile ? filledStockStatus.shortMessage : filledStockStatus.message;
-  const emptyStockSubtitle = isMobile ? 
-    (safeKosong >= 5 ? "Banyak" : "Normal") : 
-    (safeKosong >= 5 ? "Perlu diisi" : "Stok normal");
-  
-  const salesSubtitle = isMobile ? 
-    (safeTodayMoney > 0 ? formatCompactNumber(safeTodayMoney) : "Rp 0") : 
-    formatCurrency(safeTodayMoney);
-  
-  const receivablesSubtitle = isMobile ? 
-    (safeReceivables > 0 ? "Belum lunas" : "Lunas") : 
-    (safeReceivables > 0 ? "Belum lunas" : "Semua lunas");
+  // Get config untuk setiap tile
+  const stokIsiConfig = getTileConfig('stok-isi', isi, isMobile);
+  const stokKosongConfig = getTileConfig('stok-kosong', kosong, isMobile);
+  const penjualanConfig = getTileConfig('penjualan', todayMoney, isMobile);
+  const piutangConfig = getTileConfig('piutang', receivablesTotal, isMobile);
 
   return (
     <Box 
@@ -117,31 +127,27 @@ function SummaryTiles({
         p: { xs: 1.5, sm: 2, md: 3 },
       }}
     >
-      <Grid 
-        container 
-        spacing={{ xs: 1.5, sm: 2 }}
-        alignItems="stretch"
-      >
+      <Grid container spacing={{ xs: 1.5, sm: 2 }} alignItems="stretch">
         {/* Stok Isi */}
         <Grid item xs={6} md={3}>
           <StatTile
             title="Stok Isi"
-            value={displayIsi}
-            subtitle={stockSubtitle}
-            color={filledStockStatus.color}
-            icon={filledStockStatus.icon || <Inventory2Icon />}
+            value={stokIsiConfig.displayValue}
+            subtitle={stokIsiConfig.subtitle}
+            color={stokIsiConfig.color}
+            icon={stokIsiConfig.icon}
             loading={loading}
           />
         </Grid>
 
-        {/* Stok Kosong - FIXED COLOR LOGIC */}
+        {/* Stok Kosong */}
         <Grid item xs={6} md={3}>
           <StatTile
             title="Stok Kosong"
-            value={displayKosong}
-            subtitle={emptyStockSubtitle}
-            color={emptyStockColor} // Gunakan logic yang fixed
-            icon={<Inventory2Icon />}
+            value={stokKosongConfig.displayValue}
+            subtitle={stokKosongConfig.subtitle}
+            color={stokKosongConfig.color}
+            icon={stokKosongConfig.icon}
             loading={loading}
           />
         </Grid>
@@ -150,10 +156,10 @@ function SummaryTiles({
         <Grid item xs={6} md={3}>
           <StatTile
             title={isMobile ? "Hari Ini" : "Penjualan Hari Ini"}
-            value={displayTodayQty}
-            subtitle={salesSubtitle}
-            color="info" // Valid MUI color
-            icon={<ShoppingCartIcon />}
+            value={todayQty} // Tetap tampilkan quantity untuk penjualan
+            subtitle={penjualanConfig.subtitle}
+            color={penjualanConfig.color}
+            icon={penjualanConfig.icon}
             loading={loading}
           />
         </Grid>
@@ -162,10 +168,10 @@ function SummaryTiles({
         <Grid item xs={6} md={3}>
           <StatTile
             title="Piutang"
-            value={displayReceivables}
-            subtitle={receivablesSubtitle}
-            color={safeReceivables > 0 ? "warning" : "success"} // Valid MUI colors
-            icon={<ReceiptLongIcon />}
+            value={piutangConfig.displayValue}
+            subtitle={piutangConfig.subtitle}
+            color={piutangConfig.color}
+            icon={piutangConfig.icon}
             loading={loading}
           />
         </Grid>

@@ -3,16 +3,32 @@ import { Card, CardContent, Stack, Box, Typography, Skeleton } from "@mui/materi
 import { alpha, useTheme } from "@mui/material/styles";
 
 // Valid color types untuk MUI
-const VALID_COLORS = ['primary', 'secondary', 'error', 'warning', 'info', 'success'];
+const VALID_COLORS = {
+  primary: true,
+  secondary: true, 
+  error: true,
+  warning: true,
+  info: true,
+  success: true
+};
+
+// Fallback color jika invalid
+const getSafeColor = (color) => {
+  return VALID_COLORS[color] ? color : 'primary';
+};
+
+// Safe color value getter
+const getColorValue = (theme, color, type = 'main') => {
+  const safeColor = getSafeColor(color);
+  return theme.palette[safeColor]?.[type] || theme.palette.primary.main;
+};
 
 function StatTile({ title, value, subtitle, color = "primary", icon, loading = false }) {
   const theme = useTheme();
   
-  // Validasi color - fallback ke primary jika invalid
-  const safeColor = VALID_COLORS.includes(color) ? color : 'primary';
-  
-  // Safe color values
-  const colorMain = theme.palette[safeColor]?.main || theme.palette.primary.main;
+  // Gunakan color yang aman
+  const safeColor = getSafeColor(color);
+  const colorMain = getColorValue(theme, safeColor, 'main');
   const colorLight = alpha(colorMain, 0.15);
   const colorBorder = alpha(colorMain, 0.2);
 
@@ -49,9 +65,12 @@ function StatTile({ title, value, subtitle, color = "primary", icon, loading = f
               flexShrink: 0,
             }}
           >
-            {icon && React.cloneElement(icon, { 
-              fontSize: { xs: "small", sm: "medium" } 
-            })}
+            {icon && React.isValidElement(icon) 
+              ? React.cloneElement(icon, { 
+                  sx: { fontSize: { xs: "1.25rem", sm: "1.5rem" } }
+                })
+              : icon
+            }
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography
