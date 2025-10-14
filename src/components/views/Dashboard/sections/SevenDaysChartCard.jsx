@@ -4,7 +4,8 @@ import {
   Card, CardHeader, CardContent, CardActions,
   Box, Stack, Typography, Chip, Divider,
   ToggleButtonGroup, ToggleButton,
-  FormControl, Select, MenuItem, InputLabel, Tooltip, Alert
+  FormControl, Select, MenuItem, InputLabel, Tooltip, Alert,
+  Table, TableHead, TableRow, TableCell, TableBody, useMediaQuery
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import TimelineIcon from "@mui/icons-material/Timeline";
@@ -12,11 +13,11 @@ import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import BoltIcon from "@mui/icons-material/Bolt";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import MiniBarChartLabeled from "../ui/MiniBarChartLabeled.jsx";
 import { DataService } from "../../../../services/DataService";
 
 export default function SevenDaysChartCard({ loading = false }) {
   const theme = useTheme();
+  const isMobile = useMediaQuery("(max-width:600px)");
 
   const [mode, setMode] = useState("7_hari");
   const [month, setMonth] = useState(new Date().getMonth());
@@ -57,46 +58,38 @@ export default function SevenDaysChartCard({ loading = false }) {
         let totalQty=0, totalValue=0;
         const formatted = weekly.map(w => {
           totalQty += w.value; totalValue += w.totalValue;
-          return {
-            label: w.label,
-            value: w.value,
-            tooltip: `Minggu ${w.weekNumber} (${w.dateRange})\nQty: ${w.value} tabung\nTotal: Rp ${new Intl.NumberFormat("id-ID").format(w.totalValue)}`
-          };
+          return { label: w.label, value: w.value, total: w.totalValue };
         });
         setSeries(formatted);
         const last = formatted[3]?.value || 0;
         const prevAvg = formatted.slice(0,3).reduce((s,x)=>s+x.value,0)/3 || 0;
         const growth = prevAvg>0 ? ((last-prevAvg)/prevAvg)*100 : 0;
-        setSummary({ type:"4_minggu", totalQty, totalValue, avgWeeklyQty: totalQty/4, growth, lastWeekQty:last });
-        if (totalQty===0) setError("Tidak ada data penjualan untuk 4 minggu terakhir");
+        setSummary({ totalQty, totalValue, avgWeeklyQty: totalQty/4, growth });
       } else if (mode === "mingguan_bulan") {
         const weekly = await DataService.getMonthlyWeeklyBreakdown(year, month);
         let totalQty=0, totalValue=0;
         const formatted = weekly.map(w => {
           totalQty += w.value; totalValue += w.totalValue;
-          return { label:w.label, value:w.value, tooltip:w.tooltip, weekNumber:w.weekNumber, dateRange:w.dateRange };
+          return { label:w.label, value:w.value, total:w.totalValue };
         });
         setSeries(formatted);
         setSummary({
-          type:"mingguan_bulan",
           totalQty,
           totalValue,
           avgWeeklyQty: formatted.length ? totalQty / formatted.length : 0,
           weekCount: formatted.length
         });
-        if (totalQty===0) setError(`Tidak ada data penjualan pada ${months[month]} ${year}`);
       } else if (mode === "6_bulan") {
         const rows = await DataService.getLast6MonthsSales();
         const formatted = rows.map(m => ({
-          label:m.label, value:m.value, tooltip:m.tooltip, month:m.month, year:m.year
+          label:m.label, value:m.value, total:m.totalValue
         }));
         setSeries(formatted);
         const total = formatted.reduce((s,x)=>s+x.value,0);
         const last = formatted[5]?.value || 0;
         const prevAvg = formatted.slice(0,5).reduce((s,x)=>s+x.value,0)/5 || 0;
         const growth = prevAvg>0 ? ((last-prevAvg)/prevAvg)*100 : 0;
-        setSummary({ type:"6_bulan", totalQty: total, avgMonthlyQty: total/6, growth, lastMonthQty: last });
-        if (total===0) setError("Tidak ada data penjualan untuk 6 bulan terakhir");
+        setSummary({ totalQty: total, avgMonthlyQty: total/6, growth });
       }
     } catch (e) {
       setError(`Gagal memuat data: ${e?.message || e}`);
@@ -122,7 +115,7 @@ export default function SevenDaysChartCard({ loading = false }) {
         borderRadius: 3,
         overflow: "hidden",
         border: `1px solid ${alpha(theme.palette.divider,0.1)}`,
-        backgroundColor: "#fff", // putih total
+        backgroundColor: "#fff",
       }}
     >
       <CardHeader
@@ -205,102 +198,58 @@ export default function SevenDaysChartCard({ loading = false }) {
         subheader={headline}
       />
 
-      {/* Card content dibuat putih solid */}
-      <CardContent sx={{ pt: 2, pb: 1.5, backgroundColor: "#fff" }}>
+      <CardContent sx={{ backgroundColor: "#fff", pt: 2 }}>
         {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
 
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
-          <Chip
-            icon={<BoltIcon />}
-            label={
-              mode==="7_hari" ? "Realtime aktif"
-              : mode==="4_minggu" ? "Rolling 28 hari"
-              : mode==="mingguan_bulan" ? "Mulai tgl 1"
-              : "Termasuk bulan berjalan"
-            }
-            size="small"
-            sx={{
-              bgcolor: alpha(theme.palette.info.main, 0.08),
-              color: theme.palette.info.main
-            }}
-          />
-          <Chip
-            icon={<TrendingUpIcon />}
-            label={
-              mode==="4_minggu"
-                ? `Rata2/Minggu: ${summary ? Math.round(summary.avgWeeklyQty) : "-"}`
-                : mode==="mingguan_bulan"
-                ? `Rata2/Minggu: ${summary ? Math.round(summary.avgWeeklyQty) : "-"}`
-                : mode==="6_bulan"
-                ? `Rata2/Bulan: ${summary ? Math.round(summary.avgMonthlyQty) : "-"}`
-                : " "
-            }
-            size="small"
-            sx={{
-              bgcolor: alpha(theme.palette.success.main, 0.08),
-              color: theme.palette.success.main
-            }}
-          />
-          {summary && (mode==="4_minggu" || mode==="6_bulan") && (
-            <Chip
-              icon={<CalendarMonthIcon />}
-              label={
-                mode==="4_minggu"
-                  ? `Qty Minggu Terakhir: ${summary.lastWeekQty}`
-                  : `Qty Bulan Terakhir: ${summary.lastMonthQty}`
-              }
-              size="small"
-              sx={{
-                bgcolor: alpha(theme.palette.warning.main, 0.08),
-                color: theme.palette.warning.main
-              }}
-            />
-          )}
-        </Stack>
-
-        <Box sx={{ overflowX: "hidden" }}>
-          <MiniBarChartLabeled
-            data={series}
-            loading={isLoading || loading}
-            height={mode==="7_hari" ? 140 : 170}
-            type={mode}
-            animateOnMount={false}
-            scrollable={false}
-          />
+        {/* TABEL GANTI CHART */}
+        <Box sx={{ overflowX: "auto" }}>
+          <Table size="small" sx={{ minWidth: 400, border: "1px solid #eee" }}>
+            <TableHead>
+              <TableRow sx={{ background: "#f9fafb" }}>
+                <TableCell align="center">Periode</TableCell>
+                <TableCell align="center">Qty (tabung)</TableCell>
+                {!isMobile && <TableCell align="center">Total (Rp)</TableCell>}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {series.map((row, idx) => (
+                <TableRow key={idx} hover>
+                  <TableCell align="center">{row.label}</TableCell>
+                  <TableCell align="center">
+                    <Typography fontWeight={600}>{row.value}</Typography>
+                  </TableCell>
+                  {!isMobile && (
+                    <TableCell align="center">
+                      {row.total
+                        ? `Rp ${new Intl.NumberFormat("id-ID").format(row.total)}`
+                        : "-"}
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </Box>
 
-        {summary && mode!=="7_hari" && (
+        {/* Summary */}
+        {summary && (
           <>
             <Divider sx={{ my: 1.5 }} />
             <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap">
-              <Stat
-                label={
-                  mode==="6_bulan"
-                    ? "Total 6 Bulan"
-                    : mode==="4_minggu"
-                    ? "Total 4 Minggu"
-                    : "Total Bulan"
-                }
-                value={summary.totalQty ?? 0}
+              <Chip size="small" label={`Total: ${summary.totalQty || 0}`} />
+              <Chip
+                size="small"
+                label={`Rata-rata: ${Math.round(
+                  summary.avgWeeklyQty || summary.avgMonthlyQty || 0
+                )}`}
               />
-              <Stat
-                label={mode==="6_bulan" ? "Rata-rata/Bulan" : "Rata-rata/Minggu"}
-                value={
-                  mode==="6_bulan"
-                    ? Math.round(summary.avgMonthlyQty ?? 0)
-                    : Math.round(summary.avgWeeklyQty ?? 0)
-                }
-              />
-              <Stat
-                label="Growth"
-                value={`${summary.growth>0?"+":""}${(summary.growth||0).toFixed(1)}%`}
+              <Chip
+                size="small"
                 color={
-                  summary.growth>0
-                    ? "success"
-                    : summary.growth<0
-                    ? "error"
-                    : "default"
+                  summary.growth > 0 ? "success" :
+                  summary.growth < 0 ? "error" : "default"
                 }
+                label={`Growth: ${summary.growth?.toFixed(1) || 0}%`}
               />
             </Stack>
           </>
@@ -324,16 +273,5 @@ export default function SevenDaysChartCard({ loading = false }) {
         </Typography>
       </CardActions>
     </Card>
-  );
-}
-
-function Stat({ label, value, color="primary" }) {
-  return (
-    <Stack direction="row" spacing={1} alignItems="center">
-      <Chip size="small" label={label} sx={{ bgcolor: alpha("#000", 0.04) }} />
-      <Typography variant="body2" fontWeight={700} color={`${color}.main`}>
-        {value}
-      </Typography>
-    </Stack>
   );
 }
