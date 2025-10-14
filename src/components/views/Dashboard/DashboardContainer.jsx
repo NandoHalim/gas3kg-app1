@@ -1,5 +1,5 @@
 // =======================================================
-// DashboardContainer (mobile-first + no scroll)
+// DashboardContainer (vertical scroll allowed, horizontal contained)
 // =======================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -63,7 +63,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const isSmallMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { settings } = useSettings();
 
-  // State
+  // State (tetap sama...)
   const [stocks, setStocks] = useState(stocksFromApp);
   const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
@@ -91,7 +91,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const busyRef = useRef(false);
   const idleTimer = useRef(null);
 
-  // 1) Snapshot
+  // Effects (tetap sama...)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -264,15 +264,18 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   return (
     <Box
       sx={{
-        width: "100vw",
+        width: "100%",
         maxWidth: "100%",
-        overflow: "hidden", // 🔥 PREVENT SCROLLING
+        // 🔥 PERBAIKAN: Izinkan scroll vertikal, cegah horizontal
+        overflowX: "hidden", // Cegah scroll horizontal page
+        overflowY: "auto",   // Izinkan scroll vertikal
         minHeight: "100vh",
         backgroundColor: theme.palette.background.default,
-        position: "relative",
-        // Prevent body scroll
-        touchAction: "pan-y",
+        // Pastikan konten tidak melebihi viewport
+        boxSizing: "border-box",
+        // Optimasi untuk mobile
         WebkitOverflowScrolling: "touch",
+        overscrollBehavior: "contain",
       }}
     >
       <Stack 
@@ -281,8 +284,10 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           p: { xs: 1.5, sm: 2, md: 3 },
           width: "100%",
           maxWidth: "100%",
-          overflow: "hidden",
+          // Pastikan Stack tidak menyebabkan overflow
           boxSizing: "border-box",
+          // Konten akan wrap dengan baik
+          minHeight: "fit-content",
         }}
       >
         <HeaderSection />
@@ -297,21 +302,21 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           loading={loading || advancedLoading}
         />
 
-        {/* SummaryTiles - Mobile First */}
+        {/* SummaryTiles */}
         <SummaryTiles
           isi={isi}
           kosong={kosong}
           todayQty={today.qty}
-          todayMoney={today.money} // Kirim number, biar di SummaryTiles yang format
-          receivablesTotal={piutang} // Kirim number, biar di SummaryTiles yang format
+          todayMoney={today.money}
+          receivablesTotal={piutang}
           loading={loading}
         />
 
-        {/* Grid utama - MOBILE FIRST */}
-        <Grid container spacing={{ xs: 2, md: 3 }}>
-          {/* Kolom kiri - full width di mobile, 6 di desktop */}
-          <Grid item xs={12} lg={6}>
-            <Stack spacing={{ xs: 2, md: 3 }}>
+        {/* Grid utama - FIXED: Pastikan konten tidak terpotong */}
+        <Grid container spacing={{ xs: 2, md: 3 }} sx={{ width: "100%", margin: 0 }}>
+          {/* Kolom kiri */}
+          <Grid item xs={12} lg={6} sx={{ width: "100%", maxWidth: "100%" }}>
+            <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%" }}>
               <FinancialSummaryCard
                 omzet={financialSummary.omzet}
                 hpp={financialSummary.hpp}
@@ -322,14 +327,17 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                 loading={financialLoading}
               />
 
-              <SevenDaysChartCard loading={loading} />
+              {/* 🔥 FIX: SevenDaysChartCard akan scroll internal jika perlu */}
+              <Box sx={{ width: "100%", overflow: "visible" }}>
+                <SevenDaysChartCard loading={loading} />
+              </Box>
             </Stack>
           </Grid>
 
-          {/* Kolom kanan - full width di mobile, 6 di desktop */}
-          <Grid item xs={12} lg={6}>
-            <Stack spacing={{ xs: 2, md: 3 }}>
-              {/* Business Intelligence dengan accordion di mobile */}
+          {/* Kolom kanan */}
+          <Grid item xs={12} lg={6} sx={{ width: "100%", maxWidth: "100%" }}>
+            <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%" }}>
+              {/* Business Intelligence */}
               {isMobile ? (
                 <Accordion 
                   elevation={1}
@@ -337,6 +345,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                     '&.MuiAccordion-root': {
                       borderRadius: 2,
                       overflow: 'hidden',
+                      width: "100%"
                     }
                   }}
                 >
@@ -368,11 +377,12 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                 />
               )}
 
-              {/* Recent Transactions dengan scroll lokal */}
+              {/* Recent Transactions dengan scroll internal */}
               <Box
                 sx={{
                   width: "100%",
                   maxWidth: "100%",
+                  // 🔥 Scroll hanya di dalam container ini
                   overflowX: "auto",
                   overflowY: "hidden",
                   WebkitOverflowScrolling: "touch",
@@ -385,8 +395,12 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                     borderRadius: 3,
                   },
                   scrollbarWidth: "thin",
-                  // Prevent horizontal page scroll
+                  // Cegah scroll horizontal di seluruh page
                   overscrollBehaviorX: "contain",
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: 2,
+                  p: 1,
+                  backgroundColor: theme.palette.background.paper,
                 }}
               >
                 <RecentTransactionsTable
