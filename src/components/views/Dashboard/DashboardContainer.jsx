@@ -27,7 +27,6 @@ import FinancialSummaryCard from "./sections/FinancialSummaryCard.jsx";
 import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
 import RecentTransactionsTable from "./sections/RecentTransactionsTable.jsx";
 import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx";
-import KpiStrip from "./sections/KpiStrip.jsx";
 import KpiStripMobile from "./sections/KpiStripMobile.jsx"; // 🔥 NEW
 
 import CustomerHistoryModal from "./modals/CustomerHistoryModal.jsx";
