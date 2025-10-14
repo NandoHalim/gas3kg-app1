@@ -70,36 +70,36 @@ const Spark = React.memo(function Spark({ values = [] }) {
 const TableRowMemo = React.memo(function TableRowMemo({ row, showTrend }) {
   return (
     <TableRow hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
-      <TableCell sx={{ py: 1 }}>
-        <Typography variant="body2" fontSize="0.8rem">
+      <TableCell sx={{ py: 1, width: '25%' }}>
+        <Typography variant="body2" fontSize="0.8rem" noWrap>
           {row.label}
         </Typography>
       </TableCell>
-      <TableCell align="right" sx={{ py: 1 }}>
+      <TableCell align="right" sx={{ py: 1, width: '20%' }}>
         <Typography variant="body2" fontWeight="bold" color="primary" fontSize="0.8rem">
           {fmt.format(row.value)}
         </Typography>
       </TableCell>
-      <TableCell align="right" sx={{ py: 1 }}>
-        <Typography variant="body2" fontSize="0.75rem">
+      <TableCell align="right" sx={{ py: 1, width: '25%' }}>
+        <Typography variant="body2" fontSize="0.75rem" noWrap>
           {fmtRp(row.total)}
         </Typography>
       </TableCell>
-      <TableCell align="center" sx={{ py: 1 }}>
+      <TableCell align="center" sx={{ py: 1, width: '15%' }}>
         <Chip
           size="small"
           color={row.delta > 0 ? "success" : row.delta < 0 ? "error" : "default"}
           variant="outlined"
           label={pct(row.delta)}
-          sx={{ height: 20, fontSize: '0.7rem' }}
+          sx={{ height: 20, fontSize: '0.7rem', minWidth: 60 }}
         />
       </TableCell>
       {showTrend && (
-        <TableCell align="center" sx={{ py: 1 }}>
+        <TableCell align="center" sx={{ py: 1, width: '15%' }}>
           <Tooltip title={`Tren: ${row.trendSlice.join(", ")}`} enterTouchDelay={20}>
-            <span>
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
               <Spark values={row.trendSlice} />
-            </span>
+            </Box>
           </Tooltip>
         </TableCell>
       )}
@@ -116,16 +116,16 @@ const MobileCardItem = React.memo(function MobileCardItem({ row }) {
       backgroundColor: '#fafafa'
     }}>
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-        <Box>
-          <Typography variant="body2" fontWeight="medium" fontSize="0.8rem">
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="body2" fontWeight="medium" fontSize="0.8rem" noWrap>
             {row.label}
           </Typography>
-          <Typography variant="body2" color="text.secondary" fontSize="0.75rem">
+          <Typography variant="body2" color="text.secondary" fontSize="0.75rem" noWrap>
             {fmtRp(row.total)}
           </Typography>
         </Box>
-        <Stack alignItems="flex-end" spacing={0.3}>
-          <Typography variant="body2" fontWeight="bold" color="primary" fontSize="0.8rem">
+        <Stack alignItems="flex-end" spacing={0.3} sx={{ minWidth: 0, flexShrink: 0 }}>
+          <Typography variant="body2" fontWeight="bold" color="primary" fontSize="0.8rem" noWrap>
             {fmt.format(row.value)}
           </Typography>
           <Chip
@@ -133,7 +133,7 @@ const MobileCardItem = React.memo(function MobileCardItem({ row }) {
             color={row.delta > 0 ? "success" : row.delta < 0 ? "error" : "default"}
             variant="outlined"
             label={pct(row.delta)}
-            sx={{ height: 18, fontSize: '0.65rem' }}
+            sx={{ height: 18, fontSize: '0.65rem', minWidth: 50 }}
           />
         </Stack>
       </Stack>
@@ -156,29 +156,42 @@ const DataTable = React.memo(function DataTable({ rows }) {
 
   if (isMobile) {
     return (
-      <Stack spacing={0.5}>
-        {visibleRows.map((row, i) => (
-          <MobileCardItem key={`${row.label}-${i}`} row={row} />
-        ))}
+      <Box sx={{ width: '100%' }}>
+        <Stack spacing={0.5}>
+          {visibleRows.map((row, i) => (
+            <MobileCardItem key={`${row.label}-${i}`} row={row} />
+          ))}
+        </Stack>
         {processedRows.length > visibleRows.length && (
           <Typography variant="caption" color="text.secondary" textAlign="center" sx={{ py: 0.5 }}>
             Menampilkan {visibleRows.length} dari {processedRows.length} data
           </Typography>
         )}
-      </Stack>
+      </Box>
     );
   }
 
   return (
-    <Box sx={{ overflowX: "auto", maxHeight: 300, overflowY: "auto" }}>
+    <Box sx={{ 
+      width: '100%', 
+      overflowX: "auto", 
+      maxHeight: 300, 
+      overflowY: "auto" 
+    }}>
       <Table 
         size="small" 
         stickyHeader
         sx={{ 
+          width: '100%',
           minWidth: 500,
+          tableLayout: 'fixed', // ✅ FIX: Gunakan fixed layout
           border: "1px solid #f0f0f0", 
           borderRadius: 1,
-          '& .MuiTableCell-root': { py: 1 },
+          '& .MuiTableCell-root': { 
+            py: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          },
           '& .MuiTableHead-root': { 
             position: 'sticky', 
             top: 0, 
@@ -186,18 +199,39 @@ const DataTable = React.memo(function DataTable({ rows }) {
             '& .MuiTableCell-root': {
               backgroundColor: '#f8f9fa',
               py: 1,
-              fontSize: '0.75rem'
+              fontSize: '0.75rem',
+              fontWeight: 600
             }
           }
         }}
       >
         <TableHead>
           <TableRow>
-            <TableCell><Typography variant="subtitle2" fontSize="0.75rem">Periode</Typography></TableCell>
-            <TableCell align="right"><Typography variant="subtitle2" fontSize="0.75rem">Qty</Typography></TableCell>
-            <TableCell align="right"><Typography variant="subtitle2" fontSize="0.75rem">Omzet</Typography></TableCell>
-            <TableCell align="center"><Typography variant="subtitle2" fontSize="0.75rem">Δ%</Typography></TableCell>
-            <TableCell align="center"><Typography variant="subtitle2" fontSize="0.75rem">Tren</Typography></TableCell>
+            <TableCell sx={{ width: '25%' }}>
+              <Typography variant="subtitle2" fontSize="0.75rem" noWrap>
+                Periode
+              </Typography>
+            </TableCell>
+            <TableCell align="right" sx={{ width: '20%' }}>
+              <Typography variant="subtitle2" fontSize="0.75rem" noWrap>
+                Qty
+              </Typography>
+            </TableCell>
+            <TableCell align="right" sx={{ width: '25%' }}>
+              <Typography variant="subtitle2" fontSize="0.75rem" noWrap>
+                Omzet
+              </Typography>
+            </TableCell>
+            <TableCell align="center" sx={{ width: '15%' }}>
+              <Typography variant="subtitle2" fontSize="0.75rem" noWrap>
+                Δ%
+              </Typography>
+            </TableCell>
+            <TableCell align="center" sx={{ width: '15%' }}>
+              <Typography variant="subtitle2" fontSize="0.75rem" noWrap>
+                Tren
+              </Typography>
+            </TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -234,7 +268,7 @@ function TableSkeleton() {
   }
 
   return (
-    <Box>
+    <Box sx={{ width: '100%' }}>
       <Skeleton variant="rectangular" height={32} sx={{ mb: 0.5, borderRadius: 1 }} />
       {[1, 2, 3, 4, 5, 6].map((item) => (
         <Skeleton key={item} variant="rectangular" height={38} sx={{ mb: 0.3, borderRadius: 0.5 }} />
@@ -246,7 +280,7 @@ function TableSkeleton() {
 // Empty State Component
 function EmptyState() {
   return (
-    <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+    <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary', width: '100%' }}>
       <TimelineIcon sx={{ fontSize: 36, mb: 1, opacity: 0.3 }} />
       <Typography variant="body2" gutterBottom>
         Tidak Ada Data
@@ -477,6 +511,7 @@ export default function SevenDaysChartCard({ loading = false }) {
 
   return (
     <Card sx={{ 
+      width: '100%', // ✅ FIX: Lebar tetap 100%
       borderRadius: 2,
       border: `1px solid ${theme.palette.divider}`,
       background: theme.palette.background.paper,
@@ -484,27 +519,32 @@ export default function SevenDaysChartCard({ loading = false }) {
       overflow: "hidden",
       height: '100%',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      minWidth: 300 // ✅ FIX: Minimum width agar tidak terlalu kecil
     }}>
       <CardHeader
         sx={{ 
           py: 1.5, 
           px: 2,
           bgcolor: "background.paper", 
-          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}` 
+          borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          width: '100%' // ✅ FIX: Lebar penuh
         }}
         title={
-          <Stack direction="row" alignItems="center" spacing={1}>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ width: '100%' }}>
             <Box sx={{ 
               p: 0.5, 
               borderRadius: 0.5, 
-              bgcolor: alpha(theme.palette.primary.main, 0.1) 
+              bgcolor: alpha(theme.palette.primary.main, 0.1),
+              flexShrink: 0
             }}>
               <TimelineIcon fontSize="small" color="primary" />
             </Box>
-            <Box flex={1}>
-              <Typography variant="subtitle1" fontWeight={600} fontSize="0.9rem">Tren Penjualan</Typography>
-              <Typography variant="caption" color="text.secondary" fontSize="0.7rem">
+            <Box flex={1} sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle1" fontWeight={600} fontSize="0.9rem" noWrap>
+                Tren Penjualan
+              </Typography>
+              <Typography variant="caption" color="text.secondary" fontSize="0.7rem" noWrap>
                 {headline}
               </Typography>
             </Box>
@@ -514,45 +554,49 @@ export default function SevenDaysChartCard({ loading = false }) {
                 color={summary.growth > 0 ? "success" : summary.growth < 0 ? "error" : "default"}
                 icon={summary.growth > 0 ? <TrendingUpIcon /> : <TrendingDownIcon />}
                 label={pct(summary.growth)} 
-                sx={{ height: 20, fontSize: '0.7rem' }}
+                sx={{ height: 20, fontSize: '0.7rem', flexShrink: 0 }}
               />
             )}
           </Stack>
         }
         action={
-          <Stack direction="row" spacing={0.5} alignItems="center">
-            <ToggleButtonGroup 
-              size="small" 
-              color="primary" 
-              exclusive 
-              value={mode} 
-              onChange={handleModeChange}
-              sx={{ 
-                backgroundColor: alpha(theme.palette.primary.main, 0.04), 
-                borderRadius: 1,
-                '& .MuiToggleButton-root': {
-                  px: 1,
-                  py: 0.5,
-                  fontSize: '0.7rem'
-                }
-              }}
-            >
-              <ToggleButton value="7_hari">7h</ToggleButton>
-              <ToggleButton value="4_minggu">4w</ToggleButton>
-              <ToggleButton value="mingguan_bulan">M/B</ToggleButton>
-              <ToggleButton value="6_bulan">6m</ToggleButton>
-            </ToggleButtonGroup>
+          <Box sx={{ flexShrink: 0 }}>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <ToggleButtonGroup 
+                size="small" 
+                color="primary" 
+                exclusive 
+                value={mode} 
+                onChange={handleModeChange}
+                sx={{ 
+                  backgroundColor: alpha(theme.palette.primary.main, 0.04), 
+                  borderRadius: 1,
+                  '& .MuiToggleButton-root': {
+                    px: 1,
+                    py: 0.5,
+                    fontSize: '0.7rem',
+                    minWidth: 'auto'
+                  }
+                }}
+              >
+                <ToggleButton value="7_hari">7h</ToggleButton>
+                <ToggleButton value="4_minggu">4w</ToggleButton>
+                <ToggleButton value="mingguan_bulan">M/B</ToggleButton>
+                <ToggleButton value="6_bulan">6m</ToggleButton>
+              </ToggleButtonGroup>
 
-            <Tooltip title="Info tren penjualan">
-              <IconButton size="small">
-                <InfoOutlinedIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Stack>
+              <Tooltip title="Info tren penjualan">
+                <IconButton size="small">
+                  <InfoOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+          </Box>
         }
       />
 
       <CardContent sx={{ 
+        width: '100%', // ✅ FIX: Lebar penuh
         backgroundColor: "background.paper", 
         pt: 1, 
         pb: 1, 
@@ -561,14 +605,14 @@ export default function SevenDaysChartCard({ loading = false }) {
         overflow: 'auto'
       }}>
         {error && (
-          <Alert severity="warning" sx={{ mb: 1, borderRadius: 1, py: 0 }} size="small">
+          <Alert severity="warning" sx={{ mb: 1, borderRadius: 1, py: 0, width: '100%' }} size="small">
             {error}
           </Alert>
         )}
 
         {/* Filter controls untuk mode tertentu */}
         {(mode === "mingguan_bulan" || mode === "6_bulan") && (
-          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5, width: '100%' }} alignItems="center">
             <FormControl size="small" sx={{ minWidth: 80 }} disabled={isLoading || mode==="6_bulan"}>
               <Select 
                 value={month} 
@@ -598,7 +642,7 @@ export default function SevenDaysChartCard({ loading = false }) {
                 label={`${months[month]} ${year}`}
                 onDelete={handleResetFilter}
                 deleteIcon={<CloseIcon />}
-                sx={{ height: 24, fontSize: '0.7rem' }}
+                sx={{ height: 24, fontSize: '0.7rem', flexShrink: 0 }}
               />
             )}
           </Stack>
@@ -609,9 +653,9 @@ export default function SevenDaysChartCard({ loading = false }) {
         ) : series.length === 0 ? (
           <EmptyState />
         ) : (
-          <>
+          <Box sx={{ width: '100%' }}> {/* ✅ FIX: Container dengan lebar tetap */}
             {/* KPI strip - lebih kompak */}
-            <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
+            <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap" sx={{ mb: 1.5, width: '100%' }}>
               <Chip 
                 size="small"
                 label={
@@ -662,14 +706,14 @@ export default function SevenDaysChartCard({ loading = false }) {
               )}
             </Stack>
 
-            {/* OPTIMIZED TABLE */}
+            {/* OPTIMIZED TABLE dengan lebar tetap */}
             <DataTable rows={series} />
 
             {/* Summary footer - lebih minimalis */}
             {summary && (
               <>
                 <Divider sx={{ my: 1 }} />
-                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ width: '100%' }}>
                   <Typography variant="caption" fontWeight="medium">
                     Total: {fmt.format(summary.totalQty || 0)}
                   </Typography>
@@ -686,17 +730,18 @@ export default function SevenDaysChartCard({ loading = false }) {
                 </Stack>
               </>
             )}
-          </>
+          </Box>
         )}
       </CardContent>
 
       <CardActions sx={{ 
         px: 1.5, 
         py: 1,
+        width: '100%', // ✅ FIX: Lebar penuh
         backgroundColor: "background.paper",
         borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}`
       }}>
-        <Typography variant="caption" color="text.secondary" fontSize="0.7rem" flex={1}>
+        <Typography variant="caption" color="text.secondary" fontSize="0.7rem" flex={1} noWrap>
           Data sinkron, kecuali status <b>DIBATALKAN</b>.
         </Typography>
         
