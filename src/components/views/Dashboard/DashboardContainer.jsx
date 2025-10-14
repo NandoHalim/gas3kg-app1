@@ -1,5 +1,5 @@
 // =======================================================
-// DashboardContainer (dashboard-only width containment)
+// DashboardContainer (Mobile Optimized)
 // =======================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -57,11 +57,11 @@ function buildLast7DaysSeries(rows = []) {
   return series;
 }
 
-// 🔥 DASHBOARD-ONLY STYLES - IMPROVED CONTAINMENT
+// 🔥 MOBILE-OPTIMIZED STYLES
 const DashboardStyles = () => (
   <style>
     {`
-      /* 🔥 STRICT DASHBOARD CONTAINMENT */
+      /* 🔥 STRICT DASHBOARD CONTAINMENT - MOBILE FIRST */
       .dashboard-container {
         width: 100% !important;
         max-width: 100% !important;
@@ -85,6 +85,7 @@ const DashboardStyles = () => (
       .dashboard-container .table-scroll-container {
         overflow-x: auto !important;
         overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
       }
       
       /* Block horizontal scroll for everything else */
@@ -98,6 +99,32 @@ const DashboardStyles = () => (
         max-width: 100% !important;
         width: 100% !important;
       }
+      
+      /* Mobile-specific optimizations */
+      @media (max-width: 768px) {
+        .dashboard-container {
+          padding: 0 !important;
+        }
+        
+        .dashboard-container .MuiCard-root {
+          margin: 8px !important;
+          border-radius: 12px !important;
+        }
+        
+        /* Improve touch targets */
+        .dashboard-container button {
+          min-height: 44px !important;
+          min-width: 44px !important;
+        }
+      }
+      
+      /* Small mobile optimizations */
+      @media (max-width: 480px) {
+        .dashboard-container .MuiCard-root {
+          margin: 6px !important;
+          border-radius: 10px !important;
+        }
+      }
     `}
   </style>
 );
@@ -108,7 +135,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const isSmallMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { settings } = useSettings();
 
-  // State
+  // State (tetap sama...)
   const [stocks, setStocks] = useState(stocksFromApp);
   const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
@@ -308,10 +335,10 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
 
   return (
     <>
-      {/* 🔥 DASHBOARD-ONLY STYLES - IMPROVED */}
+      {/* 🔥 MOBILE-OPTIMIZED STYLES */}
       <DashboardStyles />
       
-      {/* 🔥 MAIN CONTAINER dengan strict containment */}
+      {/* 🔥 MAIN CONTAINER dengan mobile optimization */}
       <Box
         className="dashboard-container"
         sx={{
@@ -323,12 +350,15 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           backgroundColor: theme.palette.background.default,
           boxSizing: "border-box",
           position: "relative",
+          // Mobile-specific padding
+          px: isMobile ? 0 : 3,
+          py: isMobile ? 0 : 2,
         }}
       >
         <Stack 
-          spacing={{ xs: 2, md: 3 }} 
+          spacing={isMobile ? 1.5 : 3} 
           sx={{ 
-            p: { xs: 1.5, sm: 2, md: 3 },
+            p: isMobile ? 1 : 3,
             width: "100%",
             maxWidth: "100%",
             boxSizing: "border-box",
@@ -339,8 +369,13 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
 
           {err && <ErrorBanner message={err} />}
 
-          {/* KpiStrip */}
-          <Box sx={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}>
+          {/* KpiStrip - Mobile optimized */}
+          <Box sx={{ 
+            width: "100%", 
+            maxWidth: "100%", 
+            overflow: "hidden",
+            px: isMobile ? 0.5 : 0 
+          }}>
             <KpiStrip
               financialData={financialSummary}
               stockPrediction={stockPrediction}
@@ -349,8 +384,13 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
             />
           </Box>
 
-          {/* SummaryTiles */}
-          <Box sx={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}>
+          {/* SummaryTiles - Mobile optimized */}
+          <Box sx={{ 
+            width: "100%", 
+            maxWidth: "100%", 
+            overflow: "hidden",
+            px: isMobile ? 0.5 : 0 
+          }}>
             <SummaryTiles
               isi={isi}
               kosong={kosong}
@@ -361,10 +401,10 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
             />
           </Box>
 
-          {/* Grid utama dengan strict containment */}
+          {/* Grid utama dengan mobile optimization */}
           <Grid 
             container 
-            spacing={{ xs: 2, md: 3 }} 
+            spacing={isMobile ? 1.5 : 3} 
             sx={{ 
               width: "100%", 
               maxWidth: "100%",
@@ -380,9 +420,9 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
               }
             }}
           >
-            {/* Kolom kiri */}
+            {/* Kolom kiri - Full width di mobile */}
             <Grid item xs={12} lg={6}>
-              <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%", maxWidth: "100%" }}>
+              <Stack spacing={isMobile ? 1.5 : 3} sx={{ width: "100%", maxWidth: "100%" }}>
                 <Box sx={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}>
                   <FinancialSummaryCard
                     omzet={financialSummary.omzet}
@@ -395,7 +435,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                   />
                 </Box>
 
-                {/* SevenDaysChartCard */}
+                {/* SevenDaysChartCard - Mobile optimized */}
                 <Box sx={{ 
                   width: "100%", 
                   maxWidth: "100%",
@@ -406,57 +446,51 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
               </Stack>
             </Grid>
 
-            {/* Kolom kanan */}
+            {/* Kolom kanan - Full width di mobile */}
             <Grid item xs={12} lg={6}>
-              <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%", maxWidth: "100%" }}>
-                {/* Business Intelligence */}
+              <Stack spacing={isMobile ? 1.5 : 3} sx={{ width: "100%", maxWidth: "100%" }}>
+                {/* Business Intelligence - Always accordion di mobile */}
                 <Box sx={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}>
-                  {isMobile ? (
-                    <Accordion 
-                      elevation={1}
-                      sx={{
+                  <Accordion 
+                    elevation={isMobile ? 0 : 1}
+                    sx={{
+                      width: "100%",
+                      maxWidth: "100%",
+                      "&.MuiAccordion-root": {
+                        borderRadius: isMobile ? 2 : 2,
+                        overflow: "hidden",
                         width: "100%",
-                        maxWidth: "100%",
-                        "&.MuiAccordion-root": {
-                          borderRadius: 2,
-                          overflow: "hidden",
+                        border: `1px solid ${theme.palette.divider}`,
+                        background: isMobile ? theme.palette.background.paper : 'inherit'
+                      }
+                    }}
+                  >
+                    <AccordionSummary 
+                      expandIcon={<ExpandMoreIcon />}
+                      sx={{
+                        minHeight: isMobile ? 48 : 56,
+                        "& .MuiAccordionSummary-content": {
+                          my: 1,
                           width: "100%",
-                          border: `1px solid ${theme.palette.divider}`,
+                          maxWidth: "100%",
                         }
                       }}
                     >
-                      <AccordionSummary 
-                        expandIcon={<ExpandMoreIcon />}
-                        sx={{
-                          minHeight: { xs: 48, sm: 56 },
-                          "& .MuiAccordionSummary-content": {
-                            my: 1,
-                            width: "100%",
-                            maxWidth: "100%",
-                          }
-                        }}
-                      >
-                        <Typography variant="subtitle1" fontWeight={700} noWrap>
-                          Business Intelligence
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ p: 0, width: "100%", maxWidth: "100%" }}>
-                        <BusinessIntelligenceCard 
-                          data={businessIntelligence} 
-                          loading={advancedLoading} 
-                          compact
-                        />
-                      </AccordionDetails>
-                    </Accordion>
-                  ) : (
-                    <BusinessIntelligenceCard 
-                      data={businessIntelligence} 
-                      loading={advancedLoading} 
-                    />
-                  )}
+                      <Typography variant={isMobile ? "subtitle2" : "subtitle1"} fontWeight={700} noWrap>
+                        Business Intelligence
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails sx={{ p: isMobile ? 1 : 2, width: "100%", maxWidth: "100%" }}>
+                      <BusinessIntelligenceCard 
+                        data={businessIntelligence} 
+                        loading={advancedLoading} 
+                        compact={isMobile}
+                      />
+                    </AccordionDetails>
+                  </Accordion>
                 </Box>
 
-                {/* Recent Transactions - 🔥 ALLOWED SCROLL AREA */}
+                {/* Recent Transactions - 🔥 MOBILE SCROLL AREA */}
                 <Box
                   className="table-scroll-container"
                   sx={{
@@ -477,7 +511,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                     overscrollBehaviorX: "contain",
                     border: `1px solid ${theme.palette.divider}`,
                     borderRadius: 2,
-                    p: 1,
+                    p: isMobile ? 0.5 : 1,
                     backgroundColor: theme.palette.background.paper,
                   }}
                 >
@@ -486,7 +520,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                     loading={loading}
                     isSmallMobile={isSmallMobile}
                     sx={{ 
-                      minWidth: { xs: 600, sm: 720 },
+                      minWidth: isSmallMobile ? 500 : 650,
                       width: "100%",
                     }}
                   />

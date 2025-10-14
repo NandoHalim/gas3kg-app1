@@ -29,7 +29,7 @@ const formatCompactNumber = (num) => {
 const safeNumber = (value) => Math.max(0, Number(value) || 0);
 
 // Simple color logic - hanya gunakan valid MUI colors
-const getTileConfig = (type, value, isMobile = false) => {
+const getTileConfig = (type, value, isMobile = false, isSmallMobile = false) => {
   const numValue = safeNumber(value);
   
   switch (type) {
@@ -39,17 +39,18 @@ const getTileConfig = (type, value, isMobile = false) => {
       
       if (numValue <= CRITICAL_STOCK_THRESHOLD) {
         stokIsiColor = 'error';
-        stokIsiSubtitle = isMobile ? 'Kritis' : 'Stok kritis';
+        stokIsiSubtitle = isSmallMobile ? 'Kritis' : 'Stok kritis';
       } else if (numValue <= LOW_STOCK_THRESHOLD) {
         stokIsiColor = 'warning';
-        stokIsiSubtitle = isMobile ? 'Menipis' : 'Stok menipis';
+        stokIsiSubtitle = isSmallMobile ? 'Menipis' : 'Stok menipis';
       }
       
       return {
         color: stokIsiColor,
         subtitle: stokIsiSubtitle,
         icon: <Inventory2Icon />,
-        displayValue: isMobile ? formatCompactNumber(numValue) : numValue
+        displayValue: isSmallMobile ? formatCompactNumber(numValue) : numValue,
+        title: isSmallMobile ? 'Stok Isi' : 'Stok Isi'
       };
 
     case 'stok-kosong':
@@ -58,25 +59,27 @@ const getTileConfig = (type, value, isMobile = false) => {
       
       if (numValue >= 10) {
         stokKosongColor = 'error';
-        stokKosongSubtitle = isMobile ? 'Banyak' : 'Banyak kosong';
+        stokKosongSubtitle = isSmallMobile ? 'Banyak' : 'Banyak kosong';
       } else if (numValue >= 5) {
         stokKosongColor = 'warning';
-        stokKosongSubtitle = isMobile ? 'Perlu isi' : 'Perlu diisi';
+        stokKosongSubtitle = isSmallMobile ? 'Perlu isi' : 'Perlu diisi';
       }
       
       return {
         color: stokKosongColor,
         subtitle: stokKosongSubtitle,
         icon: <Inventory2Icon />,
-        displayValue: isMobile ? formatCompactNumber(numValue) : numValue
+        displayValue: isSmallMobile ? formatCompactNumber(numValue) : numValue,
+        title: isSmallMobile ? 'Stok Kosong' : 'Stok Kosong'
       };
 
     case 'penjualan':
       return {
         color: 'info',
-        subtitle: isMobile ? formatCompactNumber(safeNumber(value)) : formatCurrency(safeNumber(value)),
+        subtitle: isSmallMobile ? formatCompactNumber(safeNumber(value)) : formatCurrency(safeNumber(value)),
         icon: <ShoppingCartIcon />,
-        displayValue: isMobile ? formatCompactNumber(numValue) : numValue
+        displayValue: isSmallMobile ? formatCompactNumber(numValue) : numValue,
+        title: isSmallMobile ? 'Hari Ini' : 'Penjualan Hari Ini'
       };
 
     case 'piutang':
@@ -85,7 +88,8 @@ const getTileConfig = (type, value, isMobile = false) => {
         color: hasReceivables ? 'warning' : 'success',
         subtitle: hasReceivables ? 'Belum lunas' : 'Lunas',
         icon: <ReceiptLongIcon />,
-        displayValue: isMobile ? formatCompactNumber(numValue) : formatCurrency(numValue)
+        displayValue: isSmallMobile ? formatCompactNumber(numValue) : formatCurrency(numValue),
+        title: 'Piutang'
       };
 
     default:
@@ -93,7 +97,8 @@ const getTileConfig = (type, value, isMobile = false) => {
         color: 'primary',
         subtitle: '',
         icon: <Inventory2Icon />,
-        displayValue: numValue
+        displayValue: numValue,
+        title: ''
       };
   }
 };
@@ -107,73 +112,79 @@ function SummaryTiles({
   loading = false 
 }) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Get config untuk setiap tile
-  const stokIsiConfig = getTileConfig('stok-isi', isi, isMobile);
-  const stokKosongConfig = getTileConfig('stok-kosong', kosong, isMobile);
-  const penjualanConfig = getTileConfig('penjualan', todayMoney, isMobile);
-  const piutangConfig = getTileConfig('piutang', receivablesTotal, isMobile);
+  const stokIsiConfig = getTileConfig('stok-isi', isi, isMobile, isSmallMobile);
+  const stokKosongConfig = getTileConfig('stok-kosong', kosong, isMobile, isSmallMobile);
+  const penjualanConfig = getTileConfig('penjualan', todayMoney, isMobile, isSmallMobile);
+  const piutangConfig = getTileConfig('piutang', receivablesTotal, isMobile, isSmallMobile);
 
   return (
     <Box 
       sx={{
         width: '100%',
         maxWidth: '100%',
-        borderRadius: { xs: 2, sm: 3 },
+        borderRadius: isSmallMobile ? 1 : { xs: 2, sm: 3 },
         border: `1px solid ${theme.palette.divider}`,
         background: theme.palette.background.paper,
-        boxShadow: { xs: '0 1px 3px rgba(0,0,0,0.1)', sm: '0 2px 8px rgba(0,0,0,0.05)' },
+        boxShadow: isSmallMobile ? 'none' : { xs: '0 1px 3px rgba(0,0,0,0.1)', sm: '0 2px 8px rgba(0,0,0,0.05)' },
         overflow: 'hidden',
-        p: { xs: 1.5, sm: 2, md: 3 },
+        p: isSmallMobile ? 1 : { xs: 1.5, sm: 2, md: 3 },
+        mx: isSmallMobile ? 0.5 : 0,
       }}
     >
-      <Grid container spacing={{ xs: 1.5, sm: 2 }} alignItems="stretch">
+      <Grid container spacing={isSmallMobile ? 1 : { xs: 1.5, sm: 2 }} alignItems="stretch">
         {/* Stok Isi */}
         <Grid item xs={6} md={3}>
           <StatTile
-            title="Stok Isi"
+            title={stokIsiConfig.title}
             value={stokIsiConfig.displayValue}
             subtitle={stokIsiConfig.subtitle}
             color={stokIsiConfig.color}
             icon={stokIsiConfig.icon}
             loading={loading}
+            compact={isSmallMobile}
           />
         </Grid>
 
         {/* Stok Kosong */}
         <Grid item xs={6} md={3}>
           <StatTile
-            title="Stok Kosong"
+            title={stokKosongConfig.title}
             value={stokKosongConfig.displayValue}
             subtitle={stokKosongConfig.subtitle}
             color={stokKosongConfig.color}
             icon={stokKosongConfig.icon}
             loading={loading}
+            compact={isSmallMobile}
           />
         </Grid>
 
         {/* Penjualan Hari Ini */}
         <Grid item xs={6} md={3}>
           <StatTile
-            title={isMobile ? "Hari Ini" : "Penjualan Hari Ini"}
-            value={todayQty} // Tetap tampilkan quantity untuk penjualan
+            title={penjualanConfig.title}
+            value={todayQty}
             subtitle={penjualanConfig.subtitle}
             color={penjualanConfig.color}
             icon={penjualanConfig.icon}
             loading={loading}
+            compact={isSmallMobile}
           />
         </Grid>
 
         {/* Piutang */}
         <Grid item xs={6} md={3}>
           <StatTile
-            title="Piutang"
+            title={piutangConfig.title}
             value={piutangConfig.displayValue}
             subtitle={piutangConfig.subtitle}
             color={piutangConfig.color}
             icon={piutangConfig.icon}
             loading={loading}
+            compact={isSmallMobile}
           />
         </Grid>
       </Grid>

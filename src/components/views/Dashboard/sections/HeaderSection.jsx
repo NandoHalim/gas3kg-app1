@@ -1,30 +1,36 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import { useMediaQuery } from "@mui/material";
 
 function HeaderSection() {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   return (
-    <Box>
+    <Box sx={{ px: isMobile ? 1 : 0 }}>
       <Typography 
-        variant="h3" 
+        variant={isMobile ? "h5" : "h3"} 
         fontWeight={800} 
         gutterBottom
         sx={{ 
-          typography: { xs: "h4", sm: "h3" },
           background: `linear(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
           backgroundClip: 'text',
           WebkitBackgroundClip: 'text',
           color: 'transparent',
+          textAlign: isMobile ? 'center' : 'left',
+          fontSize: isMobile ? '1.8rem' : 'inherit'
         }}
       >
         Dashboard
       </Typography>
       <Typography 
         color="text.secondary" 
-        variant="h6"
-        sx={{ typography: { xs: "body1", sm: "h6" } }}
+        variant={isMobile ? "body2" : "h6"}
+        sx={{ 
+          textAlign: isMobile ? 'center' : 'left',
+          fontSize: isMobile ? '0.9rem' : 'inherit'
+        }}
       >
         Ringkasan performa bisnis dan analitik penjualan
       </Typography>

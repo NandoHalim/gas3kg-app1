@@ -1,4 +1,4 @@
-// KpiStrip.jsx - Versi mobile-first yang lebih robust
+// KpiStrip.jsx - Mobile First Optimized
 import React from 'react';
 import {
   Box,
@@ -27,6 +27,7 @@ const KpiStrip = ({
   loading = false 
 }) => {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Safe data extraction dengan fallbacks
@@ -63,19 +64,20 @@ const KpiStrip = ({
       <Card sx={{ 
         width: '100%', 
         mb: 2,
-        borderRadius: 2,
-        boxShadow: theme.shadows[1]
+        borderRadius: isSmallMobile ? 1 : 2,
+        boxShadow: theme.shadows[1],
+        mx: isSmallMobile ? 0.5 : 0
       }}>
-        <CardContent sx={{ p: 2 }}>
-          <Skeleton variant="text" width="40%" height={28} sx={{ mb: 2 }} />
-          <Stack spacing={1.5}>
+        <CardContent sx={{ p: isSmallMobile ? 1.5 : 2 }}>
+          <Skeleton variant="text" width="40%" height={isSmallMobile ? 20 : 28} sx={{ mb: 2 }} />
+          <Stack spacing={1}>
             {[1, 2, 3].map((item) => (
               <Box key={item} display="flex" justifyContent="space-between" alignItems="center">
                 <Box display="flex" alignItems="center" gap={1}>
-                  <Skeleton variant="circular" width={20} height={20} />
-                  <Skeleton variant="text" width={60} height={20} />
+                  <Skeleton variant="circular" width={isSmallMobile ? 16 : 20} height={isSmallMobile ? 16 : 20} />
+                  <Skeleton variant="text" width={isSmallMobile ? 40 : 60} height={isSmallMobile ? 16 : 20} />
                 </Box>
-                <Skeleton variant="text" width={80} height={20} />
+                <Skeleton variant="text" width={isSmallMobile ? 50 : 80} height={isSmallMobile ? 16 : 20} />
               </Box>
             ))}
           </Stack>
@@ -90,119 +92,133 @@ const KpiStrip = ({
     return null;
   }
 
+  // Mobile-optimized KPI Item
+  const KpiItem = ({ icon, label, value, growth, valueColor = 'text.primary' }) => (
+    <Box 
+      display="flex" 
+      justifyContent="space-between" 
+      alignItems="center"
+      sx={{ 
+        py: isSmallMobile ? 0.5 : 1,
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        '&:last-child': { borderBottom: 'none' }
+      }}
+    >
+      <Box display="flex" alignItems="center" gap={1} sx={{ minWidth: 0, flex: 1 }}>
+        <Box sx={{ 
+          color: valueColor,
+          fontSize: isSmallMobile ? '16px' : '18px',
+          flexShrink: 0
+        }}>
+          {icon}
+        </Box>
+        <Typography 
+          variant="body2" 
+          sx={{ 
+            fontSize: isSmallMobile ? '0.75rem' : '0.875rem', 
+            fontWeight: 500,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {label}:
+        </Typography>
+      </Box>
+      
+      <Box display="flex" alignItems="center" gap={0.5} sx={{ flexShrink: 0 }}>
+        <Typography 
+          variant="body2" 
+          fontWeight="bold"
+          sx={{ 
+            color: valueColor,
+            fontSize: isSmallMobile ? '0.75rem' : '0.875rem',
+            textAlign: 'right'
+          }}
+        >
+          {value}
+        </Typography>
+        {growth && (
+          <Chip 
+            label={formatGrowth(growth)}
+            color={growth > 0 ? 'success' : growth < 0 ? 'error' : 'default'}
+            size="small"
+            variant="outlined"
+            sx={{ 
+              height: isSmallMobile ? 18 : 24,
+              fontSize: isSmallMobile ? '0.6rem' : '0.75rem',
+              minWidth: isSmallMobile ? 45 : 60,
+              '& .MuiChip-icon': {
+                fontSize: isSmallMobile ? '12px' : '16px'
+              }
+            }}
+          />
+        )}
+      </Box>
+    </Box>
+  );
+
   return (
     <Card sx={{ 
       width: '100%', 
       mb: 2,
-      borderRadius: 2,
+      borderRadius: isSmallMobile ? 1 : 2,
       border: `1px solid ${theme.palette.divider}`,
       background: `linear-gradient(135deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
       boxShadow: theme.shadows[1],
-      '&:hover': {
-        boxShadow: theme.shadows[2],
-      }
+      mx: isSmallMobile ? 0.5 : 0
     }}>
-      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+      <CardContent sx={{ 
+        p: isSmallMobile ? 1.5 : 2, 
+        '&:last-child': { pb: isSmallMobile ? 1.5 : 2 } 
+      }}>
         <Typography 
-          variant="h6" 
+          variant={isSmallMobile ? "subtitle2" : "h6"} 
           gutterBottom 
           sx={{ 
-            fontSize: '1rem',
             fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
-            gap: 1
+            gap: 1,
+            fontSize: isSmallMobile ? '0.9rem' : '1rem',
+            mb: isSmallMobile ? 1 : 2
           }}
         >
-          <ShowChart fontSize="small" />
+          <ShowChart fontSize={isSmallMobile ? "small" : "medium"} />
           Key Indicators
         </Typography>
         
-        <Stack spacing={1.5}>
+        <Stack spacing={0}>
           {/* Financial - Laba */}
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Box display="flex" alignItems="center" gap={1}>
-              <AttachMoney 
-                fontSize="small" 
-                sx={{ 
-                  color: laba > 0 ? theme.palette.success.main : theme.palette.text.secondary,
-                  fontSize: '18px'
-                }} 
-              />
-              <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                {isSmallMobile ? 'Laba' : 'Total Laba'}:
-              </Typography>
-            </Box>
-            <Typography 
-              variant="body2" 
-              fontWeight="bold"
-              sx={{ 
-                color: laba > 0 ? theme.palette.success.main : theme.palette.text.primary,
-                fontSize: '0.875rem'
-              }}
-            >
-              {formatCurrency(laba)}
-            </Typography>
-          </Box>
+          <KpiItem
+            icon={<AttachMoney fontSize={isSmallMobile ? "small" : "small"} />}
+            label={isSmallMobile ? 'Laba' : 'Total Laba'}
+            value={formatCurrency(laba)}
+            valueColor={laba > 0 ? theme.palette.success.main : theme.palette.text.primary}
+          />
 
           {/* Stock Indicator */}
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Box display="flex" alignItems="center" gap={1}>
-              <Inventory 
-                fontSize="small" 
-                sx={{ 
-                  color: currentStock > 10 ? theme.palette.success.main : 
-                         currentStock > 5 ? theme.palette.warning.main : theme.palette.error.main,
-                  fontSize: '18px'
-                }} 
-              />
-              <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                {isSmallMobile ? 'Stok' : 'Stok ISI'}:
-              </Typography>
-            </Box>
-            <Typography 
-              variant="body2" 
-              fontWeight="bold"
-              sx={{ 
-                color: currentStock > 10 ? theme.palette.success.main : 
-                       currentStock > 5 ? theme.palette.warning.main : theme.palette.error.main,
-                fontSize: '0.875rem'
-              }}
-            >
-              {currentStock}
-            </Typography>
-          </Box>
+          <KpiItem
+            icon={<Inventory fontSize={isSmallMobile ? "small" : "small"} />}
+            label={isSmallMobile ? 'Stok' : 'Stok ISI'}
+            value={currentStock}
+            valueColor={
+              currentStock > 10 ? theme.palette.success.main : 
+              currentStock > 5 ? theme.palette.warning.main : theme.palette.error.main
+            }
+          />
 
           {/* Growth Indicator */}
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Box display="flex" alignItems="center" gap={1}>
-              <Analytics 
-                fontSize="small" 
-                sx={{ 
-                  color: revenueGrowth > 0 ? theme.palette.success.main : 
-                         revenueGrowth < 0 ? theme.palette.error.main : theme.palette.info.main,
-                  fontSize: '18px'
-                }} 
-              />
-              <Typography variant="body2" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                {isSmallMobile ? 'Growth' : 'Revenue Growth'}:
-              </Typography>
-            </Box>
-            <Chip 
-              label={formatGrowth(revenueGrowth)}
-              color={revenueGrowth > 0 ? 'success' : revenueGrowth < 0 ? 'error' : 'default'}
-              size="small"
-              variant="outlined"
-              icon={revenueGrowth > 0 ? <TrendingUp /> : <TrendingDown />}
-              sx={{ 
-                fontSize: '0.75rem',
-                height: '24px',
-                '& .MuiChip-icon': {
-                  fontSize: '16px'
-                }
-              }}
-            />
-          </Box>
+          <KpiItem
+            icon={<Analytics fontSize={isSmallMobile ? "small" : "small"} />}
+            label={isSmallMobile ? 'Growth' : 'Revenue Growth'}
+            value={formatGrowth(revenueGrowth)}
+            growth={revenueGrowth}
+            valueColor={
+              revenueGrowth > 0 ? theme.palette.success.main : 
+              revenueGrowth < 0 ? theme.palette.error.main : theme.palette.info.main
+            }
+          />
         </Stack>
       </CardContent>
     </Card>
