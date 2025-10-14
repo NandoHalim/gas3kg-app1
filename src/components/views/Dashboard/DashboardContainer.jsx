@@ -1,5 +1,5 @@
 // =======================================================
-// DashboardContainer (mobile-first dengan KpiStripMobile)
+// DashboardContainer (STRICT WIDTH CONTAINMENT - DASHBOARD ONLY)
 // =======================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -27,7 +27,7 @@ import FinancialSummaryCard from "./sections/FinancialSummaryCard.jsx";
 import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
 import RecentTransactionsTable from "./sections/RecentTransactionsTable.jsx";
 import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx";
-import KpiStripMobile from "./sections/KpiStripMobile.jsx"; // 🔥 NEW
+import KpiStripMobile from "./sections/KpiStripMobile.jsx";
 
 import CustomerHistoryModal from "./modals/CustomerHistoryModal.jsx";
 import ErrorBanner from "./ui/ErrorBanner.jsx";
@@ -57,13 +57,42 @@ function buildLast7DaysSeries(rows = []) {
   return series;
 }
 
+// 🔥 DASHBOARD-SPECIFIC STYLES
+const DashboardStyles = () => (
+  <style>
+    {`
+      /* 🔥 DASHBOARD ONLY: Strict width containment */
+      .dashboard-container * {
+        box-sizing: border-box !important;
+      }
+      
+      .dashboard-container {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
+      }
+      
+      .dashboard-container .MuiGrid-item,
+      .dashboard-container .MuiGrid-container {
+        max-width: 100% !important;
+      }
+      
+      /* Allow horizontal scroll ONLY in designated containers */
+      .dashboard-container .scroll-container {
+        overflow-x: auto;
+        overflow-y: hidden;
+      }
+    `}
+  </style>
+);
+
 export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const isSmallMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { settings } = useSettings();
 
-  // State
+  // State (tetap sama...)
   const [stocks, setStocks] = useState(stocksFromApp);
   const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
@@ -262,198 +291,209 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const kosong = Number(stocks?.KOSONG || 0);
 
   return (
-    <Box
-      sx={{
-        width: "100%",
-        maxWidth: "100%",
-        // 🔥 PERBAIKAN: Izinkan scroll vertikal, cegah horizontal
-        overflowX: "hidden", // Cegah scroll horizontal page
-        overflowY: "auto",   // Izinkan scroll vertikal
-        minHeight: "100vh",
-        backgroundColor: theme.palette.background.default,
-        // Pastikan konten tidak melebihi viewport
-        boxSizing: "border-box",
-        // Optimasi untuk mobile
-        WebkitOverflowScrolling: "touch",
-        overscrollBehavior: "contain",
-        // 🔥 NEW: Better mobile touch handling
-        touchAction: "pan-y",
-      }}
-    >
-      <Stack 
-        spacing={{ xs: 2, md: 3 }} 
-        sx={{ 
-          p: { xs: 1.5, sm: 2, md: 3 },
-          width: "100%",
-          maxWidth: "100%",
-          // Pastikan Stack tidak menyebabkan overflow
+    <>
+      {/* 🔥 DASHBOARD-ONLY STYLES */}
+      <DashboardStyles />
+      
+      {/* 🔥 MAIN DASHBOARD CONTAINER dengan class khusus */}
+      <Box
+        className="dashboard-container" // 🔥 CRITICAL: Dashboard-specific class
+        sx={{
+          width: "100vw",
+          maxWidth: "100vw",
+          overflowX: "hidden",
+          overflowY: "auto",
+          minHeight: "100vh",
+          backgroundColor: theme.palette.background.default,
           boxSizing: "border-box",
-          // Konten akan wrap dengan baik
-          minHeight: "fit-content",
-          // 🔥 NEW: Prevent any horizontal expansion
-          overflow: "hidden",
+          WebkitOverflowScrolling: "touch",
+          overscrollBehavior: "contain",
+          touchAction: "pan-y",
+          position: "relative",
         }}
       >
-        <HeaderSection />
+        <Stack 
+          spacing={{ xs: 2, md: 3 }} 
+          sx={{ 
+            p: { xs: 1.5, sm: 2, md: 3 },
+            width: "100%",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            minHeight: "fit-content",
+            overflow: "hidden",
+          }}
+        >
+          <HeaderSection />
 
-        {err && <ErrorBanner message={err} />}
+          {err && <ErrorBanner message={err} />}
 
-        {/* 🔥 UPDATED: KPI Strip - Mobile vs Desktop */}
-        {isMobile ? (
-          <KpiStripMobile
-            financialData={financialSummary}
-            stockPrediction={stockPrediction}
-            businessIntel={businessIntelligence}
-            loading={loading || advancedLoading}
-          />
-        ) : (
-          <KpiStrip
-            financialData={financialSummary}
-            stockPrediction={stockPrediction}
-            businessIntel={businessIntelligence}
-            loading={loading || advancedLoading}
-          />
-        )}
+          {/* KPI Strip */}
+          <Box sx={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}>
+            <KpiStrip
+              financialData={financialSummary}
+              stockPrediction={stockPrediction}
+              businessIntel={businessIntelligence}
+              loading={loading || advancedLoading}
+            />
+          </Box>
 
-        {/* SummaryTiles */}
-        <SummaryTiles
-          isi={isi}
-          kosong={kosong}
-          todayQty={today.qty}
-          todayMoney={today.money}
-          receivablesTotal={piutang}
-          loading={loading}
-        />
+          {/* SummaryTiles */}
+          <Box sx={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}>
+            <SummaryTiles
+              isi={isi}
+              kosong={kosong}
+              todayQty={today.qty}
+              todayMoney={today.money}
+              receivablesTotal={piutang}
+              loading={loading}
+            />
+          </Box>
 
-        {/* Grid utama - MOBILE FIRST */}
-        <Grid container spacing={{ xs: 2, md: 3 }} sx={{ width: "100%", margin: 0 }}>
-          {/* Kolom kiri */}
-          <Grid item xs={12} lg={6} sx={{ width: "100%", maxWidth: "100%" }}>
-            <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%" }}>
-              <FinancialSummaryCard
-                omzet={financialSummary.omzet}
-                hpp={financialSummary.hpp}
-                laba={financialSummary.laba}
-                margin={financialSummary.margin}
-                transactionCount={financialSummary.transactionCount}
-                totalQty={financialSummary.totalQty}
-                loading={financialLoading}
-              />
-
-              {/* SevenDaysChartCard dengan container yang aman */}
-              <Box sx={{ 
-                width: "100%", 
-                overflow: "visible",
-                // 🔥 NEW: Ensure card doesn't cause horizontal scroll
+          {/* Grid utama */}
+          <Grid 
+            container 
+            spacing={{ xs: 2, md: 3 }} 
+            sx={{ 
+              width: "100%", 
+              maxWidth: "100%",
+              margin: 0,
+              "& .MuiGrid-item": {
+                width: "100%",
                 maxWidth: "100%",
-              }}>
-                <SevenDaysChartCard loading={loading} />
-              </Box>
-            </Stack>
-          </Grid>
+                overflow: "hidden"
+              }
+            }}
+          >
+            {/* Kolom kiri */}
+            <Grid item xs={12} lg={6}>
+              <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%", maxWidth: "100%" }}>
+                <Box sx={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}>
+                  <FinancialSummaryCard
+                    omzet={financialSummary.omzet}
+                    hpp={financialSummary.hpp}
+                    laba={financialSummary.laba}
+                    margin={financialSummary.margin}
+                    transactionCount={financialSummary.transactionCount}
+                    totalQty={financialSummary.totalQty}
+                    loading={financialLoading}
+                  />
+                </Box>
 
-          {/* Kolom kanan */}
-          <Grid item xs={12} lg={6} sx={{ width: "100%", maxWidth: "100%" }}>
-            <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%" }}>
-              {/* Business Intelligence - Accordion untuk mobile */}
-              {isMobile ? (
-                <Accordion 
-                  elevation={1}
-                  sx={{
-                    '&.MuiAccordion-root': {
-                      borderRadius: 2,
-                      overflow: 'hidden',
-                      width: "100%",
-                      // 🔥 NEW: Better mobile styling
-                      border: `1px solid ${theme.palette.divider}`,
-                    }
-                  }}
-                >
-                  <AccordionSummary 
-                    expandIcon={<ExpandMoreIcon />}
-                    sx={{
-                      minHeight: { xs: 48, sm: 56 },
-                      '& .MuiAccordionSummary-content': {
-                        my: 1
-                      },
-                      backgroundColor: theme.palette.background.paper,
-                    }}
-                  >
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      Business Intelligence
-                    </Typography>
-                  </AccordionSummary>
-                  <AccordionDetails sx={{ p: 0 }}>
+                {/* SevenDaysChartCard */}
+                <Box sx={{ 
+                  width: "100%", 
+                  maxWidth: "100%",
+                  overflow: "hidden",
+                  "& .MuiCard-root": {
+                    width: "100%",
+                    maxWidth: "100%",
+                  }
+                }}>
+                  <SevenDaysChartCard loading={loading} />
+                </Box>
+              </Stack>
+            </Grid>
+
+            {/* Kolom kanan */}
+            <Grid item xs={12} lg={6}>
+              <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%", maxWidth: "100%" }}>
+                {/* Business Intelligence */}
+                <Box sx={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}>
+                  {isMobile ? (
+                    <Accordion 
+                      elevation={1}
+                      sx={{
+                        width: "100%",
+                        maxWidth: "100%",
+                        "&.MuiAccordion-root": {
+                          borderRadius: 2,
+                          overflow: "hidden",
+                          width: "100%",
+                          border: `1px solid ${theme.palette.divider}`,
+                        }
+                      }}
+                    >
+                      <AccordionSummary 
+                        expandIcon={<ExpandMoreIcon />}
+                        sx={{
+                          minHeight: { xs: 48, sm: 56 },
+                          "& .MuiAccordionSummary-content": {
+                            my: 1,
+                            width: "100%",
+                            maxWidth: "100%",
+                          }
+                        }}
+                      >
+                        <Typography variant="subtitle1" fontWeight={700} noWrap>
+                          Business Intelligence
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ p: 0, width: "100%", maxWidth: "100%" }}>
+                        <BusinessIntelligenceCard 
+                          data={businessIntelligence} 
+                          loading={advancedLoading} 
+                          compact
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  ) : (
                     <BusinessIntelligenceCard 
                       data={businessIntelligence} 
                       loading={advancedLoading} 
-                      compact
                     />
-                  </AccordionDetails>
-                </Accordion>
-              ) : (
-                <BusinessIntelligenceCard 
-                  data={businessIntelligence} 
-                  loading={advancedLoading} 
-                />
-              )}
+                  )}
+                </Box>
 
-              {/* Recent Transactions dengan scroll internal yang lebih baik */}
-              <Box
-                sx={{
-                  width: "100%",
-                  maxWidth: "100%",
-                  // 🔥 IMPROVED: Better scroll container
-                  overflowX: "auto",
-                  overflowY: "hidden",
-                  WebkitOverflowScrolling: "touch",
-                  "&::-webkit-scrollbar": { 
-                    height: 6,
-                    backgroundColor: theme.palette.grey[100],
-                  },
-                  "&::-webkit-scrollbar-thumb": {
-                    backgroundColor: theme.palette.grey[400],
-                    borderRadius: 3,
-                  },
-                  "&::-webkit-scrollbar-thumb:hover": {
-                    backgroundColor: theme.palette.grey[600],
-                  },
-                  scrollbarWidth: "thin",
-                  // 🔥 IMPROVED: Better scroll containment
-                  overscrollBehaviorX: "contain",
-                  overscrollBehaviorY: "none",
-                  // Styling
-                  border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: 2,
-                  p: 1,
-                  backgroundColor: theme.palette.background.paper,
-                  // 🔥 NEW: Prevent any horizontal expansion
-                  boxSizing: "border-box",
-                }}
-              >
-                <RecentTransactionsTable
-                  rows={recent}
-                  loading={loading}
-                  isSmallMobile={isSmallMobile}
-                  sx={{ 
-                    minWidth: { xs: 600, sm: 720 },
+                {/* Recent Transactions - 🔥 ALLOWED SCROLL AREA */}
+                <Box
+                  className="scroll-container" // 🔥 SPECIAL: Allowed to scroll horizontally
+                  sx={{
                     width: "100%",
+                    maxWidth: "100%",
+                    overflowX: "auto",
+                    overflowY: "hidden",
+                    WebkitOverflowScrolling: "touch",
+                    "&::-webkit-scrollbar": { 
+                      height: 6,
+                      backgroundColor: theme.palette.grey[100],
+                    },
+                    "&::-webkit-scrollbar-thumb": {
+                      backgroundColor: theme.palette.grey[400],
+                      borderRadius: 3,
+                    },
+                    scrollbarWidth: "thin",
+                    overscrollBehaviorX: "contain",
+                    border: `1px solid ${theme.palette.divider}`,
+                    borderRadius: 2,
+                    p: 1,
+                    backgroundColor: theme.palette.background.paper,
                   }}
-                />
-              </Box>
-            </Stack>
+                >
+                  <RecentTransactionsTable
+                    rows={recent}
+                    loading={loading}
+                    isSmallMobile={isSmallMobile}
+                    sx={{ 
+                      minWidth: { xs: 600, sm: 720 },
+                      width: "100%",
+                      maxWidth: "100%",
+                    }}
+                  />
+                </Box>
+              </Stack>
+            </Grid>
           </Grid>
-        </Grid>
 
-        <CustomerHistoryModal
-          open={openHist}
-          customerName={histName}
-          rows={histRows}
-          totalQty={histTotalQty}
-          loading={histLoading}
-          onClose={closeCustomerHistory}
-        />
-      </Stack>
-    </Box>
+          <CustomerHistoryModal
+            open={openHist}
+            customerName={histName}
+            rows={histRows}
+            totalQty={histTotalQty}
+            loading={histLoading}
+            onClose={closeCustomerHistory}
+          />
+        </Stack>
+      </Box>
+    </>
   );
 }
