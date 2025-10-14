@@ -347,11 +347,83 @@ export default function SevenDaysChartCard({ loading = false }) {
   const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
   const years = useMemo(() => [year - 1, year, year + 1], [year]);
 
-  // Optimized load function
-  const load = useCallback(async () => {
+  // ✅ FIXED: Simple useEffect tanpa infinite loop
+  useEffect(() => {
+    const loadData = async () => {
+      if (isLoading) return;
+      
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        let result;
+        switch (mode) {
+          case "7_hari":
+            result = await DataService.getSevenDaySalesRealtime();
+            break;
+          case "4_minggu":
+            result = await DataService.getLast4WeeksSales();
+            break;
+          case "mingguan_bulan":
+            result = await DataService.getMonthlyWeeklyBreakdown(year, month);
+            break;
+          case "6_bulan":
+            result = await DataService.getLast6MonthsSales();
+            break;
+          default:
+            result = [];
+        }
+
+        const processedData = processDataBasedOnMode(result, mode, month, year);
+        setSeries(processedData.series);
+        setSummary(processedData.summary);
+        
+      } catch (e) {
+        setError(`Gagal memuat data: ${e?.message || e}`);
+        setSeries([]); 
+        setSummary(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const timer = setTimeout(loadData, 300);
+    return () => clearTimeout(timer);
+  }, [mode, month, year]); // ✅ Dependencies yang stabil
+
+  const headline = useMemo(() => {
+    switch (mode) {
+      case "7_hari": return "7 Hari Terakhir";
+      case "4_minggu": return "4 Minggu Terakhir";
+      case "mingguan_bulan": return `Mingguan • ${months[month]} ${year}`;
+      case "6_bulan": return "6 Bulan Terakhir";
+      default: return "Penjualan";
+    }
+  }, [mode, month, year, months]);
+
+  // Optimized handlers
+  const handleModeChange = useCallback((_, newMode) => {
+    if (newMode) setMode(newMode);
+  }, []);
+
+  const handleMonthChange = useCallback((event) => {
+    setMonth(event.target.value);
+  }, []);
+
+  const handleYearChange = useCallback((event) => {
+    setYear(event.target.value);
+  }, []);
+
+  const handleResetFilter = useCallback(() => {
+    setMonth(new Date().getMonth());
+    setYear(new Date().getFullYear());
+  }, []);
+
+  // Manual refresh function
+  const handleManualRefresh = useCallback(async () => {
     if (isLoading) return;
     
-    setIsLoading(true); 
+    setIsLoading(true);
     setError(null);
     
     try {
@@ -385,43 +457,6 @@ export default function SevenDaysChartCard({ loading = false }) {
       setIsLoading(false);
     }
   }, [mode, month, year, isLoading]);
-
-  // Debounced useEffect
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      load();
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, [load]);
-
-  const headline = useMemo(() => {
-    switch (mode) {
-      case "7_hari": return "7 Hari Terakhir";
-      case "4_minggu": return "4 Minggu Terakhir";
-      case "mingguan_bulan": return `Mingguan • ${months[month]} ${year}`;
-      case "6_bulan": return "6 Bulan Terakhir";
-      default: return "Penjualan";
-    }
-  }, [mode, month, year, months]);
-
-  // Optimized handlers
-  const handleModeChange = useCallback((_, newMode) => {
-    if (newMode) setMode(newMode);
-  }, []);
-
-  const handleMonthChange = useCallback((event) => {
-    setMonth(event.target.value);
-  }, []);
-
-  const handleYearChange = useCallback((event) => {
-    setYear(event.target.value);
-  }, []);
-
-  const handleResetFilter = useCallback(() => {
-    setMonth(new Date().getMonth());
-    setYear(new Date().getFullYear());
-  }, []);
 
   return (
     <Card sx={{ 
@@ -629,7 +664,7 @@ export default function SevenDaysChartCard({ loading = false }) {
           <Button 
             size="small" 
             startIcon={<RefreshIcon />} 
-            onClick={load}
+            onClick={handleManualRefresh}
             disabled={isLoading}
           >
             Refresh
