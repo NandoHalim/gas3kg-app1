@@ -1,5 +1,5 @@
 // =======================================================
-// DashboardContainer (vertical scroll allowed, horizontal contained)
+// DashboardContainer (mobile-first dengan KpiStripMobile)
 // =======================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -28,6 +28,7 @@ import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
 import RecentTransactionsTable from "./sections/RecentTransactionsTable.jsx";
 import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx";
 import KpiStrip from "./sections/KpiStrip.jsx";
+import KpiStripMobile from "./sections/KpiStripMobile.jsx"; // 🔥 NEW
 
 import CustomerHistoryModal from "./modals/CustomerHistoryModal.jsx";
 import ErrorBanner from "./ui/ErrorBanner.jsx";
@@ -63,7 +64,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const isSmallMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { settings } = useSettings();
 
-  // State (tetap sama...)
+  // State
   const [stocks, setStocks] = useState(stocksFromApp);
   const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
@@ -276,6 +277,8 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
         // Optimasi untuk mobile
         WebkitOverflowScrolling: "touch",
         overscrollBehavior: "contain",
+        // 🔥 NEW: Better mobile touch handling
+        touchAction: "pan-y",
       }}
     >
       <Stack 
@@ -288,19 +291,30 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           boxSizing: "border-box",
           // Konten akan wrap dengan baik
           minHeight: "fit-content",
+          // 🔥 NEW: Prevent any horizontal expansion
+          overflow: "hidden",
         }}
       >
         <HeaderSection />
 
         {err && <ErrorBanner message={err} />}
 
-        {/* KPI Strip */}
-        <KpiStrip
-          financialData={financialSummary}
-          stockPrediction={stockPrediction}
-          businessIntel={businessIntelligence}
-          loading={loading || advancedLoading}
-        />
+        {/* 🔥 UPDATED: KPI Strip - Mobile vs Desktop */}
+        {isMobile ? (
+          <KpiStripMobile
+            financialData={financialSummary}
+            stockPrediction={stockPrediction}
+            businessIntel={businessIntelligence}
+            loading={loading || advancedLoading}
+          />
+        ) : (
+          <KpiStrip
+            financialData={financialSummary}
+            stockPrediction={stockPrediction}
+            businessIntel={businessIntelligence}
+            loading={loading || advancedLoading}
+          />
+        )}
 
         {/* SummaryTiles */}
         <SummaryTiles
@@ -312,7 +326,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           loading={loading}
         />
 
-        {/* Grid utama - FIXED: Pastikan konten tidak terpotong */}
+        {/* Grid utama - MOBILE FIRST */}
         <Grid container spacing={{ xs: 2, md: 3 }} sx={{ width: "100%", margin: 0 }}>
           {/* Kolom kiri */}
           <Grid item xs={12} lg={6} sx={{ width: "100%", maxWidth: "100%" }}>
@@ -327,8 +341,13 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                 loading={financialLoading}
               />
 
-              {/* 🔥 FIX: SevenDaysChartCard akan scroll internal jika perlu */}
-              <Box sx={{ width: "100%", overflow: "visible" }}>
+              {/* SevenDaysChartCard dengan container yang aman */}
+              <Box sx={{ 
+                width: "100%", 
+                overflow: "visible",
+                // 🔥 NEW: Ensure card doesn't cause horizontal scroll
+                maxWidth: "100%",
+              }}>
                 <SevenDaysChartCard loading={loading} />
               </Box>
             </Stack>
@@ -337,7 +356,7 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           {/* Kolom kanan */}
           <Grid item xs={12} lg={6} sx={{ width: "100%", maxWidth: "100%" }}>
             <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%" }}>
-              {/* Business Intelligence */}
+              {/* Business Intelligence - Accordion untuk mobile */}
               {isMobile ? (
                 <Accordion 
                   elevation={1}
@@ -345,7 +364,9 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                     '&.MuiAccordion-root': {
                       borderRadius: 2,
                       overflow: 'hidden',
-                      width: "100%"
+                      width: "100%",
+                      // 🔥 NEW: Better mobile styling
+                      border: `1px solid ${theme.palette.divider}`,
                     }
                   }}
                 >
@@ -355,7 +376,8 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                       minHeight: { xs: 48, sm: 56 },
                       '& .MuiAccordionSummary-content': {
                         my: 1
-                      }
+                      },
+                      backgroundColor: theme.palette.background.paper,
                     }}
                   >
                     <Typography variant="subtitle1" fontWeight={700}>
@@ -377,12 +399,12 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                 />
               )}
 
-              {/* Recent Transactions dengan scroll internal */}
+              {/* Recent Transactions dengan scroll internal yang lebih baik */}
               <Box
                 sx={{
                   width: "100%",
                   maxWidth: "100%",
-                  // 🔥 Scroll hanya di dalam container ini
+                  // 🔥 IMPROVED: Better scroll container
                   overflowX: "auto",
                   overflowY: "hidden",
                   WebkitOverflowScrolling: "touch",
@@ -394,13 +416,20 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
                     backgroundColor: theme.palette.grey[400],
                     borderRadius: 3,
                   },
+                  "&::-webkit-scrollbar-thumb:hover": {
+                    backgroundColor: theme.palette.grey[600],
+                  },
                   scrollbarWidth: "thin",
-                  // Cegah scroll horizontal di seluruh page
+                  // 🔥 IMPROVED: Better scroll containment
                   overscrollBehaviorX: "contain",
+                  overscrollBehaviorY: "none",
+                  // Styling
                   border: `1px solid ${theme.palette.divider}`,
                   borderRadius: 2,
                   p: 1,
                   backgroundColor: theme.palette.background.paper,
+                  // 🔥 NEW: Prevent any horizontal expansion
+                  boxSizing: "border-box",
                 }}
               >
                 <RecentTransactionsTable
