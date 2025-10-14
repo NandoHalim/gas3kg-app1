@@ -202,7 +202,136 @@ const DataTable = React.memo(function DataTable({ rows }) {
   );
 });
 
-// Sisa komponen (TableSkeleton, EmptyState, dll) tetap sama...
+// Loading Skeleton Component
+function TableSkeleton() {
+  const isMobile = useMediaQuery('(max-width:600px)');
+  
+  if (isMobile) {
+    return (
+      <Stack spacing={1}>
+        {[1, 2, 3, 4, 5].map((item) => (
+          <Skeleton key={item} variant="rectangular" height={80} sx={{ borderRadius: 2 }} />
+        ))}
+      </Stack>
+    );
+  }
+
+  return (
+    <Box>
+      <Skeleton variant="rectangular" height={40} sx={{ mb: 1, borderRadius: 1 }} />
+      {[1, 2, 3, 4, 5, 6, 7].map((item) => (
+        <Skeleton key={item} variant="rectangular" height={50} sx={{ mb: 0.5, borderRadius: 1 }} />
+      ))}
+    </Box>
+  );
+}
+
+// Empty State Component
+function EmptyState() {
+  return (
+    <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
+      <TimelineIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
+      <Typography variant="h6" gutterBottom>
+        Tidak Ada Data
+      </Typography>
+      <Typography variant="body2">
+        Tidak ada data penjualan untuk periode yang dipilih
+      </Typography>
+    </Box>
+  );
+}
+
+// Helper function untuk process data
+function processDataBasedOnMode(data, mode, month, year) {
+  const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+  
+  if (!data || data.length === 0) {
+    return { series: [], summary: null };
+  }
+
+  let series = [];
+  let summary = null;
+
+  try {
+    switch (mode) {
+      case "7_hari":
+        series = data.map(r => ({
+          label: new Date(r.date).toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+          value: r.qty || 0,
+          total: r.totalValue || null
+        }));
+        break;
+
+      case "4_minggu":
+        let totalQty4 = 0, totalValue4 = 0;
+        series = data.map(w => {
+          totalQty4 += w.value; 
+          totalValue4 += w.totalValue;
+          return { 
+            label: w.label, 
+            value: w.value, 
+            total: w.totalValue 
+          };
+        });
+        const last4 = series[3]?.value || 0;
+        const prevAvg4 = series.slice(0,3).reduce((s,x)=>s+x.value,0)/3 || 0;
+        const growth4 = prevAvg4 > 0 ? ((last4 - prevAvg4) / prevAvg4) * 100 : 0;
+        summary = { 
+          totalQty: totalQty4, 
+          totalValue: totalValue4, 
+          avgWeeklyQty: totalQty4/4, 
+          growth: growth4 
+        };
+        break;
+
+      case "mingguan_bulan":
+        let totalQtyMonth = 0, totalValueMonth = 0;
+        series = data.map(w => {
+          totalQtyMonth += w.value; 
+          totalValueMonth += w.totalValue;
+          return { 
+            label: w.label, 
+            value: w.value, 
+            total: w.totalValue 
+          };
+        });
+        summary = {
+          totalQty: totalQtyMonth,
+          totalValue: totalValueMonth,
+          avgWeeklyQty: series.length ? totalQtyMonth / series.length : 0,
+          weekCount: series.length
+        };
+        break;
+
+      case "6_bulan":
+        let totalQty6 = 0;
+        series = data.map(m => ({ 
+          label: m.label, 
+          value: m.value, 
+          total: m.totalValue 
+        }));
+        totalQty6 = series.reduce((s,x)=>s+x.value,0);
+        const last6 = series[5]?.value || 0;
+        const prevAvg6 = series.slice(0,5).reduce((s,x)=>s+x.value,0)/5 || 0;
+        const growth6 = prevAvg6 > 0 ? ((last6 - prevAvg6) / prevAvg6) * 100 : 0;
+        summary = { 
+          totalQty: totalQty6, 
+          avgMonthlyQty: totalQty6/6, 
+          growth: growth6 
+        };
+        break;
+
+      default:
+        series = data;
+    }
+  } catch (error) {
+    console.error('Error processing data:', error);
+    series = [];
+    summary = null;
+  }
+
+  return { series, summary };
+}
 
 // ---------- Main Optimized Card ----------
 export default function SevenDaysChartCard({ loading = false }) {
@@ -218,17 +347,14 @@ export default function SevenDaysChartCard({ loading = false }) {
   const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
   const years = useMemo(() => [year - 1, year, year + 1], [year]);
 
-  // Optimized load function dengan debouncing implicit
+  // Optimized load function
   const load = useCallback(async () => {
-    if (isLoading) return; // Prevent concurrent requests
+    if (isLoading) return;
     
     setIsLoading(true); 
     setError(null);
     
     try {
-      // Simulate API delay untuk testing
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
       let result;
       switch (mode) {
         case "7_hari":
@@ -247,7 +373,6 @@ export default function SevenDaysChartCard({ loading = false }) {
           result = [];
       }
 
-      // Process data dengan batasan
       const processedData = processDataBasedOnMode(result, mode, month, year);
       setSeries(processedData.series);
       setSummary(processedData.summary);
@@ -293,6 +418,11 @@ export default function SevenDaysChartCard({ loading = false }) {
     setYear(event.target.value);
   }, []);
 
+  const handleResetFilter = useCallback(() => {
+    setMonth(new Date().getMonth());
+    setYear(new Date().getFullYear());
+  }, []);
+
   return (
     <Card sx={{ 
       borderRadius: 3,
@@ -301,14 +431,40 @@ export default function SevenDaysChartCard({ loading = false }) {
       boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
       overflow: "hidden"
     }}>
-      {/* Header dengan optimized callbacks */}
       <CardHeader
         sx={{ 
           py: 2, 
           bgcolor: "background.paper", 
           borderBottom: `1px solid ${alpha(theme.palette.divider, 0.12)}` 
         }}
-        title={/* ... sama seperti sebelumnya ... */}
+        title={
+          <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Box sx={{ 
+              p: 0.5, 
+              borderRadius: 1, 
+              bgcolor: alpha(theme.palette.primary.main, 0.1) 
+            }}>
+              <TimelineIcon fontSize="small" color="primary" />
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>Tren Penjualan</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {headline}
+              </Typography>
+            </Box>
+            {summary?.growth !== undefined && (
+              <Chip 
+                size="small" 
+                color={summary.growth > 0 ? "success" : summary.growth < 0 ? "error" : "default"}
+                icon={summary.growth > 0 ? <TrendingUpIcon /> : <TrendingDownIcon />}
+                label={pct(summary.growth)} 
+              />
+            )}
+            <Tooltip title="Update realtime, kalkulasi mengikuti kalender.">
+              <InfoOutlinedIcon fontSize="small" sx={{ color: "text.secondary" }} />
+            </Tooltip>
+          </Stack>
+        }
         action={
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="flex-start">
             <ToggleButtonGroup 
@@ -333,15 +489,29 @@ export default function SevenDaysChartCard({ loading = false }) {
                 <FormControl size="small" sx={{ minWidth: 120 }} disabled={isLoading || mode==="6_bulan"}>
                   <InputLabel>Bulan</InputLabel>
                   <Select value={month} label="Bulan" onChange={handleMonthChange}>
-                    {months.map((m,i)=>(<MenuItem key={i} value={i}>{m}</MenuItem>))}
+                    {months.map((m,i) => (
+                      <MenuItem key={i} value={i}>{m}</MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
                 <FormControl size="small" sx={{ minWidth: 100 }} disabled={isLoading}>
                   <InputLabel>Tahun</InputLabel>
                   <Select value={year} label="Tahun" onChange={handleYearChange}>
-                    {years.map(y=>(<MenuItem key={y} value={y}>{y}</MenuItem>))}
+                    {years.map(y => (
+                      <MenuItem key={y} value={y}>{y}</MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
+                {(month !== new Date().getMonth() || year !== new Date().getFullYear()) && (
+                  <Chip 
+                    size="small"
+                    variant="filled"
+                    label={`${months[month]} ${year}`}
+                    onDelete={handleResetFilter}
+                    deleteIcon={<CloseIcon />}
+                    sx={{ mt: 0.5 }}
+                  />
+                )}
               </Stack>
             )}
           </Stack>
@@ -363,7 +533,51 @@ export default function SevenDaysChartCard({ loading = false }) {
           <>
             {/* KPI strip */}
             <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
-              {/* ... sama seperti sebelumnya ... */}
+              <Chip 
+                icon={<BoltIcon />} 
+                size="small"
+                label={
+                  mode==="7_hari" ? "Realtime aktif" : 
+                  mode==="4_minggu" ? "Rolling 28 hari" : 
+                  mode==="mingguan_bulan" ? "Mulai tgl 1" : 
+                  "Termasuk bulan berjalan"
+                }
+                sx={{ 
+                  bgcolor: alpha(theme.palette.info.main, 0.08), 
+                  color: theme.palette.info.main,
+                  fontWeight: 500
+                }} 
+              />
+              <Chip 
+                icon={<TrendingUpIcon />} 
+                size="small"
+                label={
+                  mode==="6_bulan"
+                    ? `Rata2/Bulan: ${summary ? fmt.format(Math.round(summary.avgMonthlyQty||0)) : "-"}`
+                    : `Rata2/Minggu: ${summary ? fmt.format(Math.round(summary.avgWeeklyQty||0)) : "-"}`
+                }
+                sx={{ 
+                  bgcolor: alpha(theme.palette.success.main, 0.08), 
+                  color: theme.palette.success.main,
+                  fontWeight: 500
+                }} 
+              />
+              {summary && (mode==="4_minggu" || mode==="6_bulan") && (
+                <Chip 
+                  icon={<CalendarMonthIcon />} 
+                  size="small"
+                  label={
+                    mode==="4_minggu" ? 
+                    `Total 4 Minggu: ${fmt.format(summary.totalQty)}` : 
+                    `Total 6 Bulan: ${fmt.format(summary.totalQty)}`
+                  }
+                  sx={{ 
+                    bgcolor: alpha(theme.palette.warning.main, 0.08), 
+                    color: theme.palette.warning.main,
+                    fontWeight: 500
+                  }} 
+                />
+              )}
             </Stack>
 
             {/* OPTIMIZED TABLE */}
@@ -374,9 +588,21 @@ export default function SevenDaysChartCard({ loading = false }) {
               <>
                 <Divider sx={{ my: 2 }} />
                 <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap">
-                  <Chip size="small" variant="outlined" label={`Total: ${fmt.format(summary.totalQty || 0)}`} />
-                  <Chip size="small" variant="outlined" label={`Rata-rata: ${fmt.format(Math.round(summary.avgWeeklyQty || summary.avgMonthlyQty || 0))}`} />
-                  <Chip size="small" color={summary.growth>0 ? "success" : summary.growth<0 ? "error" : "default"} label={`Growth: ${pct(summary.growth || 0)}`} />
+                  <Chip 
+                    size="small" 
+                    variant="outlined"
+                    label={`Total: ${fmt.format(summary.totalQty || 0)}`} 
+                  />
+                  <Chip 
+                    size="small" 
+                    variant="outlined"
+                    label={`Rata-rata: ${fmt.format(Math.round(summary.avgWeeklyQty || summary.avgMonthlyQty || 0))}`} 
+                  />
+                  <Chip 
+                    size="small" 
+                    color={summary.growth > 0 ? "success" : summary.growth < 0 ? "error" : "default"} 
+                    label={`Growth: ${pct(summary.growth || 0)}`} 
+                  />
                 </Stack>
               </>
             )}
@@ -411,7 +637,7 @@ export default function SevenDaysChartCard({ loading = false }) {
           <Button 
             size="small" 
             startIcon={<DownloadIcon />}
-            disabled={series.length === 0}
+            disabled={series.length === 0 || isLoading}
           >
             Export
           </Button>
@@ -419,11 +645,4 @@ export default function SevenDaysChartCard({ loading = false }) {
       </CardActions>
     </Card>
   );
-}
-
-// Helper function untuk process data
-function processDataBasedOnMode(data, mode, month, year) {
-  // Implementasi processing logic yang sama seperti sebelumnya
-  // dengan tambahan limit data jika diperlukan
-  return { series: data, summary: null };
 }
