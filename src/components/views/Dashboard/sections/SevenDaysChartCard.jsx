@@ -19,7 +19,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import DownloadIcon from "@mui/icons-material/Download";
 import CloseIcon from "@mui/icons-material/Close";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-import { ChartsDataService } from "../../../../services/ChartsDataService";
+import { DataService } from "../../../../services/DataService";
 
 // ---------- Constants & Helpers ----------
 const fmt = new Intl.NumberFormat("id-ID");
@@ -401,7 +401,7 @@ export default function SevenDaysChartCard({ loading = false }) {
   const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Ags","Sep","Okt","Nov","Des"];
   const years = useMemo(() => [year - 1, year, year + 1], [year]);
 
-  // ✅ FIXED: Layout-stable useEffect dengan ChartsDataService
+  // ✅ FIXED: Kembali ke DataService
   useEffect(() => {
     const loadData = async () => {
       if (isLoading) return;
@@ -413,16 +413,16 @@ export default function SevenDaysChartCard({ loading = false }) {
         let result;
         switch (mode) {
           case "7_hari":
-            result = await ChartsDataService.getSevenDaySalesRealtime();
+            result = await DataService.getSevenDaySalesRealtime();
             break;
           case "4_minggu":
-            result = await ChartsDataService.getLast4WeeksSales();
+            result = await DataService.getLast4WeeksSales();
             break;
           case "mingguan_bulan":
-            result = await ChartsDataService.getMonthlyWeeklyBreakdown(year, month);
+            result = await DataService.getMonthlyWeeklyBreakdown(year, month);
             break;
           case "6_bulan":
-            result = await ChartsDataService.getLast6MonthsSales();
+            result = await DataService.getLast6MonthsSales();
             break;
           default:
             result = [];
@@ -455,16 +455,9 @@ export default function SevenDaysChartCard({ loading = false }) {
     }
   }, [mode, month, year, months]);
 
-  // Optimized handlers dengan layout stability
+  // Optimized handlers
   const handleModeChange = useCallback((_, newMode) => {
-    if (newMode) {
-      setMode(newMode);
-      // Reset filter ketika ganti mode untuk konsistensi layout
-      if (newMode !== "mingguan_bulan") {
-        setMonth(new Date().getMonth());
-        setYear(new Date().getFullYear());
-      }
-    }
+    if (newMode) setMode(newMode);
   }, []);
 
   const handleMonthChange = useCallback((event) => {
@@ -480,7 +473,7 @@ export default function SevenDaysChartCard({ loading = false }) {
     setYear(new Date().getFullYear());
   }, []);
 
-  // Manual refresh function dengan ChartsDataService
+  // Manual refresh function
   const handleManualRefresh = useCallback(async () => {
     if (isLoading) return;
     
@@ -491,16 +484,16 @@ export default function SevenDaysChartCard({ loading = false }) {
       let result;
       switch (mode) {
         case "7_hari":
-          result = await ChartsDataService.getSevenDaySalesRealtime();
+          result = await DataService.getSevenDaySalesRealtime();
           break;
         case "4_minggu":
-          result = await ChartsDataService.getLast4WeeksSales();
+          result = await DataService.getLast4WeeksSales();
           break;
         case "mingguan_bulan":
-          result = await ChartsDataService.getMonthlyWeeklyBreakdown(year, month);
+          result = await DataService.getMonthlyWeeklyBreakdown(year, month);
           break;
         case "6_bulan":
-          result = await ChartsDataService.getLast6MonthsSales();
+          result = await DataService.getLast6MonthsSales();
           break;
         default:
           result = [];
@@ -572,13 +565,7 @@ export default function SevenDaysChartCard({ loading = false }) {
           </Stack>
         }
         action={
-          <Box sx={{ 
-            flexShrink: 0,
-            display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
-            gap: { xs: 0.5, sm: 0.5 },
-            alignItems: { xs: 'flex-end', sm: 'center' }
-          }}>
+          <Box sx={{ flexShrink: 0 }}>
             <Stack direction="row" spacing={0.5} alignItems="center">
               <ToggleButtonGroup 
                 size="small" 
@@ -593,12 +580,7 @@ export default function SevenDaysChartCard({ loading = false }) {
                     px: 1,
                     py: 0.5,
                     fontSize: '0.7rem',
-                    minWidth: 'auto',
-                    border: '1px solid transparent',
-                    '&.Mui-selected': {
-                      backgroundColor: alpha(theme.palette.primary.main, 0.12),
-                      border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`
-                    }
+                    minWidth: 'auto'
                   }
                 }}
               >
@@ -635,7 +617,7 @@ export default function SevenDaysChartCard({ loading = false }) {
           </Alert>
         )}
 
-        {/* Filter controls untuk mode tertentu - FIXED LAYOUT */}
+        {/* Filter controls untuk mode tertentu */}
         {(mode === "mingguan_bulan" || mode === "6_bulan") && (
           <Stack direction="row" spacing={1} sx={{ mb: 1.5, width: '100%' }} alignItems="center" flexWrap="wrap">
             <FormControl size="small" sx={{ minWidth: 80, flex: 1 }} disabled={isLoading || mode==="6_bulan"}>
