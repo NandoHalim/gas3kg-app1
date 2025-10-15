@@ -1,8 +1,5 @@
 // src/components/views/TransaksiView.jsx
 import React, { useEffect, useState } from "react";
-import Card from "../ui/Card.jsx";
-import Button from "../ui/Button.jsx";
-import PenjualanView from "./PenjualanView.jsx";
 import { DataService } from "../../services/DataService.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { fmtIDR } from "../../utils/helpers.js";
@@ -37,12 +34,20 @@ import {
   useTheme,
   useMediaQuery,
   AppBar,
+  Toolbar,
+  Card,
+  CardHeader,
+  CardContent,
+  Button
 } from "@mui/material";
 import PaidIcon from "@mui/icons-material/PriceCheck";
 import SearchIcon from "@mui/icons-material/Search";
 import ReplayIcon from "@mui/icons-material/Replay";
 import CreditScoreIcon from "@mui/icons-material/CreditScore";
 import CloseIcon from "@mui/icons-material/Close";
+
+// Import komponen yang diperlukan
+import PenjualanView from "./PenjualanView.jsx";
 
 export default function TransaksiView({ stocks = {}, onSaved }) {
   const toast = useToast();
@@ -209,7 +214,7 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
                     }}
                   />
                   <Button
-                    className="secondary"
+                    variant="outlined"
                     onClick={() => setQ("")}
                     disabled={loading}
                     startIcon={<ReplayIcon />}
@@ -399,7 +404,7 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button 
-            className="secondary" 
+            variant="outlined"
             onClick={() => setPaying(null)} 
             disabled={loading}
             sx={{ textTransform: "none" }}
