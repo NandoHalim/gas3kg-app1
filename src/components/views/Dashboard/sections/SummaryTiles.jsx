@@ -109,7 +109,7 @@ const StatusChip = ({ status, isMobile }) => {
   );
 };
 
-// Mobile-optimized Stat Tile
+// Mobile-optimized Stat Tile dengan FIXED HEIGHT
 const StatTile = ({ 
   title, 
   value, 
@@ -126,11 +126,11 @@ const StatTile = ({
     return (
       <Box
         sx={{
-          p: isSmallMobile ? 1 : 1.5,
+          p: isSmallMobile ? 1.5 : 2,
           borderRadius: 2,
           backgroundColor: theme.palette.background.paper,
           border: `1px solid ${theme.palette.divider}`,
-          height: '100%',
+          height: isSmallMobile ? 100 : 120, // FIXED HEIGHT
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between'
@@ -149,11 +149,11 @@ const StatTile = ({
   return (
     <Box
       sx={{
-        p: isSmallMobile ? 1 : 1.5,
+        p: isSmallMobile ? 1.5 : 2,
         borderRadius: 2,
         backgroundColor: theme.palette.background.paper,
         border: `1px solid ${theme.palette.divider}`,
-        height: '100%',
+        height: isSmallMobile ? 100 : 120, // FIXED HEIGHT untuk konsistensi
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
@@ -193,19 +193,20 @@ const StatTile = ({
         </Typography>
       </Stack>
 
-      {/* Value */}
-      <Typography
-        variant={isSmallMobile ? "h6" : "h5"}
-        fontWeight={700}
-        sx={{
-          fontSize: isSmallMobile ? '1.1rem' : '1.4rem',
-          lineHeight: 1.2,
-          mb: isSmallMobile ? 0.5 : 1,
-          color: 'text.primary'
-        }}
-      >
-        {value}
-      </Typography>
+      {/* Value - dengan text alignment center untuk konsistensi */}
+      <Box sx={{ textAlign: 'center', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography
+          variant={isSmallMobile ? "h6" : "h5"}
+          fontWeight={700}
+          sx={{
+            fontSize: isSmallMobile ? '1.3rem' : '1.6rem',
+            lineHeight: 1.2,
+            color: 'text.primary'
+          }}
+        >
+          {value}
+        </Typography>
+      </Box>
 
       {/* Footer dengan status dan subtitle */}
       <Stack 
@@ -320,7 +321,6 @@ function SummaryTiles({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isLargeMobile = useMediaQuery(theme.breakpoints.between('sm', 'md'));
 
   // Get config untuk setiap tile
   const stokIsiConfig = getTileConfig('stok-isi', isi, todayMoney, isSmallMobile);
@@ -333,7 +333,6 @@ function SummaryTiles({
       sx={{
         width: '100%',
         maxWidth: '100%',
-        borderRadius: { xs: 2, sm: 3 },
         backgroundColor: theme.palette.background.default,
         overflow: 'hidden',
         px: { xs: 1, sm: 2 },
@@ -345,7 +344,7 @@ function SummaryTiles({
         direction="row" 
         alignItems="center" 
         justifyContent="space-between" 
-        sx={{ mb: { xs: 2, sm: 3 } }}
+        sx={{ mb: { xs: 2, sm: 3 }, px: { xs: 1, sm: 0 } }}
       >
         <Typography
           variant={isSmallMobile ? "h6" : "h5"}
@@ -362,7 +361,8 @@ function SummaryTiles({
           variant="caption"
           color="text.secondary"
           sx={{
-            fontSize: { xs: '0.7rem', sm: '0.8rem' }
+            fontSize: { xs: '0.7rem', sm: '0.8rem' },
+            display: { xs: 'none', sm: 'block' } // Sembunyikan tanggal di mobile kecil
           }}
         >
           {new Date().toLocaleDateString('id-ID', {
@@ -374,14 +374,20 @@ function SummaryTiles({
         </Typography>
       </Stack>
 
-      {/* Tiles Grid */}
+      {/* PERBAIKAN: True 2x2 Grid dengan ukuran sama */}
       <Grid 
         container 
-        spacing={isSmallMobile ? 1 : { xs: 1.5, sm: 2 }} 
+        spacing={isSmallMobile ? 1.5 : { xs: 2, sm: 2.5 }} 
         alignItems="stretch"
+        sx={{
+          // Pastikan semua item grid memiliki height yang sama
+          '& .MuiGrid-item': {
+            display: 'flex'
+          }
+        }}
       >
         {/* Stok Isi */}
-        <Grid item xs={6} sm={6} md={3}>
+        <Grid item xs={6}>
           <StatTile
             title={stokIsiConfig.title}
             value={stokIsiConfig.displayValue}
@@ -395,7 +401,7 @@ function SummaryTiles({
         </Grid>
 
         {/* Stok Kosong */}
-        <Grid item xs={6} sm={6} md={3}>
+        <Grid item xs={6}>
           <StatTile
             title={stokKosongConfig.title}
             value={stokKosongConfig.displayValue}
@@ -409,7 +415,7 @@ function SummaryTiles({
         </Grid>
 
         {/* Penjualan Hari Ini */}
-        <Grid item xs={6} sm={6} md={3}>
+        <Grid item xs={6}>
           <StatTile
             title={penjualanConfig.title}
             value={penjualanConfig.displayValue}
@@ -423,7 +429,7 @@ function SummaryTiles({
         </Grid>
 
         {/* Piutang */}
-        <Grid item xs={6} sm={6} md={3}>
+        <Grid item xs={6}>
           <StatTile
             title={piutangConfig.title}
             value={piutangConfig.displayValue}
@@ -437,7 +443,7 @@ function SummaryTiles({
         </Grid>
       </Grid>
 
-      {/* Quick Status Legend - hanya untuk mobile */}
+      {/* Quick Status Legend - hanya untuk mobile kecil */}
       {isSmallMobile && (
         <Box sx={{ mt: 2, px: 1 }}>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
