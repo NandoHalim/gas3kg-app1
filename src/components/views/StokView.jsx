@@ -24,23 +24,16 @@ import {
   CircularProgress,
   useTheme,
   useMediaQuery,
-  Fab,
+  Paper,
   BottomNavigation,
   BottomNavigationAction,
-  Paper,
-  Dialog,
-  DialogContent,
-  DialogActions,
-  IconButton,
   AppBar,
   Toolbar,
 } from "@mui/material";
 import {
-  Add as AddIcon,
   Inventory as InventoryIcon,
   SwapHoriz as SwapIcon,
   Adjust as AdjustIcon,
-  Close as CloseIcon,
 } from "@mui/icons-material";
 
 // 🔧 Mobile-first responsive hook
@@ -80,6 +73,28 @@ const MOBILE_FIELD_PROPS = {
   size: "medium" 
 };
 
+// 🔧 Mobile tabs configuration - DIPINDAHKAN KE LEVEL ATAS
+const MOBILE_TABS = [
+  { 
+    label: "Tambah Kosong", 
+    icon: <InventoryIcon />, 
+    component: TambahKosong,
+    value: "tambah-kosong"
+  },
+  { 
+    label: "Restok Isi", 
+    icon: <SwapIcon />, 
+    component: RestokIsi,
+    value: "restok-isi"
+  },
+  { 
+    label: "Penyesuaian", 
+    icon: <AdjustIcon />, 
+    component: PenyesuaianStok,
+    value: "penyesuaian"
+  },
+];
+
 export default function StokView({ stocks = {}, onSaved }) {
   const toast = useToast();
   const { isMobile, isTablet, isDesktop } = useResponsive();
@@ -87,21 +102,21 @@ export default function StokView({ stocks = {}, onSaved }) {
     ISI: Number(stocks.ISI || 0),
     KOSONG: Number(stocks.KOSONG || 0),
   });
-  const [activeTab, setActiveTab] = useState(0);
-  const [fabOpen, setFabOpen] = useState(false);
+  
+  // 🔧 FIX: Gunakan string value untuk activeTab agar lebih reliable
+  const [activeTab, setActiveTab] = useState("tambah-kosong");
 
   useEffect(() => {
     setSnap({ ISI: Number(stocks.ISI || 0), KOSONG: Number(stocks.KOSONG || 0) });
   }, [stocks]);
 
-  // Mobile tabs configuration
-  const mobileTabs = [
-    { label: "Tambah Kosong", icon: <InventoryIcon />, component: TambahKosong },
-    { label: "Restok Isi", icon: <SwapIcon />, component: RestokIsi },
-    { label: "Penyesuaian", icon: <AdjustIcon />, component: PenyesuaianStok },
-  ];
+  // 🔧 FIX: Cari komponen aktif berdasarkan value, bukan index
+  const getActiveComponent = () => {
+    const activeTabConfig = MOBILE_TABS.find(tab => tab.value === activeTab);
+    return activeTabConfig ? activeTabConfig.component : TambahKosong;
+  };
 
-  const ActiveComponent = mobileTabs[activeTab]?.component;
+  const ActiveComponent = getActiveComponent();
 
   // Mobile header dengan stats yang lebih compact
   const MobileHeader = () => (
@@ -274,18 +289,16 @@ export default function StokView({ stocks = {}, onSaved }) {
       
       {/* Main Content */}
       <Box sx={{ p: 2 }}>
-        {ActiveComponent && (
-          <ActiveComponent
-            onSaved={(s) => {
-              setSnap(s);
-              onSaved?.(s);
-            }}
-            isMobile={isMobile}
-          />
-        )}
+        <ActiveComponent
+          onSaved={(s) => {
+            setSnap(s);
+            onSaved?.(s);
+          }}
+          isMobile={isMobile}
+        />
       </Box>
 
-      {/* Bottom Navigation */}
+      {/* Bottom Navigation - FIXED: Gunakan value string */}
       <Paper 
         sx={{ 
           position: 'fixed', 
@@ -299,15 +312,17 @@ export default function StokView({ stocks = {}, onSaved }) {
         <BottomNavigation
           value={activeTab}
           onChange={(event, newValue) => {
+            console.log('Tab changed to:', newValue); // Debug log
             setActiveTab(newValue);
           }}
           showLabels
         >
-          {mobileTabs.map((tab, index) => (
+          {MOBILE_TABS.map((tab) => (
             <BottomNavigationAction
-              key={index}
+              key={tab.value}
               label={tab.label}
               icon={tab.icon}
+              value={tab.value}
               sx={{
                 minWidth: 'auto',
                 '& .MuiBottomNavigationAction-label': {
