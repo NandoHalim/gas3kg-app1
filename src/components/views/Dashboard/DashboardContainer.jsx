@@ -1,38 +1,26 @@
 // =======================================================
-// DashboardContainer dengan Tab Navigation
+// DashboardContainer (Mobile Optimized)
 // =======================================================
 import React, { useEffect, useRef, useState } from "react";
 import {
   Box,
   Stack,
-  Tabs,
-  Tab,
-  AppBar,
-  Toolbar,
-  Typography,
-  IconButton,
-  Badge,
   useTheme,
   useMediaQuery,
-  Paper,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Typography,
+  Grid,
 } from "@mui/material";
-import {
-  Dashboard as DashboardIcon,
-  TrendingUp as TrendingUpIcon,
-  Analytics as AnalyticsIcon,
-  Receipt as ReceiptIcon,
-  Assessment as ReportIcon,
-  Notifications as NotificationsIcon,
-  AccountCircle as AccountCircleIcon,
-  Settings as SettingsIcon
-} from "@mui/icons-material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 import { DataService } from "../../../services/DataService.js";
 import { supabase } from "../../../lib/supabase.js";
 import { useSettings } from "../../../context/SettingsContext.jsx";
 import { fmtIDR, todayStr } from "../../../utils/helpers.js";
 
-// Sections (tetap sama)
+// Sections
 import HeaderSection from "./sections/HeaderSection.jsx";
 import SummaryTiles from "./sections/SummaryTiles.jsx";
 import FinancialSummaryCard from "./sections/FinancialSummaryCard.jsx";
@@ -44,7 +32,7 @@ import KpiStrip from "./sections/KpiStrip.jsx";
 import CustomerHistoryModal from "./modals/CustomerHistoryModal.jsx";
 import ErrorBanner from "./ui/ErrorBanner.jsx";
 
-// Helper functions (tetap sama)
+// Helpers
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
 const isoDate = (d) => startOfDay(d).toISOString().slice(0,10);
 
@@ -69,284 +57,85 @@ function buildLast7DaysSeries(rows = []) {
   return series;
 }
 
-// Tab Panel Component
-function TabPanel({ children, value, index, ...other }) {
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`dashboard-tabpanel-${index}`}
-      aria-labelledby={`dashboard-tab-${index}`}
-      {...other}
-    >
-      {value === index && (
-        <Box sx={{ 
-          p: { xs: 1, sm: 2, md: 3 },
-          width: '100%',
-          maxWidth: '100%',
-          overflowX: 'hidden'
-        }}>
-          {children}
-        </Box>
-      )}
-    </div>
-  );
-}
-
-// Komponen untuk setiap Tab
-const OverviewTab = ({ 
-  financialSummary, 
-  stockPrediction, 
-  businessIntelligence, 
-  loading, 
-  advancedLoading,
-  isi,
-  kosong,
-  today,
-  piutang,
-  isMobile 
-}) => (
-  <Stack spacing={isMobile ? 2 : 3}>
-    {/* KPI Strip */}
-    <Box sx={{ width: "100%" }}>
-      <KpiStrip
-        financialData={financialSummary}
-        stockPrediction={stockPrediction}
-        businessIntel={businessIntelligence}
-        loading={loading || advancedLoading}
-        compact={isMobile}
-      />
-    </Box>
-
-    {/* Summary Tiles */}
-    <Box sx={{ width: "100%" }}>
-      <SummaryTiles
-        isi={isi}
-        kosong={kosong}
-        todayQty={today.qty}
-        todayMoney={today.money}
-        receivablesTotal={piutang}
-        loading={loading}
-        compact={isMobile}
-      />
-    </Box>
-
-    {/* Quick Stats Grid */}
-    <Box sx={{ 
-      display: 'grid', 
-      gridTemplateColumns: { 
-        xs: '1fr', 
-        sm: '1fr 1fr',
-        md: '2fr 1fr' 
-      }, 
-      gap: isMobile ? 2 : 3,
-      width: '100%'
-    }}>
-      {/* Financial Summary */}
-      <Paper elevation={2} sx={{ p: isMobile ? 2 : 3, borderRadius: 2 }}>
-        <Typography variant="h6" gutterBottom fontWeight={600}>
-          Financial Overview
-        </Typography>
-        <FinancialSummaryCard
-          omzet={financialSummary.omzet}
-          hpp={financialSummary.hpp}
-          laba={financialSummary.laba}
-          margin={financialSummary.margin}
-          transactionCount={financialSummary.transactionCount}
-          totalQty={financialSummary.totalQty}
-          loading={loading}
-          compact={true}
-        />
-      </Paper>
-
-      {/* Business Intelligence */}
-      <Paper elevation={2} sx={{ p: isMobile ? 2 : 3, borderRadius: 2 }}>
-        <Typography variant="h6" gutterBottom fontWeight={600}>
-          Business Insights
-        </Typography>
-        <BusinessIntelligenceCard 
-          data={businessIntelligence} 
-          loading={advancedLoading} 
-          compact={true}
-        />
-      </Paper>
-    </Box>
-  </Stack>
-);
-
-const FinancialTab = ({ financialSummary, financialLoading, isMobile }) => (
-  <Stack spacing={isMobile ? 2 : 3}>
-    <Paper elevation={2} sx={{ p: isMobile ? 2 : 3, borderRadius: 2 }}>
-      <Typography variant="h5" gutterBottom fontWeight={600} color="primary">
-        Detailed Financial Analysis
-      </Typography>
-      <FinancialSummaryCard
-        omzet={financialSummary.omzet}
-        hpp={financialSummary.hpp}
-        laba={financialSummary.laba}
-        margin={financialSummary.margin}
-        transactionCount={financialSummary.transactionCount}
-        totalQty={financialSummary.totalQty}
-        loading={financialLoading}
-        showDetails={true}
-      />
-    </Paper>
-
-    {/* Additional Financial Metrics bisa ditambahkan di sini */}
-    <Box sx={{ 
-      display: 'grid', 
-      gridTemplateColumns: { 
-        xs: '1fr', 
-        sm: '1fr 1fr' 
-      }, 
-      gap: isMobile ? 2 : 3 
-    }}>
-      <Paper elevation={1} sx={{ p: 2, textAlign: 'center' }}>
-        <Typography variant="h4" color="primary" fontWeight={700}>
-          {fmtIDR(financialSummary.omzet)}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Total Revenue
-        </Typography>
-      </Paper>
+// 🔥 MOBILE-OPTIMIZED STYLES
+const DashboardStyles = () => (
+  <style>
+    {`
+      /* 🔥 STRICT DASHBOARD CONTAINMENT - MOBILE FIRST */
+      .dashboard-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+        box-sizing: border-box !important;
+      }
       
-      <Paper elevation={1} sx={{ p: 2, textAlign: 'center' }}>
-        <Typography variant="h4" color="success.main" fontWeight={700}>
-          {financialSummary.margin}%
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Profit Margin
-        </Typography>
-      </Paper>
-    </Box>
-  </Stack>
+      .dashboard-container * {
+        box-sizing: border-box !important;
+        max-width: 100% !important;
+      }
+      
+      /* Force all cards to be contained */
+      .dashboard-container .MuiCard-root {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: hidden !important;
+      }
+      
+      /* Allow horizontal scroll ONLY for tables with this class */
+      .dashboard-container .table-scroll-container {
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+      }
+      
+      /* Block horizontal scroll for everything else */
+      .dashboard-container > *:not(.table-scroll-container) {
+        overflow-x: hidden !important;
+      }
+      
+      /* Grid containment */
+      .dashboard-container .MuiGrid-item,
+      .dashboard-container .MuiGrid-container {
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+      
+      /* Mobile-specific optimizations */
+      @media (max-width: 768px) {
+        .dashboard-container {
+          padding: 0 !important;
+        }
+        
+        .dashboard-container .MuiCard-root {
+          margin: 8px !important;
+          border-radius: 12px !important;
+        }
+        
+        /* Improve touch targets */
+        .dashboard-container button {
+          min-height: 44px !important;
+          min-width: 44px !important;
+        }
+      }
+      
+      /* Small mobile optimizations */
+      @media (max-width: 480px) {
+        .dashboard-container .MuiCard-root {
+          margin: 6px !important;
+          border-radius: 10px !important;
+        }
+      }
+    `}
+  </style>
 );
 
-const AnalyticsTab = ({ series7, loading, businessIntelligence, advancedLoading, isMobile }) => (
-  <Stack spacing={isMobile ? 2 : 3}>
-    {/* 7 Days Chart */}
-    <Paper elevation={2} sx={{ p: isMobile ? 2 : 3, borderRadius: 2 }}>
-      <Typography variant="h5" gutterBottom fontWeight={600}>
-        Sales Trend (7 Days)
-      </Typography>
-      <SevenDaysChartCard 
-        loading={loading} 
-        compact={isMobile}
-      />
-    </Paper>
-
-    {/* Business Intelligence */}
-    <Paper elevation={2} sx={{ p: isMobile ? 2 : 3, borderRadius: 2 }}>
-      <Typography variant="h5" gutterBottom fontWeight={600}>
-        Business Intelligence
-      </Typography>
-      <BusinessIntelligenceCard 
-        data={businessIntelligence} 
-        loading={advancedLoading} 
-        compact={false}
-      />
-    </Paper>
-  </Stack>
-);
-
-const TransactionsTab = ({ recent, loading, isSmallMobile, openCustomerHistory }) => (
-  <Stack spacing={3}>
-    <Paper elevation={2} sx={{ p: { xs: 1, sm: 2, md: 3 }, borderRadius: 2 }}>
-      <Typography variant="h5" gutterBottom fontWeight={600}>
-        Recent Transactions
-      </Typography>
-      <Box
-        className="table-scroll-container"
-        sx={{
-          width: "100%",
-          overflowX: "auto",
-          WebkitOverflowScrolling: "touch",
-        }}
-      >
-        <RecentTransactionsTable
-          rows={recent}
-          loading={loading}
-          isSmallMobile={isSmallMobile}
-          onCustomerClick={openCustomerHistory}
-          sx={{ 
-            minWidth: isSmallMobile ? 500 : 650,
-            width: "100%",
-          }}
-        />
-      </Box>
-    </Paper>
-  </Stack>
-);
-
-const ReportsTab = ({ financialSummary, today, isMobile }) => (
-  <Stack spacing={isMobile ? 2 : 3}>
-    <Paper elevation={2} sx={{ p: isMobile ? 2 : 3, borderRadius: 2 }}>
-      <Typography variant="h5" gutterBottom fontWeight={600}>
-        Quick Reports
-      </Typography>
-      <Box sx={{ 
-        display: 'grid', 
-        gridTemplateColumns: { 
-          xs: '1fr', 
-          sm: '1fr 1fr',
-          md: '1fr 1fr 1fr' 
-        }, 
-        gap: 2 
-      }}>
-        {/* Report Cards */}
-        <Paper elevation={1} sx={{ p: 2, textAlign: 'center', bgcolor: 'primary.main', color: 'white' }}>
-          <Typography variant="h6">Today's Sales</Typography>
-          <Typography variant="h4" fontWeight={700}>
-            {fmtIDR(today.money)}
-          </Typography>
-          <Typography variant="body2">{today.qty} units</Typography>
-        </Paper>
-
-        <Paper elevation={1} sx={{ p: 2, textAlign: 'center', bgcolor: 'secondary.main', color: 'white' }}>
-          <Typography variant="h6">Total Transactions</Typography>
-          <Typography variant="h4" fontWeight={700}>
-            {financialSummary.transactionCount}
-          </Typography>
-          <Typography variant="body2">All time</Typography>
-        </Paper>
-
-        <Paper elevation={1} sx={{ p: 2, textAlign: 'center', bgcolor: 'success.main', color: 'white' }}>
-          <Typography variant="h6">Profit Margin</Typography>
-          <Typography variant="h4" fontWeight={700}>
-            {financialSummary.margin}%
-          </Typography>
-          <Typography variant="body2">Efficiency</Typography>
-        </Paper>
-      </Box>
-    </Paper>
-
-    {/* Export Options */}
-    <Paper elevation={1} sx={{ p: 3, textAlign: 'center' }}>
-      <Typography variant="h6" gutterBottom>
-        Generate Detailed Reports
-      </Typography>
-      <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
-        <IconButton color="primary" sx={{ border: 1, p: 2 }}>
-          <ReportIcon />
-          <Typography variant="body2" sx={{ ml: 1 }}>PDF Report</Typography>
-        </IconButton>
-        <IconButton color="success" sx={{ border: 1, p: 2 }}>
-          <AssessmentIcon />
-          <Typography variant="body2" sx={{ ml: 1 }}>Excel Export</Typography>
-        </IconButton>
-      </Box>
-    </Paper>
-  </Stack>
-);
-
-// Main Component
 export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const isSmallMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { settings } = useSettings();
 
-  // State management (tetap sama dengan sebelumnya)
+  // State (tetap sama...)
   const [stocks, setStocks] = useState(stocksFromApp);
   const [series7, setSeries7] = useState([]);
   const [piutang, setPiutang] = useState(0);
@@ -358,99 +147,171 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
   const [financialLoading, setFinancialLoading] = useState(true);
+
+  // Advanced
   const [stockPrediction, setStockPrediction] = useState(null);
   const [businessIntelligence, setBusinessIntelligence] = useState(null);
   const [advancedLoading, setAdvancedLoading] = useState(true);
+
+  // Modal
   const [openHist, setOpenHist] = useState(false);
   const [histName, setHistName] = useState("");
   const [histRows, setHistRows] = useState([]);
   const [histLoading, setHistLoading] = useState(false);
   const [histTotalQty, setHistTotalQty] = useState(0);
 
-  // Tab state
-  const [activeTab, setActiveTab] = useState(0);
+  const busyRef = useRef(false);
+  const idleTimer = useRef(null);
 
-  // Effects dan logic lainnya TETAP SAMA seperti kode awal Anda
-  // ... (semua useEffect, event handlers, dll tetap sama)
+  // Effects (tetap sama...)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const snap = await DataService.getDashboardSnapshot({ revalidate: true });
+        if (!alive) return;
+        setStocks(snap.stocks || { ISI: 0, KOSONG: 0 });
+        setSeries7(snap.sevenDays || []);
+        setPiutang(snap.receivables || 0);
+        setRecent(snap.recentSales || []);
+        setLoading(false);
+      } catch (e) {
+        if (!alive) return;
+        setErr(e.message || "Gagal memuat dashboard");
+        setLoading(false);
+      }
+    })();
 
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
-  };
+    const onSnap = (e) => {
+      const d = e?.detail || {};
+      setStocks(d.stocks || { ISI: 0, KOSONG: 0 });
+      setSeries7(Array.isArray(d.sevenDays) ? d.sevenDays : []);
+      setPiutang(Number.isFinite(d.receivables) ? d.receivables : 0);
+      setRecent(Array.isArray(d.recentSales) ? d.recentSales : []);
+    };
+    window.addEventListener("dashboard:snapshot", onSnap);
+    return () => {
+      alive = false;
+      window.removeEventListener("dashboard:snapshot", onSnap);
+    };
+  }, []);
 
-  const tabs = [
-    {
-      label: 'Overview',
-      icon: <DashboardIcon />,
-      badge: 0,
-      component: (
-        <OverviewTab
-          financialSummary={financialSummary}
-          stockPrediction={stockPrediction}
-          businessIntelligence={businessIntelligence}
-          loading={loading}
-          advancedLoading={advancedLoading}
-          isi={Number(stocks?.ISI || 0)}
-          kosong={Number(stocks?.KOSONG || 0)}
-          today={today}
-          piutang={piutang}
-          isMobile={isMobile}
-        />
-      )
-    },
-    {
-      label: 'Financial',
-      icon: <TrendingUpIcon />,
-      badge: 0,
-      component: (
-        <FinancialTab
-          financialSummary={financialSummary}
-          financialLoading={financialLoading}
-          isMobile={isMobile}
-        />
-      )
-    },
-    {
-      label: 'Analytics',
-      icon: <AnalyticsIcon />,
-      badge: 0,
-      component: (
-        <AnalyticsTab
-          series7={series7}
-          loading={loading}
-          businessIntelligence={businessIntelligence}
-          advancedLoading={advancedLoading}
-          isMobile={isMobile}
-        />
-      )
-    },
-    {
-      label: 'Transactions',
-      icon: <ReceiptIcon />,
-      badge: recent.length > 0 ? recent.length : 0,
-      component: (
-        <TransactionsTab
-          recent={recent}
-          loading={loading}
-          isSmallMobile={isSmallMobile}
-          openCustomerHistory={openCustomerHistory}
-        />
-      )
-    },
-    {
-      label: 'Reports',
-      icon: <ReportIcon />,
-      badge: 0,
-      component: (
-        <ReportsTab
-          financialSummary={financialSummary}
-          today={today}
-          isMobile={isMobile}
-        />
-      )
-    }
-  ];
+  // 2) Financial summary
+  useEffect(() => {
+    let alive = true;
+    const run = async () => {
+      try {
+        setFinancialLoading(true);
+        const summary = await DataService.getFinancialSummary({
+          from: "2000-01-01",
+          to: todayStr(),
+          hppPerUnit: Number(settings.hpp || 0),
+        });
+        if (!alive) return;
+        setFinancialSummary(summary);
+      } catch (error) {
+        // Fallback manual
+        try {
+          const salesData = await DataService.getSalesHistory({
+            from: "2000-01-01",
+            to: todayStr(),
+            method: "ALL",
+            status: "ALL",
+            limit: 10000,
+          });
+          if (!alive) return;
+          const paid = salesData.filter((s) => {
+            const m = String(s.method || "").toUpperCase();
+            const st = String(s.status || "").toUpperCase();
+            if (st === "DIBATALKAN") return false;
+            if (m === "TUNAI") return true;
+            if (st === "LUNAS") return true;
+            return false;
+          });
+          const omzet = paid.reduce((a, s) => a + (Number(s.total) || 0), 0);
+          const totalQty = paid.reduce((a, s) => a + (Number(s.qty) || 0), 0);
+          const hpp = totalQty * Number(settings.hpp || 0);
+          const laba = omzet - hpp;
+          const margin = omzet > 0 ? Math.round((laba / omzet) * 100) : 0;
+          setFinancialSummary({ omzet, hpp, laba, margin, totalQty, transactionCount: paid.length });
+        } finally {}
+      } finally {
+        if (alive) setFinancialLoading(false);
+      }
+    };
+    run();
+    return () => { alive = false; };
+  }, [settings.hpp]);
 
-  // Modal handler (tetap sama)
+  // 3) Advanced features
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setAdvancedLoading(true);
+        const [prediction, intelligence] = await Promise.all([
+          DataService.getStockPrediction(30).catch(() => null),
+          DataService.getCurrentMonthBusinessIntelligence().catch(() => null),
+        ]);
+        if (!alive) return;
+        setStockPrediction(prediction);
+        setBusinessIntelligence(intelligence);
+      } finally {
+        if (alive) setAdvancedLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // 4) Realtime
+  useEffect(() => {
+    const askRevalidate = () => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      DataService.getDashboardSnapshot({ revalidate: true });
+      clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(() => (busyRef.current = false), 1200);
+    };
+    const ch = supabase
+      .channel("dashboard-rt-lite")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, askRevalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "stocks" }, askRevalidate)
+      .subscribe();
+    return () => {
+      try { supabase.removeChannel(ch); } catch {}
+      clearTimeout(idleTimer.current);
+    };
+  }, []);
+
+  // 5) 7 days recompute
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const from = new Date(); from.setDate(from.getDate() - 6); from.setHours(0,0,0,0);
+        const to = new Date();
+        const rows = await DataService.loadSalesByDateRange?.(from.toISOString(), to.toISOString()).catch(() => []);
+        if (!alive) return;
+        setSeries7(buildLast7DaysSeries(rows || []));
+      } catch (e) {}
+    })();
+    return () => { alive = false; };
+  }, [recent, today, stocks]);
+
+  // 6) Today
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const todaySum = await DataService.getSalesSummary({ from: todayStr(), to: todayStr() });
+        if (!alive) return;
+        setToday(todaySum || { qty: 0, money: 0 });
+      } catch {}
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Modal handlers
   const openCustomerHistory = async (name) => {
     setHistName(name);
     setOpenHist(true);
@@ -467,144 +328,217 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
       setHistLoading(false);
     }
   };
-
   const closeCustomerHistory = () => setOpenHist(false);
 
+  const isi = Number(stocks?.ISI || 0);
+  const kosong = Number(stocks?.KOSONG || 0);
+
   return (
-    <Box sx={{ flexGrow: 1, bgcolor: 'background.default', minHeight: '100vh' }}>
-      {/* App Bar dengan Tabs */}
-      <AppBar 
-        position="static" 
-        elevation={0}
-        sx={{ 
-          bgcolor: 'background.paper',
-          color: 'text.primary',
-          borderBottom: `1px solid ${theme.palette.divider}`
+    <>
+      {/* 🔥 MOBILE-OPTIMIZED STYLES */}
+      <DashboardStyles />
+      
+      {/* 🔥 MAIN CONTAINER dengan mobile optimization */}
+      <Box
+        className="dashboard-container"
+        sx={{
+          width: "100%",
+          maxWidth: "100%",
+          overflowX: "hidden",
+          overflowY: "auto",
+          minHeight: "100vh",
+          backgroundColor: theme.palette.background.default,
+          boxSizing: "border-box",
+          position: "relative",
+          // Mobile-specific padding
+          px: isMobile ? 0 : 3,
+          py: isMobile ? 0 : 2,
         }}
       >
-        <Toolbar variant={isMobile ? "dense" : "regular"} sx={{ 
-          minHeight: { xs: 56, md: 64 },
-          px: { xs: 1, sm: 2, md: 3 }
-        }}>
-          <Typography 
-            variant="h6" 
-            component="div" 
-            sx={{ 
-              flexGrow: 0,
-              mr: 4,
-              display: { xs: 'none', sm: 'block' },
-              fontWeight: 700,
-              color: theme.palette.primary.main
-            }}
-          >
-            🏠 BUSINESS DASHBOARD
-          </Typography>
-          
-          <Typography 
-            variant="h6" 
-            component="div" 
-            sx={{ 
-              flexGrow: 0,
-              mr: 4,
-              display: { xs: 'block', sm: 'none' },
-              fontWeight: 700
-            }}
-          >
-            🏠 DASHBOARD
-          </Typography>
+        <Stack 
+          spacing={isMobile ? 1.5 : 3} 
+          sx={{ 
+            p: isMobile ? 1 : 3,
+            width: "100%",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            minHeight: "fit-content",
+          }}
+        >
+          <HeaderSection />
 
-          <Tabs
-            value={activeTab}
-            onChange={handleTabChange}
-            variant={isMobile ? "scrollable" : "standard"}
-            scrollButtons="auto"
-            allowScrollButtonsMobile
-            sx={{
-              flexGrow: 1,
-              '& .MuiTab-root': {
-                minHeight: { xs: 48, md: 64 },
-                minWidth: { xs: 80, md: 120 },
-                fontSize: { xs: '0.7rem', sm: '0.8rem', md: '0.875rem' },
-                fontWeight: 600,
-                textTransform: 'none',
-                '&.Mui-selected': {
-                  color: theme.palette.primary.main,
+          {err && <ErrorBanner message={err} />}
+
+          {/* KpiStrip - Mobile optimized */}
+          <Box sx={{ 
+            width: "100%", 
+            maxWidth: "100%", 
+            overflow: "hidden",
+            px: isMobile ? 0.5 : 0 
+          }}>
+            <KpiStrip
+              financialData={financialSummary}
+              stockPrediction={stockPrediction}
+              businessIntel={businessIntelligence}
+              loading={loading || advancedLoading}
+            />
+          </Box>
+
+          {/* SummaryTiles - Mobile optimized */}
+          <Box sx={{ 
+            width: "100%", 
+            maxWidth: "100%", 
+            overflow: "hidden",
+            px: isMobile ? 0.5 : 0 
+          }}>
+            <SummaryTiles
+              isi={isi}
+              kosong={kosong}
+              todayQty={today.qty}
+              todayMoney={today.money}
+              receivablesTotal={piutang}
+              loading={loading}
+            />
+          </Box>
+
+          {/* Grid utama dengan mobile optimization */}
+          <Grid 
+            container 
+            spacing={isMobile ? 1.5 : 3} 
+            sx={{ 
+              width: "100%", 
+              maxWidth: "100%",
+              margin: 0,
+              "& .MuiGrid-item": {
+                width: "100%",
+                maxWidth: "100%",
+                overflow: "hidden",
+                "& > *": {
+                  width: "100% !important",
+                  maxWidth: "100% !important"
                 }
-              },
-              '& .MuiTabs-indicator': {
-                backgroundColor: theme.palette.primary.main,
-                height: 3
               }
             }}
           >
-            {tabs.map((tab, index) => (
-              <Tab
-                key={index}
-                icon={
-                  <Badge 
-                    badgeContent={tab.badge} 
-                    color="error" 
-                    invisible={tab.badge === 0}
-                    sx={{ 
-                      '& .MuiBadge-badge': {
-                        fontSize: '0.6rem',
-                        height: 16,
-                        minWidth: 16
+            {/* Kolom kiri - Full width di mobile */}
+            <Grid item xs={12} lg={6}>
+              <Stack spacing={isMobile ? 1.5 : 3} sx={{ width: "100%", maxWidth: "100%" }}>
+                <Box sx={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}>
+                  <FinancialSummaryCard
+                    omzet={financialSummary.omzet}
+                    hpp={financialSummary.hpp}
+                    laba={financialSummary.laba}
+                    margin={financialSummary.margin}
+                    transactionCount={financialSummary.transactionCount}
+                    totalQty={financialSummary.totalQty}
+                    loading={financialLoading}
+                  />
+                </Box>
+
+                {/* SevenDaysChartCard - Mobile optimized */}
+                <Box sx={{ 
+                  width: "100%", 
+                  maxWidth: "100%",
+                  overflow: "hidden",
+                }}>
+                  <SevenDaysChartCard loading={loading} />
+                </Box>
+              </Stack>
+            </Grid>
+
+            {/* Kolom kanan - Full width di mobile */}
+            <Grid item xs={12} lg={6}>
+              <Stack spacing={isMobile ? 1.5 : 3} sx={{ width: "100%", maxWidth: "100%" }}>
+                {/* Business Intelligence - Always accordion di mobile */}
+                <Box sx={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}>
+                  <Accordion 
+                    elevation={isMobile ? 0 : 1}
+                    sx={{
+                      width: "100%",
+                      maxWidth: "100%",
+                      "&.MuiAccordion-root": {
+                        borderRadius: isMobile ? 2 : 2,
+                        overflow: "hidden",
+                        width: "100%",
+                        border: `1px solid ${theme.palette.divider}`,
+                        background: isMobile ? theme.palette.background.paper : 'inherit'
                       }
                     }}
                   >
-                    {tab.icon}
-                  </Badge>
-                }
-                label={isMobile ? '' : tab.label}
-                iconPosition="start"
-                sx={{
-                  minWidth: 'auto',
-                  px: { xs: 1, sm: 2, md: 3 }
-                }}
-              />
-            ))}
-          </Tabs>
+                    <AccordionSummary 
+                      expandIcon={<ExpandMoreIcon />}
+                      sx={{
+                        minHeight: isMobile ? 48 : 56,
+                        "& .MuiAccordionSummary-content": {
+                          my: 1,
+                          width: "100%",
+                          maxWidth: "100%",
+                        }
+                      }}
+                    >
+                      <Typography variant={isMobile ? "subtitle2" : "subtitle1"} fontWeight={700} noWrap>
+                        Business Intelligence
+                      </Typography>
+                    </AccordionSummary>
+                    <AccordionDetails sx={{ p: isMobile ? 1 : 2, width: "100%", maxWidth: "100%" }}>
+                      <BusinessIntelligenceCard 
+                        data={businessIntelligence} 
+                        loading={advancedLoading} 
+                        compact={isMobile}
+                      />
+                    </AccordionDetails>
+                  </Accordion>
+                </Box>
 
-          {/* Action Icons */}
-          <Box sx={{ display: 'flex', gap: { xs: 0.5, sm: 1 } }}>
-            <IconButton size="small" color="inherit">
-              <Badge badgeContent={4} color="error">
-                <NotificationsIcon fontSize={isMobile ? "small" : "medium"} />
-              </Badge>
-            </IconButton>
-            <IconButton size="small" color="inherit">
-              <SettingsIcon fontSize={isMobile ? "small" : "medium"} />
-            </IconButton>
-          </Box>
-        </Toolbar>
-      </AppBar>
+                {/* Recent Transactions - 🔥 MOBILE SCROLL AREA */}
+                <Box
+                  className="table-scroll-container"
+                  sx={{
+                    width: "100%",
+                    maxWidth: "100%",
+                    overflowX: "auto",
+                    overflowY: "hidden",
+                    WebkitOverflowScrolling: "touch",
+                    "&::-webkit-scrollbar": { 
+                      height: 6,
+                      backgroundColor: theme.palette.grey[100],
+                    },
+                    "&::-webkit-scrollbar-thumb": {
+                      backgroundColor: theme.palette.grey[400],
+                      borderRadius: 3,
+                    },
+                    scrollbarWidth: "thin",
+                    overscrollBehaviorX: "contain",
+                    border: `1px solid ${theme.palette.divider}`,
+                    borderRadius: 2,
+                    p: isMobile ? 0.5 : 1,
+                    backgroundColor: theme.palette.background.paper,
+                  }}
+                >
+                  <RecentTransactionsTable
+                    rows={recent}
+                    loading={loading}
+                    isSmallMobile={isSmallMobile}
+                    sx={{ 
+                      minWidth: isSmallMobile ? 500 : 650,
+                      width: "100%",
+                    }}
+                  />
+                </Box>
+              </Stack>
+            </Grid>
+          </Grid>
 
-      {/* Main Content Area */}
-      <Box sx={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
-        {err && (
-          <Box sx={{ px: { xs: 1, sm: 2, md: 3 }, pt: 2 }}>
-            <ErrorBanner message={err} />
-          </Box>
-        )}
-
-        {/* Tab Content */}
-        {tabs.map((tab, index) => (
-          <TabPanel key={index} value={activeTab} index={index}>
-            {tab.component}
-          </TabPanel>
-        ))}
+          <CustomerHistoryModal
+            open={openHist}
+            customerName={histName}
+            rows={histRows}
+            totalQty={histTotalQty}
+            loading={histLoading}
+            onClose={closeCustomerHistory}
+          />
+        </Stack>
       </Box>
-
-      {/* Modal */}
-      <CustomerHistoryModal
-        open={openHist}
-        customerName={histName}
-        rows={histRows}
-        totalQty={histTotalQty}
-        loading={histLoading}
-        onClose={closeCustomerHistory}
-      />
-    </Box>
+    </>
   );
 }
