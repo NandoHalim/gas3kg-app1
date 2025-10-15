@@ -34,35 +34,36 @@ import {
   Paper,
   TextField,
   InputAdornment,
+  useTheme,
+  useMediaQuery,
+  AppBar,
 } from "@mui/material";
 import PaidIcon from "@mui/icons-material/PriceCheck";
 import SearchIcon from "@mui/icons-material/Search";
 import ReplayIcon from "@mui/icons-material/Replay";
 import CreditScoreIcon from "@mui/icons-material/CreditScore";
+import CloseIcon from "@mui/icons-material/Close";
 
 export default function TransaksiView({ stocks = {}, onSaved }) {
   const toast = useToast();
   const { settings } = useSettings();
-  const [tab, setTab] = useState("penjualan"); // 'penjualan' | 'hutang'
-
-  // Pencarian hutang
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
+  const [tab, setTab] = useState("penjualan");
   const [q, setQ] = useState("");
   const [debts, setDebts] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  // Daftar pelanggan unik dari riwayat transaksi (untuk Autocomplete di PenjualanView)
   const [customerList, setCustomerList] = useState([]);
-
-  // Dialog bayar hutang
   const [paying, setPaying] = useState(null);
   const payingTotal = Number(paying?.total || 0);
 
-  // Ambil daftar pelanggan unik sekali di awal
   useEffect(() => {
     let on = true;
     (async () => {
       try {
-        const rows = await DataService.loadSales(300); // ambil 300 transaksi terakhir
+        const rows = await DataService.loadSales(300);
         const uniq = Array.from(new Set((rows || []).map((r) => (r.customer || "").trim()))).filter(Boolean);
         if (on) setCustomerList(uniq);
       } catch (e) {
@@ -72,7 +73,6 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
     return () => { on = false; };
   }, []);
 
-  // Muat daftar hutang saat tab=hutang / query berubah
   useEffect(() => {
     let on = true;
     (async () => {
@@ -88,7 +88,6 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
       }
     })();
     return () => { on = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, q]);
 
   const onPaid = async () => {
@@ -118,29 +117,48 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
   };
 
   return (
-    <Stack spacing={2} sx={{ pb: { xs: 8, md: 2 } }}>
-      {/* Header + Tabs */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          Transaksi
-        </Typography>
-        <Box sx={{ ml: "auto" }} />
-        <Tabs
-          value={tab}
-          onChange={(_, v) => setTab(v)}
-          sx={{
-            minHeight: 48,
-            "& .MuiTab-root": { minHeight: 48, textTransform: "none" },
-          }}
-          textColor="primary"
-          indicatorColor="primary"
-        >
-          <Tab value="penjualan" icon={<CreditScoreIcon />} iconPosition="start" label="Penjualan Baru" />
-          <Tab value="hutang" icon={<PaidIcon />} iconPosition="start" label="Bayar Hutang" />
-        </Tabs>
-      </Box>
+    <Box sx={{ pb: { xs: 8, md: 2 } }}>
+      {/* Header + Tabs - Mobile Optimized */}
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ p: 2 }}>
+          <Stack spacing={2}>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              Transaksi
+            </Typography>
+            
+            <Tabs
+              value={tab}
+              onChange={(_, v) => setTab(v)}
+              variant={isMobile ? "fullWidth" : "standard"}
+              sx={{
+                minHeight: 48,
+                "& .MuiTab-root": { 
+                  minHeight: 48, 
+                  textTransform: "none",
+                  fontSize: isSmallMobile ? '0.75rem' : '0.875rem'
+                },
+              }}
+              textColor="primary"
+              indicatorColor="primary"
+            >
+              <Tab 
+                value="penjualan" 
+                icon={<CreditScoreIcon />} 
+                iconPosition="start" 
+                label={isSmallMobile ? "Penjualan" : "Penjualan Baru"} 
+              />
+              <Tab 
+                value="hutang" 
+                icon={<PaidIcon />} 
+                iconPosition="start" 
+                label={isSmallMobile ? "Hutang" : "Bayar Hutang"} 
+              />
+            </Tabs>
+          </Stack>
+        </CardContent>
+      </Card>
 
-      {/* TAB: PENJUALAN — langsung render form */}
+      {/* TAB: PENJUALAN */}
       {tab === "penjualan" && (
         <PenjualanView
           stocks={stocks}
@@ -155,142 +173,202 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
       {/* TAB: HUTANG */}
       {tab === "hutang" && (
         <Stack spacing={2}>
-          <Card
-            title="Cari Hutang"
-            action={
-              <Tooltip title="Muat ulang">
-                <span>
-                  <IconButton onClick={() => setQ((s) => s)} disabled={loading}>
-                    <ReplayIcon />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            }
-          >
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="flex-end">
-              <Box sx={{ flex: 1 }}>
-                <TextField
-                  fullWidth
-                  placeholder="Cari nama pelanggan / catatan…"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  disabled={loading}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Box>
-              <Button
-                className="secondary"
-                onClick={() => setQ("")}
-                disabled={loading}
-                startIcon={<ReplayIcon />}
-                sx={{ textTransform: "none", minWidth: 100 }}
-              >
-                Reset
-              </Button>
-            </Stack>
-            <Box sx={{ mt: 1, fontSize: 12, color: COLORS.secondary }}>
-              Menampilkan transaksi dengan metode <b>HUTANG</b>. Pembayaran wajib <b>lunas</b>.
-            </Box>
+          {/* Search Card */}
+          <Card>
+            <CardContent sx={{ p: 2 }}>
+              <Stack spacing={2}>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <SearchIcon color="action" />
+                  <Typography variant="h6">Cari Hutang</Typography>
+                  <Box sx={{ flexGrow: 1 }} />
+                  <Tooltip title="Muat ulang">
+                    <IconButton 
+                      onClick={() => setQ((s) => s)} 
+                      disabled={loading}
+                      size="small"
+                    >
+                      <ReplayIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="flex-end">
+                  <TextField
+                    fullWidth
+                    placeholder="Cari nama pelanggan / catatan..."
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    disabled={loading}
+                    size="small"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                  <Button
+                    className="secondary"
+                    onClick={() => setQ("")}
+                    disabled={loading}
+                    startIcon={<ReplayIcon />}
+                    sx={{ textTransform: "none", minWidth: 100 }}
+                    size="small"
+                  >
+                    Reset
+                  </Button>
+                </Stack>
+                
+                <Typography variant="caption" color="text.secondary">
+                  Menampilkan transaksi dengan metode <b>HUTANG</b>. Pembayaran wajib <b>lunas</b>.
+                </Typography>
+              </Stack>
+            </CardContent>
           </Card>
 
-          <Card title="Daftar Hutang" collapsible defaultExpanded sx={{ overflow: "hidden" }}>
-            {loading ? (
-              <Stack spacing={1}>
-                {[...Array(3)].map((_, i) => <Skeleton key={i} height={36} />)}
-              </Stack>
-            ) : (
-              <TableContainer component={Paper} sx={{ borderRadius: 1.5 }}>
-                <Table size="medium" sx={{ minWidth: 650 }}>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Tanggal</TableCell>
-                      <TableCell>Pelanggan</TableCell>
-                      <TableCell align="right">Qty</TableCell>
-                      <TableCell align="right">Harga</TableCell>
-                      <TableCell align="right">Total</TableCell>
-                      <TableCell align="center">Aksi</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {!debts.length && (
+          {/* Debt List Card */}
+          <Card>
+            <CardHeader title="Daftar Hutang" />
+            <CardContent sx={{ p: 0 }}>
+              {loading ? (
+                <Box sx={{ p: 2 }}>
+                  <Stack spacing={1}>
+                    {[...Array(3)].map((_, i) => (
+                      <Skeleton key={i} height={48} variant="rounded" />
+                    ))}
+                  </Stack>
+                </Box>
+              ) : (
+                <TableContainer 
+                  component={Paper} 
+                  elevation={0}
+                  sx={{ 
+                    borderRadius: 0,
+                    maxHeight: isMobile ? 'calc(100vh - 300px)' : '500px'
+                  }}
+                >
+                  <Table 
+                    size={isMobile ? "small" : "medium"} 
+                    stickyHeader
+                  >
+                    <TableHead>
                       <TableRow>
-                        <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                          <Box sx={{ color: "text.secondary" }}>
-                            <Typography variant="body2" gutterBottom>📊 Tidak ada data</Typography>
-                            <Typography variant="body2">Data akan muncul di sini setelah ada transaksi hutang</Typography>
-                          </Box>
-                        </TableCell>
+                        <TableCell>Tanggal</TableCell>
+                        <TableCell>Pelanggan</TableCell>
+                        {!isSmallMobile && <TableCell align="right">Qty</TableCell>}
+                        {!isMobile && <TableCell align="right">Harga</TableCell>}
+                        <TableCell align="right">Total</TableCell>
+                        <TableCell align="center">Aksi</TableCell>
                       </TableRow>
-                    )}
-                    {debts.map((d) => {
-                      const isLunas = String(d.status || "").toUpperCase() === "LUNAS";
-                      return (
-                        <TableRow key={d.id} hover>
-                          <TableCell sx={{ whiteSpace: "nowrap" }}>
-                            {(d.created_at || "").slice(0, 10)}
-                          </TableCell>
-                          <TableCell>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <Chip
-                                size="small"
-                                label={isLunas ? "LUNAS" : "HUTANG"}
-                                color={isLunas ? "success" : "error"}
-                                variant="outlined"
-                              />
-                              <Typography>{d.customer || "PUBLIC"}</Typography>
-                            </Stack>
-                          </TableCell>
-                          <TableCell align="right">{d.qty}</TableCell>
-                          <TableCell align="right">{fmtIDR(d.price)}</TableCell>
-                          <TableCell align="right"><b>{fmtIDR(d.total)}</b></TableCell>
-                          <TableCell align="center">
-                            <Tooltip title="Bayar hutang">
-                              <span>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  onClick={() =>
-                                    setPaying({
-                                      id: d.id,
-                                      customer: d.customer,
-                                      total: d.total,
-                                      created_at: d.created_at,
-                                    })
-                                  }
-                                  disabled={loading || (Number(d.total) || 0) <= 0}
-                                  sx={{ textTransform: "none", minWidth: 100 }}
-                                >
-                                  Bayar
-                                </Button>
-                              </span>
-                            </Tooltip>
+                    </TableHead>
+                    <TableBody>
+                      {!debts.length && (
+                        <TableRow>
+                          <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                            <Box sx={{ color: "text.secondary" }}>
+                              <Typography variant="body2" gutterBottom>📊 Tidak ada data hutang</Typography>
+                              <Typography variant="caption">
+                                Data akan muncul di sini setelah ada transaksi hutang
+                              </Typography>
+                            </Box>
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
+                      )}
+                      {debts.map((d) => {
+                        const isLunas = String(d.status || "").toUpperCase() === "LUNAS";
+                        return (
+                          <TableRow key={d.id} hover>
+                            <TableCell sx={{ whiteSpace: "nowrap" }}>
+                              {(d.created_at || "").slice(0, 10)}
+                            </TableCell>
+                            <TableCell>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Chip
+                                  size="small"
+                                  label={isLunas ? "LUNAS" : "HUTANG"}
+                                  color={isLunas ? "success" : "error"}
+                                  variant={isLunas ? "filled" : "outlined"}
+                                />
+                                <Typography variant="body2">
+                                  {d.customer || "PUBLIC"}
+                                </Typography>
+                              </Stack>
+                            </TableCell>
+                            {!isSmallMobile && (
+                              <TableCell align="right">{d.qty}</TableCell>
+                            )}
+                            {!isMobile && (
+                              <TableCell align="right">{fmtIDR(d.price)}</TableCell>
+                            )}
+                            <TableCell align="right">
+                              <Typography fontWeight={600}>
+                                {fmtIDR(d.total)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="center">
+                              <Tooltip title="Bayar hutang">
+                                <span>
+                                  <Button
+                                    size="small"
+                                    variant={isLunas ? "outlined" : "contained"}
+                                    onClick={() =>
+                                      setPaying({
+                                        id: d.id,
+                                        customer: d.customer,
+                                        total: d.total,
+                                        created_at: d.created_at,
+                                      })
+                                    }
+                                    disabled={loading || isLunas || (Number(d.total) || 0) <= 0}
+                                    sx={{ textTransform: "none", minWidth: 80 }}
+                                    color={isLunas ? "success" : "primary"}
+                                  >
+                                    {isLunas ? "Lunas" : "Bayar"}
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </CardContent>
           </Card>
         </Stack>
       )}
 
-      {/* DIALOG BAYAR HUTANG */}
-      <Dialog open={!!paying} onClose={() => setPaying(null)} fullWidth maxWidth="sm">
-        <DialogTitle>Bayar Hutang</DialogTitle>
-        <DialogContent dividers>
+      {/* Payment Dialog */}
+      <Dialog 
+        open={!!paying} 
+        onClose={() => setPaying(null)} 
+        fullWidth 
+        maxWidth="sm"
+        fullScreen={isSmallMobile}
+      >
+        {isSmallMobile && (
+          <AppBar position="static" elevation={1}>
+            <Toolbar>
+              <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+                Bayar Hutang
+              </Typography>
+              <IconButton edge="end" color="inherit" onClick={() => setPaying(null)}>
+                <CloseIcon />
+              </IconButton>
+            </Toolbar>
+          </AppBar>
+        )}
+        {!isSmallMobile && <DialogTitle>Bayar Hutang</DialogTitle>}
+        
+        <DialogContent dividers sx={{ pt: isSmallMobile ? 2 : 1 }}>
           {paying ? (
-            <Stack spacing={1.5}>
+            <Stack spacing={2}>
               <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Typography color="text.secondary">Pelanggan</Typography>
-                <Typography fontWeight={700}>{paying.customer || "PUBLIC"}</Typography>
+                <Typography fontWeight={600}>{paying.customer || "PUBLIC"}</Typography>
               </Stack>
               <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Typography color="text.secondary">Tanggal</Typography>
@@ -298,10 +376,18 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
               </Stack>
               <Divider />
               <Stack direction="row" alignItems="center" justifyContent="space-between">
-                <Typography>Total Tagihan</Typography>
-                <Typography variant="h6">{fmtIDR(payingTotal)}</Typography>
+                <Typography variant="h6">Total Tagihan</Typography>
+                <Typography variant="h6" color="primary.main">
+                  {fmtIDR(payingTotal)}
+                </Typography>
               </Stack>
-              <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: "#f8fafc", fontSize: 12, color: "text.secondary" }}>
+              <Box sx={{ 
+                p: 2, 
+                borderRadius: 1, 
+                bgcolor: "success.light", 
+                color: "success.contrastText",
+                fontSize: 14 
+              }}>
                 Nominal <b>dikunci</b> sama dengan total. Transaksi akan ditandai <b>LUNAS</b>.
               </Box>
             </Stack>
@@ -311,15 +397,29 @@ export default function TransaksiView({ stocks = {}, onSaved }) {
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button className="secondary" onClick={() => setPaying(null)} disabled={loading} sx={{ textTransform: "none", minWidth: 100 }}>
+        <DialogActions sx={{ p: 2 }}>
+          <Button 
+            className="secondary" 
+            onClick={() => setPaying(null)} 
+            disabled={loading}
+            sx={{ textTransform: "none" }}
+            size={isSmallMobile ? "large" : "medium"}
+            fullWidth={isSmallMobile}
+          >
             Batal
           </Button>
-          <Button onClick={onPaid} disabled={loading} sx={{ textTransform: "none", minWidth: 100 }}>
-            {loading ? "Menyimpan…" : "Simpan"}
+          <Button 
+            onClick={onPaid} 
+            disabled={loading}
+            variant="contained"
+            sx={{ textTransform: "none" }}
+            size={isSmallMobile ? "large" : "medium"}
+            fullWidth={isSmallMobile}
+          >
+            {loading ? "Menyimpan..." : "Bayar Hutang"}
           </Button>
         </DialogActions>
       </Dialog>
-    </Stack>
+    </Box>
   );
 }
