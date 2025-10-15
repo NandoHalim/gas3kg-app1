@@ -390,6 +390,9 @@ function processDataBasedOnMode(data, mode, month, year) {
 // ---------- Main Compact Card ----------
 export default function SevenDaysChartCard({ loading = false }) {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
   const [mode, setMode] = useState("7_hari");
   const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(new Date().getFullYear());
@@ -455,9 +458,16 @@ export default function SevenDaysChartCard({ loading = false }) {
     }
   }, [mode, month, year, months]);
 
-  // Optimized handlers
+  // Optimized handlers dengan layout stability
   const handleModeChange = useCallback((_, newMode) => {
-    if (newMode) setMode(newMode);
+    if (newMode) {
+      setMode(newMode);
+      // Reset filter ketika ganti mode untuk konsistensi layout
+      if (newMode !== "mingguan_bulan") {
+        setMonth(new Date().getMonth());
+        setYear(new Date().getFullYear());
+      }
+    }
   }, []);
 
   const handleMonthChange = useCallback((event) => {
@@ -524,19 +534,29 @@ export default function SevenDaysChartCard({ loading = false }) {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      boxSizing: 'border-box'
+      boxSizing: 'border-box',
+      // 🔥 FIXED: Prevent layout shift
+      minHeight: { xs: 500, sm: 550, md: 600 },
+      position: 'relative'
     }}>
       <CardHeader
         sx={{ 
-          py: 1.5, 
-          px: 2,
+          py: { xs: 1, sm: 1.5 }, 
+          px: { xs: 1.5, sm: 2 },
           bgcolor: "background.paper", 
           borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
           width: '100%',
-          boxSizing: 'border-box'
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          // 🔥 FIXED: Stable header height
+          minHeight: { xs: 64, sm: 72 },
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          gap: { xs: 1, sm: 0 }
         }}
         title={
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ width: '100%' }}>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ width: '100%', maxWidth: '100%' }}>
             <Box sx={{ 
               p: 0.5, 
               borderRadius: 0.5, 
@@ -545,11 +565,11 @@ export default function SevenDaysChartCard({ loading = false }) {
             }}>
               <TimelineIcon fontSize="small" color="primary" />
             </Box>
-            <Box flex={1} sx={{ minWidth: 0 }}>
-              <Typography variant="subtitle1" fontWeight={600} fontSize="0.9rem" noWrap>
+            <Box flex={1} sx={{ minWidth: 0, maxWidth: '100%' }}>
+              <Typography variant="subtitle1" fontWeight={600} fontSize={{ xs: '0.85rem', sm: '0.9rem' }} noWrap>
                 Tren Penjualan
               </Typography>
-              <Typography variant="caption" color="text.secondary" fontSize="0.7rem" noWrap>
+              <Typography variant="caption" color="text.secondary" fontSize={{ xs: '0.65rem', sm: '0.7rem' }} noWrap>
                 {headline}
               </Typography>
             </Box>
@@ -559,14 +579,31 @@ export default function SevenDaysChartCard({ loading = false }) {
                 color={summary.growth > 0 ? "success" : summary.growth < 0 ? "error" : "default"}
                 icon={summary.growth > 0 ? <TrendingUpIcon /> : <TrendingDownIcon />}
                 label={pct(summary.growth)} 
-                sx={{ height: 20, fontSize: '0.7rem', flexShrink: 0 }}
+                sx={{ 
+                  height: 20, 
+                  fontSize: { xs: '0.65rem', sm: '0.7rem' }, 
+                  flexShrink: 0,
+                  display: { xs: 'none', sm: 'flex' } // Hide on mobile to save space
+                }}
               />
             )}
           </Stack>
         }
         action={
-          <Box sx={{ flexShrink: 0 }}>
-            <Stack direction="row" spacing={0.5} alignItems="center">
+          <Box sx={{ 
+            flexShrink: 0,
+            width: { xs: '100%', sm: 'auto' },
+            maxWidth: '100%'
+          }}>
+            <Stack 
+              direction="row" 
+              spacing={0.5} 
+              alignItems="center"
+              sx={{ 
+                width: '100%',
+                justifyContent: { xs: 'space-between', sm: 'flex-end' }
+              }}
+            >
               <ToggleButtonGroup 
                 size="small" 
                 color="primary" 
@@ -577,10 +614,12 @@ export default function SevenDaysChartCard({ loading = false }) {
                   backgroundColor: alpha(theme.palette.primary.main, 0.04), 
                   borderRadius: 1,
                   '& .MuiToggleButton-root': {
-                    px: 1,
+                    px: { xs: 0.75, sm: 1 },
                     py: 0.5,
-                    fontSize: '0.7rem',
-                    minWidth: 'auto'
+                    fontSize: { xs: '0.65rem', sm: '0.7rem' },
+                    minWidth: { xs: 'auto', sm: 'auto' },
+                    // 🔥 FIXED: Consistent button width
+                    flex: { xs: 1, sm: 'none' }
                   }
                 }}
               >
@@ -591,7 +630,7 @@ export default function SevenDaysChartCard({ loading = false }) {
               </ToggleButtonGroup>
 
               <Tooltip title="Info tren penjualan">
-                <IconButton size="small">
+                <IconButton size="small" sx={{ flexShrink: 0 }}>
                   <InfoOutlinedIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -606,39 +645,84 @@ export default function SevenDaysChartCard({ loading = false }) {
         backgroundColor: "background.paper", 
         pt: 1, 
         pb: 1, 
-        px: 2,
+        px: { xs: 1.5, sm: 2 },
         flex: 1,
         overflow: 'auto',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        // 🔥 FIXED: Consistent content area height
+        minHeight: { xs: 300, sm: 350 }
       }}>
         {error && (
-          <Alert severity="warning" sx={{ mb: 1, borderRadius: 1, py: 0, width: '100%' }} size="small">
+          <Alert severity="warning" sx={{ 
+            mb: 1, 
+            borderRadius: 1, 
+            py: 0, 
+            width: '100%',
+            fontSize: { xs: '0.75rem', sm: '0.8rem' }
+          }} size="small">
             {error}
           </Alert>
         )}
 
-        {/* Filter controls untuk mode tertentu */}
+        {/* Filter controls untuk mode tertentu - 🔥 FIXED LAYOUT */}
         {(mode === "mingguan_bulan" || mode === "6_bulan") && (
-          <Stack direction="row" spacing={1} sx={{ mb: 1.5, width: '100%' }} alignItems="center" flexWrap="wrap">
-            <FormControl size="small" sx={{ minWidth: 80, flex: 1 }} disabled={isLoading || mode==="6_bulan"}>
+          <Stack 
+            direction={{ xs: 'column', sm: 'row' }} 
+            spacing={1} 
+            sx={{ 
+              mb: 1.5, 
+              width: '100%',
+              maxWidth: '100%'
+            }} 
+            alignItems={{ xs: 'stretch', sm: 'center' }}
+          >
+            <FormControl 
+              size="small" 
+              sx={{ 
+                minWidth: { xs: '100%', sm: 120 },
+                flex: { xs: 1, sm: 'none' }
+              }} 
+              disabled={isLoading || mode==="6_bulan"}
+            >
+              <InputLabel sx={{ fontSize: { xs: '0.75rem', sm: '0.8rem' } }}>Bulan</InputLabel>
               <Select 
                 value={month} 
                 onChange={handleMonthChange}
-                sx={{ fontSize: '0.75rem', height: '32px' }}
+                sx={{ 
+                  fontSize: { xs: '0.75rem', sm: '0.8rem' }, 
+                  height: '32px' 
+                }}
+                label="Bulan"
               >
                 {months.map((m,i) => (
-                  <MenuItem key={i} value={i} sx={{ fontSize: '0.75rem' }}>{m}</MenuItem>
+                  <MenuItem key={i} value={i} sx={{ fontSize: { xs: '0.75rem', sm: '0.8rem' } }}>
+                    {m}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 80, flex: 1 }} disabled={isLoading}>
+            <FormControl 
+              size="small" 
+              sx={{ 
+                minWidth: { xs: '100%', sm: 100 },
+                flex: { xs: 1, sm: 'none' }
+              }} 
+              disabled={isLoading}
+            >
+              <InputLabel sx={{ fontSize: { xs: '0.75rem', sm: '0.8rem' } }}>Tahun</InputLabel>
               <Select 
                 value={year} 
                 onChange={handleYearChange}
-                sx={{ fontSize: '0.75rem', height: '32px' }}
+                sx={{ 
+                  fontSize: { xs: '0.75rem', sm: '0.8rem' }, 
+                  height: '32px' 
+                }}
+                label="Tahun"
               >
                 {years.map(y => (
-                  <MenuItem key={y} value={y} sx={{ fontSize: '0.75rem' }}>{y}</MenuItem>
+                  <MenuItem key={y} value={y} sx={{ fontSize: { xs: '0.75rem', sm: '0.8rem' } }}>
+                    {y}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -649,7 +733,12 @@ export default function SevenDaysChartCard({ loading = false }) {
                 label={`${months[month]} ${year}`}
                 onDelete={handleResetFilter}
                 deleteIcon={<CloseIcon />}
-                sx={{ height: 24, fontSize: '0.7rem', flexShrink: 0 }}
+                sx={{ 
+                  height: 24, 
+                  fontSize: { xs: '0.65rem', sm: '0.7rem' }, 
+                  flexShrink: 0,
+                  alignSelf: { xs: 'center', sm: 'auto' }
+                }}
               />
             )}
           </Stack>
@@ -662,7 +751,17 @@ export default function SevenDaysChartCard({ loading = false }) {
         ) : (
           <Box sx={{ width: '100%', maxWidth: '100%' }}>
             {/* KPI strip - lebih kompak */}
-            <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap" sx={{ mb: 1.5, width: '100%' }}>
+            <Stack 
+              direction="row" 
+              spacing={0.5} 
+              useFlexGap 
+              flexWrap="wrap" 
+              sx={{ 
+                mb: 1.5, 
+                width: '100%',
+                maxWidth: '100%'
+              }}
+            >
               <Chip 
                 size="small"
                 label={
@@ -676,7 +775,7 @@ export default function SevenDaysChartCard({ loading = false }) {
                   color: theme.palette.info.main,
                   fontWeight: 500,
                   height: 20,
-                  fontSize: '0.65rem'
+                  fontSize: { xs: '0.6rem', sm: '0.65rem' }
                 }} 
               />
               <Chip 
@@ -691,7 +790,7 @@ export default function SevenDaysChartCard({ loading = false }) {
                   color: theme.palette.success.main,
                   fontWeight: 500,
                   height: 20,
-                  fontSize: '0.65rem'
+                  fontSize: { xs: '0.6rem', sm: '0.65rem' }
                 }} 
               />
               {summary && (mode==="4_minggu" || mode==="6_bulan") && (
@@ -707,7 +806,7 @@ export default function SevenDaysChartCard({ loading = false }) {
                     color: theme.palette.warning.main,
                     fontWeight: 500,
                     height: 20,
-                    fontSize: '0.65rem'
+                    fontSize: { xs: '0.6rem', sm: '0.65rem' }
                   }} 
                 />
               )}
@@ -720,17 +819,27 @@ export default function SevenDaysChartCard({ loading = false }) {
             {summary && (
               <>
                 <Divider sx={{ my: 1 }} />
-                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ width: '100%' }}>
-                  <Typography variant="caption" fontWeight="medium">
+                <Stack 
+                  direction="row" 
+                  spacing={1} 
+                  useFlexGap 
+                  flexWrap="wrap" 
+                  sx={{ 
+                    width: '100%',
+                    maxWidth: '100%'
+                  }}
+                >
+                  <Typography variant="caption" fontWeight="medium" fontSize={{ xs: '0.7rem', sm: '0.75rem' }}>
                     Total: {fmt.format(summary.totalQty || 0)}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" fontSize={{ xs: '0.7rem', sm: '0.75rem' }}>
                     Rata: {fmt.format(Math.round(summary.avgWeeklyQty || summary.avgMonthlyQty || 0))}
                   </Typography>
                   <Typography 
                     variant="caption" 
                     color={summary.growth > 0 ? "success.main" : summary.growth < 0 ? "error.main" : "text.secondary"}
                     fontWeight="medium"
+                    fontSize={{ xs: '0.7rem', sm: '0.75rem' }}
                   >
                     Growth: {pct(summary.growth || 0)}
                   </Typography>
@@ -742,15 +851,23 @@ export default function SevenDaysChartCard({ loading = false }) {
       </CardContent>
 
       <CardActions sx={{ 
-        px: 1.5, 
+        px: { xs: 1, sm: 1.5 }, 
         py: 1,
         width: '100%',
         maxWidth: '100%',
         backgroundColor: "background.paper",
         borderTop: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        // 🔥 FIXED: Consistent footer height
+        minHeight: 48
       }}>
-        <Typography variant="caption" color="text.secondary" fontSize="0.7rem" flex={1} noWrap>
+        <Typography 
+          variant="caption" 
+          color="text.secondary" 
+          fontSize={{ xs: '0.65rem', sm: '0.7rem' }} 
+          flex={1} 
+          noWrap
+        >
           Data sinkron, kecuali status <b>DIBATALKAN</b>.
         </Typography>
         
