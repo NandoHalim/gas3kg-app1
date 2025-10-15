@@ -10,7 +10,8 @@ import {
   IconButton,
   AppBar,
   Toolbar,
-  InputAdornment
+  InputAdornment,
+  TableContainer
 } from "@mui/material";
 import { COLORS } from "../../utils/constants.js";
 import { fmtIDR } from "../../utils/helpers.js";
@@ -213,38 +214,40 @@ function CustomerDetail({ customer, open, onClose }) {
 
         <Divider sx={{ my: 2 }} />
         <Typography variant="subtitle2" gutterBottom>Riwayat Transaksi Terbaru</Typography>
-        <Table size="small" sx={{ minWidth: isMobile ? 600 : 'auto' }}>
-          <TableHead>
-            <TableRow>
-              <TableCell>Tanggal</TableCell>
-              <TableCell>Invoice</TableCell>
-              <TableCell align="right">Qty</TableCell>
-              <TableCell align="right">Total</TableCell>
-              <TableCell>Status</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {!recentTx.length && (
-              <TableRow><TableCell colSpan={5} align="center">Belum ada transaksi</TableCell></TableRow>
-            )}
-            {recentTx.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell>{String(r.created_at || "").slice(0, 10)}</TableCell>
-                <TableCell>{r.invoice || r.id}</TableCell>
-                <TableCell align="right">{r.qty}</TableCell>
-                <TableCell align="right">{fmtIDR(r.total ?? (r.qty * r.price))}</TableCell>
-                <TableCell>
-                  <Chip 
-                    label={r.status} 
-                    size="small" 
-                    color={r.status === 'LUNAS' ? 'success' : 'warning'}
-                    variant="outlined"
-                  />
-                </TableCell>
+        <TableContainer>
+          <Table size="small" sx={{ minWidth: isMobile ? 600 : 'auto' }}>
+            <TableHead>
+              <TableRow>
+                <TableCell>Tanggal</TableCell>
+                <TableCell>Invoice</TableCell>
+                <TableCell align="right">Qty</TableCell>
+                <TableCell align="right">Total</TableCell>
+                <TableCell>Status</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {!recentTx.length && (
+                <TableRow><TableCell colSpan={5} align="center">Belum ada transaksi</TableCell></TableRow>
+              )}
+              {recentTx.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell>{String(r.created_at || "").slice(0, 10)}</TableCell>
+                  <TableCell>{r.invoice || r.id}</TableCell>
+                  <TableCell align="right">{r.qty}</TableCell>
+                  <TableCell align="right">{fmtIDR(r.total ?? (r.qty * r.price))}</TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={r.status} 
+                      size="small" 
+                      color={r.status === 'LUNAS' ? 'success' : 'warning'}
+                      variant="outlined"
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} size={isMobile ? "large" : "medium"} fullWidth={isMobile}>
