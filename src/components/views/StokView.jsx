@@ -24,17 +24,8 @@ import {
   CircularProgress,
   useTheme,
   useMediaQuery,
-  Paper,
-  BottomNavigation,
-  BottomNavigationAction,
-  AppBar,
-  Toolbar,
+  Divider,
 } from "@mui/material";
-import {
-  Inventory as InventoryIcon,
-  SwapHoriz as SwapIcon,
-  Adjust as AdjustIcon,
-} from "@mui/icons-material";
 
 // 🔧 Mobile-first responsive hook
 const useResponsive = () => {
@@ -49,20 +40,20 @@ const useResponsive = () => {
 // 🔧 Mobile-optimized constants
 const MOBILE_CONSTANTS = {
   spacing: {
-    xs: 1.5,
-    sm: 2,
-    md: 2.5,
+    xs: 2,
+    sm: 2.5,
+    md: 3,
     lg: 3
   },
   typography: {
-    h4: { xs: "1.4rem", sm: "1.6rem", md: "1.8rem", lg: "2rem" },
-    h6: { xs: "1.1rem", sm: "1.2rem", md: "1.3rem", lg: "1.4rem" },
-    body: { xs: "0.875rem", sm: "0.9rem", md: "0.95rem", lg: "1rem" }
+    h4: { xs: "1.5rem", sm: "1.75rem", md: "2rem", lg: "2.25rem" },
+    h5: { xs: "1.25rem", sm: "1.4rem", md: "1.5rem", lg: "1.6rem" },
+    body: { xs: "0.875rem", sm: "0.9rem", md: "1rem", lg: "1rem" }
   },
   dimensions: {
     buttonHeight: { xs: 48, sm: 44, md: 40 },
     inputHeight: { xs: 56, sm: 52, md: 48 },
-    chipHeight: { xs: 32, sm: 32, md: 32 }
+    chipHeight: { xs: 36, sm: 32, md: 32 }
   }
 };
 
@@ -73,28 +64,6 @@ const MOBILE_FIELD_PROPS = {
   size: "medium" 
 };
 
-// 🔧 Mobile tabs configuration - DIPINDAHKAN KE LEVEL ATAS
-const MOBILE_TABS = [
-  { 
-    label: "Tambah Kosong", 
-    icon: <InventoryIcon />, 
-    component: TambahKosong,
-    value: "tambah-kosong"
-  },
-  { 
-    label: "Restok Isi", 
-    icon: <SwapIcon />, 
-    component: RestokIsi,
-    value: "restok-isi"
-  },
-  { 
-    label: "Penyesuaian", 
-    icon: <AdjustIcon />, 
-    component: PenyesuaianStok,
-    value: "penyesuaian"
-  },
-];
-
 export default function StokView({ stocks = {}, onSaved }) {
   const toast = useToast();
   const { isMobile, isTablet, isDesktop } = useResponsive();
@@ -102,238 +71,138 @@ export default function StokView({ stocks = {}, onSaved }) {
     ISI: Number(stocks.ISI || 0),
     KOSONG: Number(stocks.KOSONG || 0),
   });
-  
-  // 🔧 FIX: Gunakan string value untuk activeTab agar lebih reliable
-  const [activeTab, setActiveTab] = useState("tambah-kosong");
 
   useEffect(() => {
     setSnap({ ISI: Number(stocks.ISI || 0), KOSONG: Number(stocks.KOSONG || 0) });
   }, [stocks]);
 
-  // 🔧 FIX: Cari komponen aktif berdasarkan value, bukan index
-  const getActiveComponent = () => {
-    const activeTabConfig = MOBILE_TABS.find(tab => tab.value === activeTab);
-    return activeTabConfig ? activeTabConfig.component : TambahKosong;
+  // Untuk semua device, gunakan single column layout yang konsisten
+  const getContainerPadding = () => {
+    if (isMobile) return { xs: 2, sm: 3 };
+    return { xs: 2, sm: 3, md: 4 };
   };
 
-  const ActiveComponent = getActiveComponent();
+  const getContentWidth = () => {
+    if (isMobile) return "100%";
+    if (isTablet) return "90%";
+    return "100%";
+  };
 
-  // Mobile header dengan stats yang lebih compact
-  const MobileHeader = () => (
-    <AppBar 
-      position="static" 
-      color="transparent" 
-      elevation={0}
-      sx={{ 
-        backgroundColor: 'background.paper',
-        borderBottom: 1,
-        borderColor: 'divider'
+  const getMaxWidth = () => {
+    if (isMobile) return "100%";
+    if (isTablet) return "800px";
+    return "1200px";
+  };
+
+  return (
+    <Box
+      sx={{
+        p: getContainerPadding(),
+        minHeight: "100vh",
+        backgroundColor: "background.default",
+        maxWidth: getMaxWidth(),
+        margin: "0 auto",
+        width: getContentWidth(),
       }}
     >
-      <Toolbar sx={{ 
-        minHeight: { xs: 56, sm: 64 },
-        px: { xs: 2, sm: 3 } 
-      }}>
-        <Box sx={{ flex: 1 }}>
+      {/* Header yang konsisten untuk semua device */}
+      <Stack
+        direction={isMobile ? "column" : "row"}
+        alignItems={isMobile ? "flex-start" : "center"}
+        justifyContent="space-between"
+        spacing={isMobile ? 2 : 3}
+        sx={{ 
+          mb: MOBILE_CONSTANTS.spacing.xs,
+          pb: 2,
+          borderBottom: 1,
+          borderColor: "divider"
+        }}
+      >
+        <Box>
           <Typography
-            variant="h6"
-            fontWeight={600}
+            variant="h4"
+            fontWeight={700}
             sx={{ 
               fontSize: MOBILE_CONSTANTS.typography.h4,
               color: "primary.main",
+              mb: 0.5
             }}
           >
-            Stok
+            Manajemen Stok
+          </Typography>
+          <Typography
+            variant="body1"
+            color="text.secondary"
+            sx={{ fontSize: MOBILE_CONSTANTS.typography.body }}
+          >
+            Kelola stok tabung LPG dengan mudah
           </Typography>
         </Box>
-        
-        <Stack direction="row" spacing={1}>
-          <Tooltip title="Tabung Isi">
-            <Chip
-              label={snap.ISI}
-              color="success"
-              size="small"
-              sx={{ 
-                fontWeight: 700, 
-                fontSize: "0.75rem",
-                minWidth: 40,
-              }}
-            />
-          </Tooltip>
-          <Tooltip title="Tabung Kosong">
-            <Chip
-              label={snap.KOSONG}
-              color="primary"
-              size="small"
-              sx={{ 
-                fontWeight: 700, 
-                fontSize: "0.75rem",
-                minWidth: 40,
-              }}
-            />
-          </Tooltip>
-        </Stack>
-      </Toolbar>
-    </AppBar>
-  );
 
-  // Desktop layout
-  if (!isMobile) {
-    return (
-      <Box
-        sx={{
-          p: { xs: 2, sm: 3, md: 4 },
-          minHeight: "100vh",
-          backgroundColor: "background.default",
-          maxWidth: { lg: "1400px", xl: "1600px" },
-          margin: "0 auto",
-        }}
-      >
-        {/* Desktop Header */}
-        <Stack
-          direction="row"
-          alignItems="center"
-          justifyContent="space-between"
+        <Stack 
+          direction="row" 
           spacing={2}
-          sx={{ mb: 3 }}
+          sx={{
+            width: isMobile ? "100%" : "auto"
+          }}
         >
-          <Box>
-            <Typography
-              variant="h4"
-              fontWeight={700}
+          <Tooltip title="Stok Tabung Isi">
+            <Chip
+              label={`ISI: ${snap.ISI}`}
+              color="success"
               sx={{ 
-                fontSize: MOBILE_CONSTANTS.typography.h4,
-                color: "primary.main",
-                mb: 0.5
+                fontWeight: 700, 
+                fontSize: { xs: "0.8rem", sm: "0.875rem" },
+                height: MOBILE_CONSTANTS.dimensions.chipHeight.xs,
+                minWidth: { xs: 80, sm: 100 }
               }}
-            >
-              Manajemen Stok
-            </Typography>
-            <Typography
-              variant="body1"
-              color="text.secondary"
-              sx={{ fontSize: MOBILE_CONSTANTS.typography.body }}
-            >
-              Kelola stok tabung LPG dengan mudah
-            </Typography>
-          </Box>
-
-          <Stack direction="row" spacing={2}>
-            <Tooltip title="Stok Tabung Isi">
-              <Chip
-                label={`ISI: ${snap.ISI}`}
-                color="success"
-                sx={{ 
-                  fontWeight: 700, 
-                  fontSize: "0.875rem",
-                  height: MOBILE_CONSTANTS.dimensions.chipHeight,
-                }}
-              />
-            </Tooltip>
-            <Tooltip title="Stok Tabung Kosong">
-              <Chip
-                label={`KOSONG: ${snap.KOSONG}`}
-                color="primary"
-                sx={{ 
-                  fontWeight: 700, 
-                  fontSize: "0.875rem",
-                  height: MOBILE_CONSTANTS.dimensions.chipHeight,
-                }}
-              />
-            </Tooltip>
-          </Stack>
+            />
+          </Tooltip>
+          <Tooltip title="Stok Tabung Kosong">
+            <Chip
+              label={`KOSONG: ${snap.KOSONG}`}
+              color="primary"
+              sx={{ 
+                fontWeight: 700, 
+                fontSize: { xs: "0.8rem", sm: "0.875rem" },
+                height: MOBILE_CONSTANTS.dimensions.chipHeight.xs,
+                minWidth: { xs: 90, sm: 110 }
+              }}
+            />
+          </Tooltip>
         </Stack>
+      </Stack>
 
-        {/* Desktop Grid */}
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6} lg={4}>
-            <TambahKosong
-              onSaved={(s) => {
-                setSnap(s);
-                onSaved?.(s);
-              }}
-              isMobile={isMobile}
-            />
-          </Grid>
-          <Grid item xs={12} md={6} lg={4}>
-            <RestokIsi
-              onSaved={(s) => {
-                setSnap(s);
-                onSaved?.(s);
-              }}
-              isMobile={isMobile}
-            />
-          </Grid>
-          <Grid item xs={12} md={6} lg={4}>
-            <PenyesuaianStok
-              onSaved={(s) => {
-                setSnap(s);
-                onSaved?.(s);
-              }}
-              isMobile={isMobile}
-            />
-          </Grid>
-        </Grid>
-      </Box>
-    );
-  }
-
-  // Mobile Layout
-  return (
-    <Box sx={{ 
-      pb: 7, // Space for bottom navigation
-      minHeight: '100vh',
-      backgroundColor: 'background.default'
-    }}>
-      <MobileHeader />
-      
-      {/* Main Content */}
-      <Box sx={{ p: 2 }}>
-        <ActiveComponent
+      {/* Single Column Layout untuk semua device */}
+      <Stack spacing={MOBILE_CONSTANTS.spacing.xs}>
+        <TambahKosong
           onSaved={(s) => {
             setSnap(s);
             onSaved?.(s);
           }}
           isMobile={isMobile}
         />
-      </Box>
-
-      {/* Bottom Navigation - FIXED: Gunakan value string */}
-      <Paper 
-        sx={{ 
-          position: 'fixed', 
-          bottom: 0, 
-          left: 0, 
-          right: 0, 
-          zIndex: 1000 
-        }} 
-        elevation={3}
-      >
-        <BottomNavigation
-          value={activeTab}
-          onChange={(event, newValue) => {
-            console.log('Tab changed to:', newValue); // Debug log
-            setActiveTab(newValue);
+        
+        <Divider sx={{ my: 1 }} />
+        
+        <RestokIsi
+          onSaved={(s) => {
+            setSnap(s);
+            onSaved?.(s);
           }}
-          showLabels
-        >
-          {MOBILE_TABS.map((tab) => (
-            <BottomNavigationAction
-              key={tab.value}
-              label={tab.label}
-              icon={tab.icon}
-              value={tab.value}
-              sx={{
-                minWidth: 'auto',
-                '& .MuiBottomNavigationAction-label': {
-                  fontSize: '0.75rem',
-                  mt: 0.5
-                }
-              }}
-            />
-          ))}
-        </BottomNavigation>
-      </Paper>
+          isMobile={isMobile}
+        />
+        
+        <Divider sx={{ my: 1 }} />
+        
+        <PenyesuaianStok
+          onSaved={(s) => {
+            setSnap(s);
+            onSaved?.(s);
+          }}
+          isMobile={isMobile}
+        />
+      </Stack>
     </Box>
   );
 }
@@ -343,19 +212,23 @@ function StokCard({ title, subtitle, children, isMobile }) {
   return (
     <Card 
       sx={{ 
+        width: "100%",
         border: 1,
         borderColor: 'divider',
         borderRadius: 2,
         boxShadow: 'none',
-        mb: 2
+        backgroundColor: 'background.paper'
       }}
     >
       <CardHeader
         title={
           <Typography 
-            variant="h6" 
+            variant="h5" 
             fontWeight={600}
-            sx={{ fontSize: MOBILE_CONSTANTS.typography.h6 }}
+            sx={{ 
+              fontSize: MOBILE_CONSTANTS.typography.h5,
+              color: "primary.dark"
+            }}
           >
             {title}
           </Typography>
@@ -370,17 +243,19 @@ function StokCard({ title, subtitle, children, isMobile }) {
           </Typography>
         }
         sx={{
-          px: 3,
-          py: 2,
+          px: { xs: 2, sm: 3 },
+          py: { xs: 2, sm: 2.5 },
           borderBottom: 1,
           borderColor: "divider",
-          backgroundColor: "background.paper"
+          '& .MuiCardHeader-content': {
+            width: '100%'
+          }
         }}
       />
       <CardContent sx={{ 
-        px: 3, 
-        py: 2,
-        '&:last-child': { pb: 2 }
+        px: { xs: 2, sm: 3 }, 
+        py: { xs: 2, sm: 3 },
+        '&:last-child': { pb: { xs: 2, sm: 3 } }
       }}>
         {children}
       </CardContent>
@@ -392,24 +267,26 @@ function StokCard({ title, subtitle, children, isMobile }) {
 const getFieldStyles = (isMobile) => ({
   '& .MuiOutlinedInput-root': {
     borderRadius: 1,
-    minHeight: isMobile ? MOBILE_CONSTANTS.dimensions.inputHeight.xs : MOBILE_CONSTANTS.dimensions.inputHeight.md,
-    fontSize: isMobile ? '16px' : 'inherit', // Prevent zoom on iOS
+    minHeight: isMobile ? MOBILE_CONSTANTS.dimensions.inputHeight.xs : MOBILE_CONSTANTS.dimensions.inputHeight.sm,
   },
   '& input': {
-    padding: isMobile ? '16.5px 14px' : '12px 14px',
+    padding: isMobile ? '14.5px 14px' : '12.5px 14px',
+    fontSize: isMobile ? '16px' : 'inherit',
   },
   '& textarea': {
-    padding: isMobile ? '16.5px 14px' : '12px 14px',
+    padding: isMobile ? '14.5px 14px' : '12.5px 14px',
+    fontSize: isMobile ? '16px' : 'inherit',
   },
   '& label': {
-    fontSize: isMobile ? MOBILE_CONSTANTS.typography.body.xs : MOBILE_CONSTANTS.typography.body.md,
+    fontSize: isMobile ? '0.9rem' : '1rem',
   },
   '& .MuiSelect-select': {
-    padding: isMobile ? '16.5px 14px' : '12px 14px',
+    padding: isMobile ? '14.5px 14px' : '12.5px 14px',
+    fontSize: isMobile ? '16px' : 'inherit',
   }
 });
 
-/* ========== Tambah Stok KOSONG - Mobile Optimized ========== */
+/* ========== Tambah Stok KOSONG ========== */
 function TambahKosong({ onSaved, isMobile }) {
   const toast = useToast();
   const [form, setForm] = useState({ qty: "", date: todayStr(), note: "" });
@@ -543,7 +420,7 @@ function TambahKosong({ onSaved, isMobile }) {
   );
 }
 
-/* ========== Restok ISI - Mobile Optimized ========== */
+/* ========== Restok ISI ========== */
 function RestokIsi({ onSaved, isMobile }) {
   const toast = useToast();
   const [form, setForm] = useState({ qty: "", date: todayStr(), note: "" });
@@ -680,7 +557,7 @@ function RestokIsi({ onSaved, isMobile }) {
   );
 }
 
-/* ========== Penyesuaian Stok - Mobile Optimized ========== */
+/* ========== Penyesuaian Stok ========== */
 function PenyesuaianStok({ onSaved, isMobile }) {
   const toast = useToast();
   const [form, setForm] = useState({
@@ -818,9 +695,9 @@ function PenyesuaianStok({ onSaved, isMobile }) {
           <Typography 
             variant="caption" 
             color="text.secondary"
-            sx={{ display: 'block', textAlign: 'center' }}
+            sx={{ display: 'block', textAlign: 'center', fontStyle: 'italic' }}
           >
-            *Tambah stok ISI tidak diperbolehkan di sini
+            *Tambah stok ISI tidak diperbolehkan di sini - gunakan menu "Restok Isi"
           </Typography>
 
           <Stack
