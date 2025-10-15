@@ -16,7 +16,6 @@ import {
   Stack,
   Typography,
   Card,
-  CardHeader,
   CardContent,
   TextField,
   Button,
@@ -37,13 +36,6 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 
-// Standar field agar konsisten tinggi/lebar (MUI standard)
-const FIELD_PROPS = { fullWidth: true, variant: "outlined", size: "medium" };
-const FIELD_SX = {
-  "& .MuiOutlinedInput-root": { borderRadius: 1, minHeight: 56 },
-  "& input": { paddingTop: 1.5, paddingBottom: 1.5 },
-};
-
 export default function PenjualanView({
   stocks = {},
   onSaved,
@@ -56,6 +48,7 @@ export default function PenjualanView({
   const toast = useToast();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
 
   const [form, setForm] = useState({
     customer: "",
@@ -67,7 +60,6 @@ export default function PenjualanView({
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Update form saat settings berubah (harga/metode)
   useEffect(() => {
     setForm((prev) => ({
       ...prev,
@@ -135,45 +127,41 @@ export default function PenjualanView({
   };
 
   return (
-    <Box sx={{ width: '100%' }}>
+    <Box sx={{ 
+      width: '100%', 
+      maxWidth: '100%', 
+      overflow: 'hidden',
+      pb: 2 
+    }}>
       {/* Header */}
-      <Card sx={{ mb: 2 }}>
-        <CardContent sx={{ p: isMobile ? 1.5 : 2 }}>
+      <Card sx={{ mb: 2, borderRadius: 2 }}>
+        <CardContent sx={{ p: isMobile ? 2 : 3 }}>
           <Stack direction="row" alignItems="center" spacing={2}>
-            <Typography variant={isMobile ? "h6" : "h5"} fontWeight={600}>
-              Penjualan Baru
+            <Typography variant={isMobile ? "h6" : "h5"} fontWeight={700}>
+              🛒 Penjualan Baru
             </Typography>
             <Box sx={{ flexGrow: 1 }} />
             <Chip
-              label={`Stok Isi: ${stokISI}`}
-              variant="outlined"
-              color={stokISI <= 5 ? "warning" : "success"}
+              label={`Stok: ${stokISI}`}
+              variant="filled"
+              color={stokISI === 0 ? "error" : stokISI <= 5 ? "warning" : "success"}
               size={isMobile ? "small" : "medium"}
             />
           </Stack>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader
-          title={<Typography variant="h6" fontWeight={600}>Form Penjualan</Typography>}
-          sx={{ 
-            pb: 2, 
-            borderBottom: 1, 
-            borderColor: "divider",
-            px: isMobile ? 2 : 3,
-            pt: isMobile ? 2 : 3
-          }}
-        />
-        <CardContent sx={{ px: isMobile ? 2 : 3, pb: isMobile ? 2 : 3 }}>
+      {/* Form */}
+      <Card sx={{ borderRadius: 2 }}>
+        <CardContent sx={{ p: isMobile ? 2 : 3 }}>
           {err && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErr("")}>
+            <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setErr("")}>
               {err}
             </Alert>
           )}
 
-          <Box component="form" onSubmit={submit}>
-            <Grid container spacing={2}>
+          <Box component="form" onSubmit={submit} sx={{ width: '100%' }}>
+            <Grid container spacing={3}>
               {/* Nama Pelanggan */}
               <Grid item xs={12}>
                 <Autocomplete
@@ -193,30 +181,29 @@ export default function PenjualanView({
                   renderInput={(params) => (
                     <TextField
                       {...params}
-                      {...FIELD_PROPS}
-                      sx={FIELD_SX}
+                      fullWidth
                       label="Nama Pelanggan"
-                      placeholder="Contoh: Ayu"
-                      value={form.customer}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, customer: e.target.value }))
-                      }
+                      placeholder="Masukkan nama pelanggan..."
                       size={isMobile ? "small" : "medium"}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 2,
+                        }
+                      }}
                     />
                   )}
                 />
                 {!isValidCustomerName(form.customer || "") && form.customer.trim().length > 0 && (
-                  <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
-                    Nama hanya huruf &amp; spasi
+                  <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
+                    ⚠️ Nama hanya boleh huruf dan spasi
                   </Typography>
                 )}
               </Grid>
 
-              {/* Tanggal */}
+              {/* Tanggal & Qty */}
               <Grid item xs={12} sm={6}>
                 <TextField
-                  {...FIELD_PROPS}
-                  sx={FIELD_SX}
+                  fullWidth
                   label="Tanggal"
                   type="date"
                   value={form.date}
@@ -224,37 +211,41 @@ export default function PenjualanView({
                   inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
                   InputLabelProps={{ shrink: true }}
                   size={isMobile ? "small" : "medium"}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                    }
+                  }}
                 />
               </Grid>
 
-              {/* Qty */}
               <Grid item xs={12} sm={6}>
                 <TextField
-                  {...FIELD_PROPS}
-                  sx={FIELD_SX}
-                  label="Jumlah (Qty)"
+                  fullWidth
+                  label="Jumlah Tabung"
                   type="number"
                   value={form.qty}
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      qty:
-                        e.target.value === ""
-                          ? ""
-                          : Math.max(0, parseInt(e.target.value, 10) || 0),
+                      qty: e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0),
                     })
                   }
-                  inputProps={{ min: 1, max: stokISI, inputMode: "numeric" }}
+                  inputProps={{ 
+                    min: 1, 
+                    max: stokISI, 
+                    inputMode: "numeric" 
+                  }}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
                         <IconButton
                           size="small"
                           onClick={() => inc(-1)}
-                          edge="start"
-                          disabled={qtyNum <= 1}
+                          disabled={qtyNum <= 1 || loading}
+                          sx={{ mr: -0.5 }}
                         >
-                          <RemoveIcon />
+                          <RemoveIcon fontSize="small" />
                         </IconButton>
                       </InputAdornment>
                     ),
@@ -263,28 +254,35 @@ export default function PenjualanView({
                         <IconButton
                           size="small"
                           onClick={() => inc(+1)}
-                          edge="end"
-                          disabled={qtyNum >= stokISI}
+                          disabled={qtyNum >= stokISI || loading}
+                          sx={{ ml: -0.5 }}
                         >
-                          <AddIcon />
+                          <AddIcon fontSize="small" />
                         </IconButton>
                       </InputAdornment>
                     ),
                   }}
-                  helperText={<span>Stok isi tersedia: <b>{stokISI}</b></span>}
+                  helperText={`Maksimal: ${stokISI} tabung`}
                   size={isMobile ? "small" : "medium"}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                    }
+                  }}
                 />
               </Grid>
 
-              {/* Harga */}
+              {/* Harga & Metode */}
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth variant="outlined" sx={FIELD_SX} size={isMobile ? "small" : "medium"}>
-                  <InputLabel id="price-label">Harga Satuan</InputLabel>
+                <FormControl fullWidth size={isMobile ? "small" : "medium"}>
+                  <InputLabel>Harga Satuan</InputLabel>
                   <Select
-                    labelId="price-label"
-                    label="Harga Satuan"
                     value={form.price}
+                    label="Harga Satuan"
                     onChange={(e) => setForm({ ...form, price: parseInt(e.target.value, 10) })}
+                    sx={{
+                      borderRadius: 2,
+                    }}
                   >
                     {PRICE_OPTIONS.map((p) => (
                       <MenuItem key={p} value={p}>
@@ -295,15 +293,16 @@ export default function PenjualanView({
                 </FormControl>
               </Grid>
 
-              {/* Metode Pembayaran */}
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth variant="outlined" sx={FIELD_SX} size={isMobile ? "small" : "medium"}>
-                  <InputLabel id="method-label">Metode Pembayaran</InputLabel>
+                <FormControl fullWidth size={isMobile ? "small" : "medium"}>
+                  <InputLabel>Metode Bayar</InputLabel>
                   <Select
-                    labelId="method-label"
-                    label="Metode Pembayaran"
                     value={form.method}
+                    label="Metode Bayar"
                     onChange={(e) => setForm({ ...form, method: e.target.value })}
+                    sx={{
+                      borderRadius: 2,
+                    }}
                   >
                     {(activeMethods || PAYMENT_METHODS).map((m) => (
                       <MenuItem key={m} value={m}>
@@ -316,25 +315,54 @@ export default function PenjualanView({
 
               {/* Total */}
               <Grid item xs={12}>
-                <Paper elevation={1} sx={{ p: 2 }}>
+                <Paper 
+                  elevation={0} 
+                  sx={{ 
+                    p: 3, 
+                    borderRadius: 2,
+                    background: `linear-gradient(135deg, ${theme.palette.primary.main}15, ${theme.palette.success.main}15)`,
+                    border: `1px solid ${theme.palette.divider}`
+                  }}
+                >
                   <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Typography fontWeight={600}>Total:</Typography>
-                    <Typography variant="h6" color="success.main" fontWeight={800}>
+                    <Box>
+                      <Typography variant="h6" fontWeight={700} gutterBottom>
+                        Total Pembayaran
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {qtyNum} tabung × {fmtIDR(form.price)}
+                      </Typography>
+                    </Box>
+                    <Typography 
+                      variant="h4" 
+                      color="success.main" 
+                      fontWeight={800}
+                      sx={{ fontSize: isMobile ? '1.75rem' : '2rem' }}
+                    >
                       {fmtIDR(total)}
                     </Typography>
                   </Stack>
                 </Paper>
               </Grid>
 
-              {/* Tombol */}
+              {/* Actions */}
               <Grid item xs={12}>
-                <Stack direction="row" spacing={2} justifyContent="flex-end">
+                <Stack 
+                  direction={isMobile ? "column" : "row"} 
+                  spacing={2} 
+                  justifyContent="flex-end"
+                  alignItems={isMobile ? "stretch" : "center"}
+                >
                   <Button
                     variant="outlined"
-                    type="button"
-                    onClick={loading ? undefined : onCancel}
-                    sx={{ textTransform: "none", minWidth: 100 }}
-                    size={isMobile ? "medium" : "large"}
+                    onClick={onCancel}
+                    disabled={loading}
+                    size={isMobile ? "large" : "medium"}
+                    fullWidth={isMobile}
+                    sx={{ 
+                      borderRadius: 2,
+                      py: isMobile ? 1.5 : 1
+                    }}
                   >
                     Batal
                   </Button>
@@ -342,10 +370,32 @@ export default function PenjualanView({
                     variant="contained"
                     type="submit"
                     disabled={loading || disabledBase}
-                    sx={{ textTransform: "none", minWidth: 100 }}
-                    size={isMobile ? "medium" : "large"}
+                    size={isMobile ? "large" : "medium"}
+                    fullWidth={isMobile}
+                    sx={{ 
+                      borderRadius: 2,
+                      py: isMobile ? 1.5 : 1
+                    }}
                   >
-                    {loading ? "Menyimpan…" : "Simpan"}
+                    {loading ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ 
+                          width: 16, 
+                          height: 16, 
+                          border: '2px solid transparent',
+                          borderTop: '2px solid white',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite',
+                          '@keyframes spin': {
+                            '0%': { transform: 'rotate(0deg)' },
+                            '100%': { transform: 'rotate(360deg)' }
+                          }
+                        }} />
+                        Menyimpan...
+                      </Box>
+                    ) : (
+                      `💾 Simpan Penjualan`
+                    )}
                   </Button>
                 </Stack>
               </Grid>
