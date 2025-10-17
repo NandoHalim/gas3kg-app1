@@ -120,6 +120,14 @@ export default function BusinessIntelligenceCard() {
       const monthlyStats = analyzeMonthlyTrend(salesData);
       setMonthlyTrend(monthlyStats);
 
+      // 🔥 DEBUG: Log data untuk verifikasi
+      console.log('🔄 Data Tren Bulanan (setelah perbaikan sorting):', monthlyStats);
+      monthlyStats.forEach(month => {
+        const totalQty = month.price18k.quantity + month.price20k.quantity;
+        const totalRevenue = month.price18k.revenue + month.price20k.revenue;
+        console.log(`📊 ${month.month}: ${totalQty} tabung, ${formatCurrency(totalRevenue)}`);
+      });
+
     } catch (error) {
       console.error('Error analyzing price data:', error);
     } finally {
@@ -180,12 +188,17 @@ export default function BusinessIntelligenceCard() {
     
     validSales.forEach(sale => {
       const date = new Date(sale.created_at);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const monthKey = `${year}-${String(month).padStart(2, '0')}`; // Format: "2024-09"
       const monthName = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
       
       if (!monthlyMap[monthKey]) {
         monthlyMap[monthKey] = {
           month: monthName,
+          monthKey: monthKey, // 🔥 TAMBAHKAN untuk sorting yang benar
+          year: year,
+          monthNumber: month,
           price18k: { quantity: 0, revenue: 0, transactions: 0 },
           price20k: { quantity: 0, revenue: 0, transactions: 0 },
           other: { quantity: 0, revenue: 0, transactions: 0 }
@@ -211,9 +224,10 @@ export default function BusinessIntelligenceCard() {
       }
     });
     
-    return Object.values(monthlyMap).sort((a, b) => {
-      return new Date(b.month) - new Date(a.month);
-    }).slice(0, 6);
+    // 🔥 PERBAIKAN CRITICAL: Sorting yang benar menggunakan monthKey
+    return Object.values(monthlyMap)
+      .sort((a, b) => b.monthKey.localeCompare(a.monthKey)) // Descending: terbaru dulu
+      .slice(0, 6); // Ambil 6 bulan terakhir
   };
 
   const handleCustomerClick = async (customer) => {
@@ -522,79 +536,103 @@ export default function BusinessIntelligenceCard() {
   };
 
   const MonthlyTrendSection = () => {
-    if (analysisLoading || monthlyTrend.length === 0) return null;
+    if (analysisLoading) {
+      return (
+        <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+          <Box display="flex" alignItems="center" gap={1} mb={2}>
+            <TrendingUpIcon color="primary" />
+            <Typography variant="subtitle2" fontWeight="bold">
+              Tren Harga per Bulan
+            </Typography>
+          </Box>
+          <Box display="flex" justifyContent="center" py={2}>
+            <CircularProgress size={20} />
+          </Box>
+        </Box>
+      );
+    }
+
+    if (monthlyTrend.length === 0) return null;
 
     return (
       <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
         <Box display="flex" alignItems="center" gap={1} mb={2}>
           <TrendingUpIcon color="primary" />
           <Typography variant="subtitle2" fontWeight="bold">
-            Tren Harga per Bulan
+            Tren Harga per Bulan (6 Bulan Terakhir)
           </Typography>
         </Box>
         
         <Stack spacing={2}>
-          {monthlyTrend.map((month, index) => (
-            <Box key={index} sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid #e0e0e0' }}>
-              <Typography variant="body2" fontWeight="bold" gutterBottom color="primary">
-                {month.month}
-              </Typography>
-              
-              <Stack spacing={1.5}>
-                {/* Delivery */}
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <LocalShippingIcon fontSize="small" color="success" />
-                    <Typography variant="body2" color="success.main">
-                      Delivery
-                    </Typography>
-                  </Box>
-                  <Box textAlign="right">
-                    <Typography variant="body2" fontWeight="medium">
-                      {month.price20k.quantity} tabung
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {formatCurrency(month.price20k.revenue)}
-                    </Typography>
-                  </Box>
-                </Box>
-
-                {/* Regular */}
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <StoreIcon fontSize="small" color="primary" />
-                    <Typography variant="body2" color="primary.main">
-                      Regular
-                    </Typography>
-                  </Box>
-                  <Box textAlign="right">
-                    <Typography variant="body2" fontWeight="medium">
-                      {month.price18k.quantity} tabung
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {formatCurrency(month.price18k.revenue)}
-                    </Typography>
-                  </Box>
-                </Box>
-
-                {/* Total */}
-                <Divider />
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2" fontWeight="bold">
-                    Total Bulanan
+          {monthlyTrend.map((month, index) => {
+            const totalQty = month.price18k.quantity + month.price20k.quantity;
+            const totalRevenue = month.price18k.revenue + month.price20k.revenue;
+            
+            return (
+              <Box key={index} sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid #e0e0e0' }}>
+                <Typography variant="body2" fontWeight="bold" gutterBottom color="primary">
+                  {month.month} 
+                  <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                    (Total: {totalQty} tabung, {formatCurrency(totalRevenue)})
                   </Typography>
-                  <Box textAlign="right">
-                    <Typography variant="body2" fontWeight="bold">
-                      {month.price20k.quantity + month.price18k.quantity} tabung
-                    </Typography>
-                    <Typography variant="body2" color="primary.main" fontWeight="bold">
-                      {formatCurrency(month.price20k.revenue + month.price18k.revenue)}
-                    </Typography>
+                </Typography>
+                
+                <Stack spacing={1.5}>
+                  {/* Delivery */}
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <LocalShippingIcon fontSize="small" color="success" />
+                      <Typography variant="body2" color="success.main">
+                        Delivery
+                      </Typography>
+                    </Box>
+                    <Box textAlign="right">
+                      <Typography variant="body2" fontWeight="medium">
+                        {month.price20k.quantity} tabung
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatCurrency(month.price20k.revenue)}
+                      </Typography>
+                    </Box>
                   </Box>
-                </Box>
-              </Stack>
-            </Box>
-          ))}
+
+                  {/* Regular */}
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <StoreIcon fontSize="small" color="primary" />
+                      <Typography variant="body2" color="primary.main">
+                        Regular
+                      </Typography>
+                    </Box>
+                    <Box textAlign="right">
+                      <Typography variant="body2" fontWeight="medium">
+                        {month.price18k.quantity} tabung
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatCurrency(month.price18k.revenue)}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* Total */}
+                  <Divider />
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="body2" fontWeight="bold">
+                      Total Bulanan
+                    </Typography>
+                    <Box textAlign="right">
+                      <Typography variant="body2" fontWeight="bold">
+                        {totalQty} tabung
+                      </Typography>
+                      <Typography variant="body2" color="primary.main" fontWeight="bold">
+                        {formatCurrency(totalRevenue)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Stack>
+              </Box>
+            );
+          })}
         </Stack>
       </Box>
     );
