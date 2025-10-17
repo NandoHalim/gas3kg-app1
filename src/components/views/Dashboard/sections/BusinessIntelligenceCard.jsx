@@ -77,10 +77,12 @@ export default function BusinessIntelligenceCard() {
         setState({ loading: false, error: null, data: res });
         
         setCustomersLoading(true);
+        
+        // 🔥 PERBAIKAN: Gunakan onlyPaid: true untuk konsistensi dengan DashboardContainer
         const topCust = await DataService.getTopCustomersPeriod({
           period: "this_month",
           limit: 5,
-          onlyPaid: false
+          onlyPaid: true  // Hanya transaksi yang sudah dibayar/lunas
         });
         
         if (!alive) return;
@@ -745,7 +747,7 @@ export default function BusinessIntelligenceCard() {
           {/* Monthly Trend */}
           <MonthlyTrendSection />
 
-          {/* Top Customers */}
+          {/* Top Customers - 🔥 SUDAH DIPERBAIKI dengan konsistensi data */}
           {!customersLoading && topCustomers.length > 0 && (
             <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
               <Box display="flex" alignItems="center" gap={1} mb={2}>
@@ -753,6 +755,9 @@ export default function BusinessIntelligenceCard() {
                 <Typography variant="subtitle2" fontWeight="bold">
                   Top Pelanggan Bulan Ini
                 </Typography>
+                <Tooltip title="Hanya transaksi yang sudah dibayar/lunas">
+                  <InfoIcon fontSize="small" color="action" />
+                </Tooltip>
               </Box>
               
               <Stack spacing={1.5}>
