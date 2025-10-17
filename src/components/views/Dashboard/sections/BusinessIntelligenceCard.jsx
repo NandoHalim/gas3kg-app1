@@ -61,6 +61,8 @@ export default function BusinessIntelligenceCard() {
   const [monthlyTrend, setMonthlyTrend] = useState([]);
   const [analysisLoading, setAnalysisLoading] = useState(false);
 
+  const { loading, error, data } = state;
+
   useEffect(() => {
     let alive = true;
     
@@ -234,6 +236,7 @@ export default function BusinessIntelligenceCard() {
     setCustomerHistory([]);
   };
 
+  // ✅ FIXED: Pindahkan useMemo setelah deklarasi data
   const forecastSummary = useMemo(() => {
     if (!data?.forecast) return null;
     
