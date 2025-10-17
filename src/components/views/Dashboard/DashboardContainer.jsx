@@ -27,7 +27,6 @@ import FinancialSummaryCard from "./sections/FinancialSummaryCard.jsx";
 import SevenDaysChartCard from "./sections/SevenDaysChartCard.jsx";
 import RecentTransactionsTable from "./sections/RecentTransactionsTable.jsx";
 import BusinessIntelligenceCard from "./sections/BusinessIntelligenceCard.jsx";
-import KpiStrip from "./sections/KpiStrip.jsx";
 
 import CustomerHistoryModal from "./modals/CustomerHistoryModal.jsx";
 import ErrorBanner from "./ui/ErrorBanner.jsx";
@@ -368,21 +367,6 @@ export default function DashboardContainer({ stocks: stocksFromApp = {} }) {
           <HeaderSection />
 
           {err && <ErrorBanner message={err} />}
-
-          {/* KpiStrip - Mobile optimized */}
-          <Box sx={{ 
-            width: "100%", 
-            maxWidth: "100%", 
-            overflow: "hidden",
-            px: isMobile ? 0.5 : 0 
-          }}>
-            <KpiStrip
-              financialData={financialSummary}
-              stockPrediction={stockPrediction}
-              businessIntel={businessIntelligence}
-              loading={loading || advancedLoading}
-            />
-          </Box>
 
           {/* SummaryTiles - Mobile optimized */}
           <Box sx={{ 
