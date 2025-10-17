@@ -4,7 +4,7 @@ import {
   Card, CardContent, Typography, Box, Stack, Alert, Chip, Tooltip, 
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Button, Table, TableBody, TableCell, TableContainer, TableHead, 
-  TableRow, Paper, IconButton
+  TableRow, Paper, IconButton, Divider
 } from "@mui/material";
 import AnalyticsIcon from "@mui/icons-material/Analytics";
 import InfoIcon from "@mui/icons-material/Info";
@@ -12,6 +12,10 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CloseIcon from "@mui/icons-material/Close";
 import HistoryIcon from "@mui/icons-material/History";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import StoreIcon from "@mui/icons-material/Store";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import { DataService } from "../../../../services/DataService.js";
 
 function formatDatePlus(days) {
@@ -21,7 +25,7 @@ function formatDatePlus(days) {
 }
 
 const formatCurrency = (amount) => {
-  if (amount == null) return '-';
+  if (amount == null || amount === 0) return '-';
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
@@ -71,7 +75,6 @@ export default function BusinessIntelligenceCard() {
         const res = await DataService.getAIInsightsV2?.() || await DataService.getAIInsights?.();
         if (!alive) return;
         setState({ loading: false, error: null, data: res });
-        DataService.saveAIInsightLog?.("dashboard", res);
         
         setCustomersLoading(true);
         const topCust = await DataService.getTopCustomersPeriod({
@@ -123,9 +126,13 @@ export default function BusinessIntelligenceCard() {
   };
 
   const analyzePrices = (salesData) => {
-    const price18k = salesData.filter(s => s.price === 18000 || s.price === 18000.00);
-    const price20k = salesData.filter(s => s.price === 20000 || s.price === 20000.00);
-    const otherPrices = salesData.filter(s => s.price !== 18000 && s.price !== 20000);
+    const validSales = salesData.filter(sale => 
+      String(sale.status || '').toUpperCase() !== 'DIBATALKAN'
+    );
+
+    const price18k = validSales.filter(s => s.price === 18000 || s.price === 18000.00);
+    const price20k = validSales.filter(s => s.price === 20000 || s.price === 20000.00);
+    const otherPrices = validSales.filter(s => s.price !== 18000 && s.price !== 20000);
 
     const total18k = price18k.reduce((sum, s) => sum + (s.total || s.qty * s.price), 0);
     const total20k = price20k.reduce((sum, s) => sum + (s.total || s.qty * s.price), 0);
@@ -140,22 +147,22 @@ export default function BusinessIntelligenceCard() {
         transactions: price18k.length,
         quantity: qty18k,
         revenue: total18k,
-        percentage: salesData.length ? (price18k.length / salesData.length) * 100 : 0
+        percentage: validSales.length ? (price18k.length / validSales.length) * 100 : 0
       },
       price20k: {
         transactions: price20k.length,
         quantity: qty20k,
         revenue: total20k,
-        percentage: salesData.length ? (price20k.length / salesData.length) * 100 : 0
+        percentage: validSales.length ? (price20k.length / validSales.length) * 100 : 0
       },
       other: {
         transactions: otherPrices.length,
         quantity: qtyOther,
         revenue: totalOther,
-        percentage: salesData.length ? (otherPrices.length / salesData.length) * 100 : 0
+        percentage: validSales.length ? (otherPrices.length / validSales.length) * 100 : 0
       },
       total: {
-        transactions: salesData.length,
+        transactions: validSales.length,
         quantity: qty18k + qty20k + qtyOther,
         revenue: total18k + total20k + totalOther
       }
@@ -163,9 +170,13 @@ export default function BusinessIntelligenceCard() {
   };
 
   const analyzeMonthlyTrend = (salesData) => {
+    const validSales = salesData.filter(sale => 
+      String(sale.status || '').toUpperCase() !== 'DIBATALKAN'
+    );
+
     const monthlyMap = {};
     
-    salesData.forEach(sale => {
+    validSales.forEach(sale => {
       const date = new Date(sale.created_at);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       const monthName = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
@@ -220,8 +231,12 @@ export default function BusinessIntelligenceCard() {
         onlyPaid: false,
         limit: 100
       });
+
+      const validHistory = history.filter(transaction => 
+        String(transaction.status || '').toUpperCase() !== 'DIBATALKAN'
+      );
       
-      setCustomerHistory(history || []);
+      setCustomerHistory(validHistory || []);
     } catch (error) {
       console.error('Error fetching customer history:', error);
       setCustomerHistory([]);
@@ -236,7 +251,6 @@ export default function BusinessIntelligenceCard() {
     setCustomerHistory([]);
   };
 
-  // ✅ FIXED: Pindahkan useMemo setelah deklarasi data
   const forecastSummary = useMemo(() => {
     if (!data?.forecast) return null;
     
@@ -396,10 +410,13 @@ export default function BusinessIntelligenceCard() {
   const PriceAnalysisSection = () => {
     if (analysisLoading) {
       return (
-        <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-          <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-            📊 Analisis Harga Jual
-          </Typography>
+        <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+          <Box display="flex" alignItems="center" gap={1} mb={1}>
+            <LocalShippingIcon color="primary" />
+            <Typography variant="subtitle2" fontWeight="bold">
+              Analisis Harga Jual
+            </Typography>
+          </Box>
           <Box display="flex" justifyContent="center" py={2}>
             <CircularProgress size={20} />
           </Box>
@@ -410,68 +427,91 @@ export default function BusinessIntelligenceCard() {
     if (!priceAnalysis) return null;
 
     return (
-      <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-        <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-          📊 Analisis Harga Jual (30 Hari)
-        </Typography>
+      <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+        <Box display="flex" alignItems="center" gap={1} mb={2}>
+          <LocalShippingIcon color="primary" />
+          <Typography variant="subtitle2" fontWeight="bold">
+            Analisis Harga Jual (30 Hari)
+          </Typography>
+        </Box>
         
         <Stack spacing={2}>
-          <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'success.50', border: '1px solid', borderColor: 'success.100' }}>
-            <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+          {/* Delivery */}
+          <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'success.50', border: '1px solid', borderColor: 'success.100' }}>
+            <Box display="flex" alignItems="center" gap={1} mb={1}>
+              <LocalShippingIcon fontSize="small" color="success" />
+              <Typography variant="body2" fontWeight="bold" color="success.main">
+                Delivery (Rp 20.000)
+              </Typography>
+            </Box>
+            <Box display="flex" justifyContent="space-between" alignItems="center">
               <Box>
-                <Typography variant="body2" fontWeight="bold" color="success.main">
-                  🚚 Delivery (Rp 20.000)
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="body2" color="text.secondary">
                   {priceAnalysis.price20k.transactions} transaksi
+                </Typography>
+                <Typography variant="h6" fontWeight="bold" color="success.main">
+                  {priceAnalysis.price20k.quantity} tabung
                 </Typography>
               </Box>
               <Box textAlign="right">
-                <Typography variant="body2" fontWeight="bold">
-                  {priceAnalysis.price20k.quantity} tabung
+                <Typography variant="body2" color="text.secondary">
+                  Total Revenue
                 </Typography>
-                <Typography variant="body2" color="success.main" fontWeight="medium">
+                <Typography variant="h6" fontWeight="bold" color="success.main">
                   {formatCurrency(priceAnalysis.price20k.revenue)}
                 </Typography>
               </Box>
             </Box>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
               {priceAnalysis.price20k.percentage.toFixed(1)}% dari total transaksi
             </Typography>
           </Box>
 
-          <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.100' }}>
-            <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+          {/* Regular */}
+          <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.100' }}>
+            <Box display="flex" alignItems="center" gap={1} mb={1}>
+              <StoreIcon fontSize="small" color="primary" />
+              <Typography variant="body2" fontWeight="bold" color="primary.main">
+                Regular (Rp 18.000)
+              </Typography>
+            </Box>
+            <Box display="flex" justifyContent="space-between" alignItems="center">
               <Box>
-                <Typography variant="body2" fontWeight="bold" color="primary.main">
-                  🏪 Regular (Rp 18.000)
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="body2" color="text.secondary">
                   {priceAnalysis.price18k.transactions} transaksi
+                </Typography>
+                <Typography variant="h6" fontWeight="bold" color="primary.main">
+                  {priceAnalysis.price18k.quantity} tabung
                 </Typography>
               </Box>
               <Box textAlign="right">
-                <Typography variant="body2" fontWeight="bold">
-                  {priceAnalysis.price18k.quantity} tabung
+                <Typography variant="body2" color="text.secondary">
+                  Total Revenue
                 </Typography>
-                <Typography variant="body2" color="primary.main" fontWeight="medium">
+                <Typography variant="h6" fontWeight="bold" color="primary.main">
                   {formatCurrency(priceAnalysis.price18k.revenue)}
                 </Typography>
               </Box>
             </Box>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
               {priceAnalysis.price18k.percentage.toFixed(1)}% dari total transaksi
             </Typography>
           </Box>
 
-          <Box sx={{ p: 1, borderRadius: 1, bgcolor: 'background.paper' }}>
-            <Box display="flex" justifyContent="space-between">
-              <Typography variant="caption" fontWeight="medium">
+          {/* Summary */}
+          <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'background.paper' }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center">
+              <Typography variant="body2" fontWeight="bold">
                 Total 30 Hari:
               </Typography>
-              <Typography variant="caption" fontWeight="bold">
-                {priceAnalysis.total.quantity} tabung • {formatCurrency(priceAnalysis.total.revenue)}
-              </Typography>
+              <Box textAlign="right">
+                <Typography variant="body2" fontWeight="bold">
+                  {priceAnalysis.total.quantity} tabung
+                </Typography>
+                <Typography variant="body2" color="primary.main" fontWeight="bold">
+                  {formatCurrency(priceAnalysis.total.revenue)}
+                </Typography>
+              </Box>
             </Box>
           </Box>
         </Stack>
@@ -483,64 +523,77 @@ export default function BusinessIntelligenceCard() {
     if (analysisLoading || monthlyTrend.length === 0) return null;
 
     return (
-      <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-        <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-          📈 Tren Harga per Bulan
-        </Typography>
+      <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+        <Box display="flex" alignItems="center" gap={1} mb={2}>
+          <TrendingUpIcon color="primary" />
+          <Typography variant="subtitle2" fontWeight="bold">
+            Tren Harga per Bulan
+          </Typography>
+        </Box>
         
-        <Stack spacing={1.5}>
+        <Stack spacing={2}>
           {monthlyTrend.map((month, index) => (
-            <Box key={index} sx={{ p: 1.5, borderRadius: 1, bgcolor: 'background.paper', border: '1px solid #f0f0f0' }}>
-              <Typography variant="body2" fontWeight="medium" gutterBottom>
+            <Box key={index} sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid #e0e0e0' }}>
+              <Typography variant="body2" fontWeight="bold" gutterBottom color="primary">
                 {month.month}
               </Typography>
               
-              <Stack spacing={1}>
+              <Stack spacing={1.5}>
+                {/* Delivery */}
                 <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="caption" color="success.main">
-                    🚚 Delivery:
-                  </Typography>
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <LocalShippingIcon fontSize="small" color="success" />
+                    <Typography variant="body2" color="success.main">
+                      Delivery
+                    </Typography>
+                  </Box>
                   <Box textAlign="right">
-                    <Typography variant="caption" fontWeight="medium">
+                    <Typography variant="body2" fontWeight="medium">
                       {month.price20k.quantity} tabung
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
                       {formatCurrency(month.price20k.revenue)}
                     </Typography>
                   </Box>
                 </Box>
 
+                {/* Regular */}
                 <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="caption" color="primary.main">
-                    🏪 Regular:
-                  </Typography>
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <StoreIcon fontSize="small" color="primary" />
+                    <Typography variant="body2" color="primary.main">
+                      Regular
+                    </Typography>
+                  </Box>
                   <Box textAlign="right">
-                    <Typography variant="caption" fontWeight="medium">
+                    <Typography variant="body2" fontWeight="medium">
                       {month.price18k.quantity} tabung
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
                       {formatCurrency(month.price18k.revenue)}
                     </Typography>
                   </Box>
                 </Box>
 
-                <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ pt: 0.5, borderTop: '1px dashed #e0e0e0' }}>
-                  <Typography variant="caption" fontWeight="bold">
-                    Total:
+                {/* Total */}
+                <Divider />
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                  <Typography variant="body2" fontWeight="bold">
+                    Total Bulanan
                   </Typography>
-                  <Typography variant="caption" fontWeight="bold">
-                    {month.price20k.quantity + month.price18k.quantity} tabung •{' '}
-                    {formatCurrency(month.price20k.revenue + month.price18k.revenue)}
-                  </Typography>
+                  <Box textAlign="right">
+                    <Typography variant="body2" fontWeight="bold">
+                      {month.price20k.quantity + month.price18k.quantity} tabung
+                    </Typography>
+                    <Typography variant="body2" color="primary.main" fontWeight="bold">
+                      {formatCurrency(month.price20k.revenue + month.price18k.revenue)}
+                    </Typography>
+                  </Box>
                 </Box>
               </Stack>
             </Box>
           ))}
         </Stack>
-        
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          Menampilkan {monthlyTrend.length} bulan terakhir
-        </Typography>
       </Box>
     );
   };
@@ -589,94 +642,120 @@ export default function BusinessIntelligenceCard() {
   return (
     <Card sx={{ width: '100%', maxWidth: '100%' }}>
       <CardContent>
-        <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
+        {/* Header */}
+        <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={3}>
           <Box>
-            <Typography variant="h6" gutterBottom>Business Intelligence (AI)</Typography>
-            <Typography variant="caption" color="text.secondary">Ringkasan & saran otomatis dari data kamu</Typography>
+            <Typography variant="h6" gutterBottom fontWeight="bold">
+              Business Intelligence (AI)
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Ringkasan & analisis otomatis dari data penjualan
+            </Typography>
           </Box>
-          <Tooltip title={new Date(data.generated_at || Date.now()).toLocaleString("id-ID")}>
-            <Chip label="AI Analysis" color="primary" variant="outlined" size="small" icon={<AnalyticsIcon fontSize="small" />} />
+          <Tooltip title={`Terakhir update: ${new Date(data.generated_at || Date.now()).toLocaleString("id-ID")}`}>
+            <Chip 
+              label="AI Analysis" 
+              color="primary" 
+              variant="outlined" 
+              size="small" 
+              icon={<AnalyticsIcon fontSize="small" />} 
+            />
           </Tooltip>
         </Box>
 
-        <Stack spacing={2}>
-          <Alert iconMapping={{ info: <InfoIcon fontSize="small" /> }} severity="info" sx={{ '& .MuiAlert-message': { fontSize: '0.9rem', lineHeight: 1.5 } }}>
+        <Stack spacing={3}>
+          {/* AI Insight */}
+          <Alert 
+            icon={<InfoIcon />} 
+            severity="info" 
+            sx={{ 
+              borderRadius: 2,
+              '& .MuiAlert-message': { 
+                fontSize: '0.9rem', 
+                lineHeight: 1.5,
+                width: '100%'
+              } 
+            }}
+          >
             {data.insight}
           </Alert>
 
+          {/* AI Advice */}
           {data.advice && (
             <Alert
-              iconMapping={{ warning: <WarningAmberIcon fontSize="small" />, success: <CheckCircleIcon fontSize="small" /> }}
+              icon={data.advice.level === "warning" ? <WarningAmberIcon /> : <CheckCircleIcon />}
               severity={data.advice.level || "info"}
+              sx={{ borderRadius: 2 }}
             >
-              <Typography variant="body2" fontWeight={700}>{data.advice.title}</Typography>
-              <Typography variant="body2">{data.advice.message}</Typography>
+              <Typography variant="body2" fontWeight={700} gutterBottom>
+                {data.advice.title}
+              </Typography>
+              <Typography variant="body2">
+                {data.advice.message}
+              </Typography>
             </Alert>
           )}
 
+          {/* Forecast */}
           {forecastSummary && (
-            <Box>
+            <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                Forecast 7 Hari {forecastSummary.dataSource === 'aktual' ? '📊' : '🤖'}
+                📊 Forecast 7 Hari
               </Typography>
               
-              <Stack spacing={1}>
-                <Box display="flex" justifyContent="space-between">
-                  <Typography variant="body2">Penjualan Harian:</Typography>
-                  <Typography variant="body2" fontWeight="medium">
+              <Stack spacing={2}>
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                  <Typography variant="body2">Penjualan Harian Rata-rata:</Typography>
+                  <Typography variant="body2" fontWeight="bold" color="primary.main">
                     {forecastSummary.avgSales ?? "-"} tabung
                   </Typography>
                 </Box>
                 
                 {forecastSummary.trend && (
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography variant="body2">Tren 3 Hari:</Typography>
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="body2">Tren Penjualan:</Typography>
                     <Typography variant="body2" fontWeight="medium">
                       {forecastSummary.trend.description}
                     </Typography>
                   </Box>
                 )}
                 
-                <Box display="flex" justifyContent="space-between">
-                  <Typography variant="body2">Status Stok:</Typography>
-                  <Typography variant="body2" fontWeight="medium">
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                  <Typography variant="body2">Estimasi Stok:</Typography>
+                  <Typography 
+                    variant="body2" 
+                    fontWeight="bold"
+                    color={
+                      forecastSummary.safeDays <= 2 ? 'error.main' :
+                      forecastSummary.safeDays <= 5 ? 'warning.main' : 'success.main'
+                    }
+                  >
                     {forecastSummary.safeDays != null ? (
-                      forecastSummary.safeDays <= 2 ? (
-                        <Box component="span" color="error.main">
-                          ⚠️ Aman {forecastSummary.safeDays} hari (sampai {forecastSummary.safeUntil})
-                        </Box>
-                      ) : forecastSummary.safeDays <= 5 ? (
-                        <Box component="span" color="warning.main">
-                          ⚠️ Aman {forecastSummary.safeDays} hari (sampai {forecastSummary.safeUntil})
-                        </Box>
-                      ) : (
-                        <Box component="span" color="success.main">
-                          ✅ Aman {forecastSummary.safeDays} hari (sampai {forecastSummary.safeUntil})
-                        </Box>
-                      )
+                      `Aman ${forecastSummary.safeDays} hari (sampai ${forecastSummary.safeUntil})`
                     ) : "Tidak tersedia"}
                   </Typography>
                 </Box>
-                
-                <Typography variant="caption" color="text.secondary">
-                  {forecastSummary.dataSource === 'aktual' ? 
-                    'Berdasarkan data penjualan 7 hari terakhir' : 
-                    'Berdasarkan prediksi AI'}
-                </Typography>
               </Stack>
             </Box>
           )}
 
+          {/* Price Analysis */}
           <PriceAnalysisSection />
 
+          {/* Monthly Trend */}
           <MonthlyTrendSection />
 
+          {/* Top Customers */}
           {!customersLoading && topCustomers.length > 0 && (
-            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                🏆 Top Pelanggan Bulan Ini
-              </Typography>
-              <Stack spacing={1}>
+            <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <TrendingUpIcon color="primary" />
+                <Typography variant="subtitle2" fontWeight="bold">
+                  Top Pelanggan Bulan Ini
+                </Typography>
+              </Box>
+              
+              <Stack spacing={1.5}>
                 {topCustomers.slice(0, 3).map((customer, index) => (
                   <Box 
                     key={customer.customer_name || index} 
@@ -685,14 +764,16 @@ export default function BusinessIntelligenceCard() {
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      p: 1,
-                      borderRadius: 1,
+                      p: 1.5,
+                      borderRadius: 2,
                       cursor: 'pointer',
                       transition: 'all 0.2s',
+                      backgroundColor: 'background.paper',
+                      border: '1px solid #e0e0e0',
                       '&:hover': {
                         backgroundColor: 'primary.light',
-                        transform: 'translateY(-1px)',
-                        boxShadow: 1
+                        transform: 'translateY(-2px)',
+                        boxShadow: 2
                       }
                     }}
                   >
@@ -700,7 +781,7 @@ export default function BusinessIntelligenceCard() {
                       <Typography variant="body2" fontWeight="medium" noWrap>
                         {index + 1}. {customer.customer_name || customer.customer || 'N/A'}
                       </Typography>
-                      <Stack direction="row" spacing={1} alignItems="center">
+                      <Stack direction="row" spacing={1} alignItems="center" mt={0.5}>
                         <Typography variant="caption" color="text.secondary">
                           {customer.total_qty || 0} tabung
                         </Typography>
@@ -712,8 +793,8 @@ export default function BusinessIntelligenceCard() {
                         </Typography>
                       </Stack>
                     </Box>
-                    <Box sx={{ textAlign: 'right' }}>
-                      <Typography variant="body2" fontWeight="medium">
+                    <Box sx={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2" fontWeight="bold" color="primary.main">
                         {formatCurrency(customer.total_value)}
                       </Typography>
                       <Tooltip title="Klik untuk lihat riwayat">
@@ -723,41 +804,38 @@ export default function BusinessIntelligenceCard() {
                   </Box>
                 ))}
               </Stack>
-              
-              {topCustomers.length > 3 && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                  +{topCustomers.length - 3} pelanggan lainnya
-                </Typography>
-              )}
             </Box>
           )}
 
+          {/* KPI Summary */}
           {data.kpi && (
-            <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                📊 Kinerja Utama
+                📈 Kinerja Utama (MTD)
               </Typography>
-              <Stack spacing={1}>
-                <Box display="flex" justifyContent="space-between">
-                  <Typography variant="body2">Omzet MTD:</Typography>
-                  <Typography variant="body2" fontWeight="medium">
+              <Stack spacing={2}>
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                  <Typography variant="body2">Total Omzet:</Typography>
+                  <Typography variant="body2" fontWeight="bold" color="primary.main">
                     {formatCurrency(data.kpi.omzet)}
                   </Typography>
                 </Box>
                 {data.kpi.laba != null && (
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography variant="body2">Laba MTD:</Typography>
-                    <Typography variant="body2" 
-                      fontWeight="medium" 
-                      color={data.kpi.laba >= 0 ? 'success.main' : 'error.main'}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="body2">Laba Bersih:</Typography>
+                    <Typography 
+                      variant="body2" 
+                      fontWeight="bold"
+                      color={data.kpi.laba >= 0 ? 'success.main' : 'error.main'}
+                    >
                       {formatCurrency(data.kpi.laba)}
                     </Typography>
                   </Box>
                 )}
                 {data.kpi.margin != null && (
-                  <Box display="flex" justifyContent="space-between">
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
                     <Typography variant="body2">Margin:</Typography>
-                    <Typography variant="body2" fontWeight="medium">
+                    <Typography variant="body2" fontWeight="bold">
                       {data.kpi.margin.toFixed(1)}%
                     </Typography>
                   </Box>
