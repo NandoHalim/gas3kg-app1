@@ -26,7 +26,26 @@ import { fmtIDR } from "../../../../utils/helpers.js";
 import RowKV from "../ui/RowKV.jsx";
 import { useMediaQuery } from "@mui/material";
 
-function FinancialSummaryCard({ 
+// Safe color helper untuk menghindari error theme
+const getSafeColor = (theme, colorPath, fallback = 'text.primary') => {
+  try {
+    if (!colorPath || typeof colorPath !== 'string') return fallback;
+    
+    // Handle color seperti 'success.main', 'error.main', dll
+    if (colorPath.includes('.')) {
+      const [colorName, shade] = colorPath.split('.');
+      return theme.palette[colorName]?.[shade] || fallback;
+    }
+    
+    // Handle basic color names
+    return theme.palette[colorPath]?.main || theme.palette[colorPath] || fallback;
+  } catch (error) {
+    console.warn('Color error:', error);
+    return fallback;
+  }
+};
+
+const FinancialSummaryCard = React.forwardRef(function FinancialSummaryCard({ 
   omzet = 0, 
   hpp = 0, 
   laba = 0, 
@@ -36,123 +55,194 @@ function FinancialSummaryCard({
   loading = false,
   period = "",
   showDetails = false,
-  onToggleDetails
-}) {
+  onToggleDetails,
+  ...props
+}, ref) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  
+  // Safe media queries dengan error handling
+  const [isMobile, setIsMobile] = React.useState(false);
+  
+  React.useEffect(() => {
+    try {
+      const mobileMql = window.matchMedia('(max-width: 600px)');
+      const updateMobile = () => setIsMobile(mobileMql.matches);
+      
+      updateMobile(); // Set initial value
+      mobileMql.addEventListener('change', updateMobile);
+      
+      return () => mobileMql.removeEventListener('change', updateMobile);
+    } catch (error) {
+      console.warn('Media query error:', error);
+      setIsMobile(false);
+    }
+  }, []);
 
-  // Calculate additional metrics
-  const averageTransactionValue = transactionCount > 0 ? omzet / transactionCount : 0;
-  const profitPerUnit = totalQty > 0 ? laba / totalQty : 0;
+  // Calculate additional metrics dengan error handling
+  const averageTransactionValue = React.useMemo(() => {
+    try {
+      return transactionCount > 0 ? omzet / transactionCount : 0;
+    } catch {
+      return 0;
+    }
+  }, [omzet, transactionCount]);
 
-  // Color schemes based on performance
+  const profitPerUnit = React.useMemo(() => {
+    try {
+      return totalQty > 0 ? laba / totalQty : 0;
+    } catch {
+      return 0;
+    }
+  }, [laba, totalQty]);
+
+  // Color schemes based on performance - dengan safe fallbacks
   const getPerformanceColor = (value, type = 'default') => {
-    if (type === 'margin') {
-      if (value >= 30) return 'success';
-      if (value >= 15) return 'warning';
-      return 'error';
+    try {
+      if (type === 'margin') {
+        if (value >= 30) return 'success';
+        if (value >= 15) return 'warning';
+        return 'error';
+      }
+      if (type === 'profit') {
+        return value >= 0 ? 'success' : 'error';
+      }
+      return 'default';
+    } catch {
+      return 'default';
     }
-    if (type === 'profit') {
-      if (value >= 0) return 'success';
-      return 'error';
-    }
-    return 'default';
   };
 
   const getPerformanceIcon = (value, type = 'default') => {
-    if (type === 'margin') {
-      if (value >= 30) return <TrendingUp sx={{ fontSize: 16 }} />;
-      if (value >= 15) return <TrendingUp sx={{ fontSize: 16 }} />;
-      return <TrendingDown sx={{ fontSize: 16 }} />;
+    try {
+      if (type === 'margin') {
+        if (value >= 30) return <TrendingUp sx={{ fontSize: 16 }} />;
+        if (value >= 15) return <TrendingUp sx={{ fontSize: 16 }} />;
+        return <TrendingDown sx={{ fontSize: 16 }} />;
+      }
+      if (type === 'profit') {
+        return value >= 0 ? <TrendingUp sx={{ fontSize: 16 }} /> : <TrendingDown sx={{ fontSize: 16 }} />;
+      }
+      return null;
+    } catch {
+      return null;
     }
-    if (type === 'profit') {
-      return value >= 0 ? <TrendingUp sx={{ fontSize: 16 }} /> : <TrendingDown sx={{ fontSize: 16 }} />;
-    }
-    return null;
   };
 
-  // Enhanced mobile row component
-  const MobileRow = ({ 
+  // Enhanced mobile row component dengan forwardRef
+  const MobileRow = React.forwardRef(function MobileRow({ 
     label, 
     value, 
     color = 'text.primary', 
     isTotal = false, 
     icon = null,
     tooltip = "",
-    chip = false 
-  }) => (
-    <Tooltip title={tooltip} arrow placement="top">
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        py: 1.5,
-        px: 1,
-        borderRadius: 1,
-        bgcolor: isTotal ? alpha(theme.palette.primary.main, 0.03) : 'transparent',
-        border: isTotal ? `1px solid ${alpha(theme.palette.primary.main, 0.1)}` : 'none',
-        transition: 'all 0.2s ease-in-out',
-        '&:hover': {
-          bgcolor: alpha(theme.palette.primary.main, 0.02),
+    chip = false,
+    ...rowProps 
+  }, ref) {
+    
+    // Safe color untuk mobile row
+    const safeColor = React.useMemo(() => {
+      try {
+        // Untuk color seperti 'success.main', gunakan hanya base color 'success'
+        if (typeof color === 'string' && color.includes('.')) {
+          return color.split('.')[0];
         }
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-          {icon && (
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              width: 24,
-              height: 24,
-              borderRadius: '50%',
-              bgcolor: alpha(color, 0.1)
-            }}>
-              {icon}
-            </Box>
+        return color;
+      } catch {
+        return 'text.primary';
+      }
+    }, [color]);
+
+    const safeIconColor = React.useMemo(() => {
+      try {
+        return getSafeColor(theme, color, 'primary.main');
+      } catch {
+        return theme.palette.primary.main;
+      }
+    }, [theme, color]);
+
+    return (
+      <Tooltip title={tooltip} arrow placement="top">
+        <Box 
+          ref={ref}
+          sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            py: 1.5,
+            px: 1,
+            borderRadius: 1,
+            bgcolor: isTotal ? alpha(theme.palette.primary.main, 0.03) : 'transparent',
+            border: isTotal ? `1px solid ${alpha(theme.palette.primary.main, 0.1)}` : 'none',
+            transition: 'all 0.2s ease-in-out',
+            '&:hover': {
+              bgcolor: alpha(theme.palette.primary.main, 0.02),
+            }
+          }}
+          {...rowProps}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+            {icon && React.isValidElement(icon) && (
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                bgcolor: alpha(safeIconColor, 0.1)
+              }}>
+                {React.cloneElement(icon, { 
+                  sx: { 
+                    fontSize: 16, 
+                    color: safeIconColor 
+                  } 
+                })}
+              </Box>
+            )}
+            <Typography 
+              variant={isTotal ? "body1" : "body2"} 
+              fontWeight={isTotal ? 600 : 500}
+              color="text.secondary"
+              sx={{ 
+                fontSize: isMobile ? '0.75rem' : '0.8rem',
+                lineHeight: 1.2
+              }}
+            >
+              {label}
+            </Typography>
+          </Box>
+          
+          {chip ? (
+            <Chip
+              label={value}
+              color={getPerformanceColor(margin, 'margin')}
+              variant="filled"
+              size="small"
+              icon={getPerformanceIcon(margin, 'margin')}
+              sx={{ 
+                fontWeight: 600,
+                minWidth: 60
+              }}
+            />
+          ) : (
+            <Typography 
+              variant={isTotal ? "h6" : "body1"} 
+              fontWeight={isTotal ? 700 : 600}
+              color={safeColor}
+              sx={{ 
+                fontSize: isMobile ? '0.8rem' : isTotal ? '1rem' : '0.9rem',
+                textAlign: 'right',
+                fontFamily: 'monospace'
+              }}
+            >
+              {value}
+            </Typography>
           )}
-          <Typography 
-            variant={isTotal ? "body1" : "body2"} 
-            fontWeight={isTotal ? 600 : 500}
-            color="text.secondary"
-            sx={{ 
-              fontSize: isMobile ? '0.75rem' : '0.8rem',
-              lineHeight: 1.2
-            }}
-          >
-            {label}
-          </Typography>
         </Box>
-        
-        {chip ? (
-          <Chip
-            label={value}
-            color={getPerformanceColor(margin, 'margin')}
-            variant="filled"
-            size="small"
-            icon={getPerformanceIcon(margin, 'margin')}
-            sx={{ 
-              fontWeight: 600,
-              minWidth: 60
-            }}
-          />
-        ) : (
-          <Typography 
-            variant={isTotal ? "h6" : "body1"} 
-            fontWeight={isTotal ? 700 : 600}
-            color={color}
-            sx={{ 
-              fontSize: isMobile ? '0.8rem' : isTotal ? '1rem' : '0.9rem',
-              textAlign: 'right',
-              fontFamily: isTotal ? 'inherit' : 'monospace'
-            }}
-          >
-            {value}
-          </Typography>
-        )}
-      </Box>
-    </Tooltip>
-  );
+      </Tooltip>
+    );
+  });
 
   // Enhanced skeleton loader
   const MobileSkeleton = () => (
@@ -181,20 +271,41 @@ function FinancialSummaryCard({
     </Stack>
   );
 
+  // Safe background colors
+  const safeBackground = React.useMemo(() => {
+    try {
+      return `linear(135deg, ${alpha(getSafeColor(theme, 'success.main'), 0.03)} 0%, ${alpha(getSafeColor(theme, 'info.main'), 0.03)} 100%)`;
+    } catch {
+      return `linear(135deg, ${alpha(theme.palette.success.main, 0.03)} 0%, ${alpha(theme.palette.info.main, 0.03)} 100%)`;
+    }
+  }, [theme]);
+
+  const safeHeaderBackground = React.useMemo(() => {
+    try {
+      return `linear(135deg, ${getSafeColor(theme, 'success.main')} 0%, ${getSafeColor(theme, 'info.main')} 100%)`;
+    } catch {
+      return `linear(135deg, ${theme.palette.success.main} 0%, ${theme.palette.info.main} 100%)`;
+    }
+  }, [theme]);
+
   return (
-    <Card sx={{
-      background: `linear(135deg, ${alpha(theme.palette.success.main, 0.03)} 0%, ${alpha(theme.palette.info.main, 0.03)} 100%)`,
-      border: `1px solid ${alpha(theme.palette.success.main, 0.15)}`,
-      width: '100%',
-      maxWidth: '100%',
-      overflow: 'hidden',
-      transition: 'all 0.3s ease-in-out',
-      '&:hover': {
-        transform: 'translateY(-2px)',
-        boxShadow: theme.shadows[4],
-        borderColor: alpha(theme.palette.success.main, 0.3),
-      }
-    }}>
+    <Card 
+      ref={ref}
+      sx={{
+        background: safeBackground,
+        border: `1px solid ${alpha(getSafeColor(theme, 'success.main'), 0.15)}`,
+        width: '100%',
+        maxWidth: '100%',
+        overflow: 'hidden',
+        transition: 'all 0.3s ease-in-out',
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: theme.shadows[4],
+          borderColor: alpha(getSafeColor(theme, 'success.main'), 0.3),
+        }
+      }}
+      {...props}
+    >
       <CardHeader
         title={
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -206,7 +317,7 @@ function FinancialSummaryCard({
                 width: isMobile ? 36 : 44,
                 height: isMobile ? 36 : 44,
                 borderRadius: 2,
-                background: `linear(135deg, ${theme.palette.success.main} 0%, ${theme.palette.info.main} 100%)`,
+                background: safeHeaderBackground,
                 color: 'white'
               }}>
                 <AccountBalanceWallet sx={{ fontSize: isMobile ? '1.1rem' : '1.3rem' }} />
@@ -247,7 +358,7 @@ function FinancialSummaryCard({
                     size="small" 
                     onClick={onToggleDetails}
                     sx={{ 
-                      color: 'primary.main',
+                      color: getSafeColor(theme, 'primary.main'),
                       transform: showDetails ? 'rotate(180deg)' : 'none',
                       transition: 'transform 0.3s ease-in-out'
                     }}
@@ -278,21 +389,21 @@ function FinancialSummaryCard({
         {loading ? (
           isMobile ? <MobileSkeleton /> : <DesktopSkeleton />
         ) : isMobile ? (
-          // Enhanced Mobile View
+          // Enhanced Mobile View dengan safe colors
           <Stack spacing={1}>
             <MobileRow 
               label="Total Omzet" 
               value={fmtIDR(omzet)} 
-              color="success.main"
-              icon={<AttachMoney sx={{ fontSize: 16, color: 'success.main' }} />}
+              color="success"
+              icon={<AttachMoney />}
               tooltip="Total pendapatan dari transaksi yang dibayar"
             />
             
             <MobileRow 
               label="HPP" 
               value={`- ${fmtIDR(hpp)}`} 
-              color="error.main"
-              icon={<Inventory sx={{ fontSize: 16, color: 'error.main' }} />}
+              color="error"
+              icon={<Inventory />}
               tooltip="Harga Pokok Penjualan"
             />
             
@@ -303,7 +414,7 @@ function FinancialSummaryCard({
             <MobileRow 
               label="Laba Kotor" 
               value={fmtIDR(laba)} 
-              color={laba >= 0 ? 'success.main' : 'error.main'}
+              color={laba >= 0 ? 'success' : 'error'}
               icon={getPerformanceIcon(laba, 'profit')}
               isTotal={true}
               tooltip="Laba sebelum pengurangan biaya operasional"
@@ -326,14 +437,14 @@ function FinancialSummaryCard({
                 <MobileRow 
                   label="Rata-rata/Transaksi" 
                   value={fmtIDR(averageTransactionValue)} 
-                  color="info.main"
+                  color="info"
                   tooltip="Nilai rata-rata per transaksi"
                 />
                 
                 <MobileRow 
                   label="Laba/Unit" 
                   value={fmtIDR(profitPerUnit)} 
-                  color={profitPerUnit >= 0 ? 'success.main' : 'error.main'}
+                  color={profitPerUnit >= 0 ? 'success' : 'error'}
                   tooltip="Laba kotor per unit tabung"
                 />
               </>
@@ -343,10 +454,10 @@ function FinancialSummaryCard({
             <Box sx={{ 
               mt: 1, 
               p: 2, 
-              bgcolor: alpha(theme.palette.primary.main, 0.08), 
+              bgcolor: alpha(getSafeColor(theme, 'primary.main'), 0.08), 
               borderRadius: 2,
               textAlign: 'center',
-              border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
+              border: `1px solid ${alpha(getSafeColor(theme, 'primary.main'), 0.1)}`
             }}>
               <Typography 
                 variant="caption" 
@@ -372,19 +483,19 @@ function FinancialSummaryCard({
             </Box>
           </Stack>
         ) : (
-          // Enhanced Desktop View
+          // Enhanced Desktop View dengan safe colors
           <Stack spacing={2.5}>
             <RowKV 
               k={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <AttachMoney sx={{ fontSize: 18, color: 'success.main' }} />
+                  <AttachMoney sx={{ fontSize: 18, color: getSafeColor(theme, 'success.main') }} />
                   <span>Total Omzet</span>
                 </Box>
               } 
               v={fmtIDR(omzet)} 
               vSx={{ 
                 fontWeight: 700, 
-                color: 'success.main',
+                color: getSafeColor(theme, 'success.main'),
                 fontSize: '1.1rem',
                 fontFamily: 'monospace'
               }}
@@ -393,14 +504,14 @@ function FinancialSummaryCard({
             <RowKV 
               k={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Inventory sx={{ fontSize: 18, color: 'error.main' }} />
+                  <Inventory sx={{ fontSize: 18, color: getSafeColor(theme, 'error.main') }} />
                   <span>Harga Pokok Penjualan</span>
                 </Box>
               } 
               v={`- ${fmtIDR(hpp)}`} 
               vSx={{ 
                 fontWeight: 600, 
-                color: 'error.main',
+                color: getSafeColor(theme, 'error.main'),
                 fontFamily: 'monospace'
               }}
             />
@@ -413,7 +524,7 @@ function FinancialSummaryCard({
               vSx={{ 
                 fontWeight: 800, 
                 fontSize: '1.3rem',
-                color: laba >= 0 ? 'success.main' : 'error.main',
+                color: getSafeColor(theme, laba >= 0 ? 'success.main' : 'error.main'),
                 fontFamily: 'monospace'
               }}
             />
@@ -445,7 +556,7 @@ function FinancialSummaryCard({
                   v={fmtIDR(averageTransactionValue)} 
                   vSx={{ 
                     fontWeight: 600, 
-                    color: 'info.main',
+                    color: getSafeColor(theme, 'info.main'),
                     fontFamily: 'monospace'
                   }}
                 />
@@ -455,7 +566,7 @@ function FinancialSummaryCard({
                   v={fmtIDR(profitPerUnit)} 
                   vSx={{ 
                     fontWeight: 600, 
-                    color: profitPerUnit >= 0 ? 'success.main' : 'error.main',
+                    color: getSafeColor(theme, profitPerUnit >= 0 ? 'success.main' : 'error.main'),
                     fontFamily: 'monospace'
                   }}
                 />
@@ -466,9 +577,9 @@ function FinancialSummaryCard({
             <Box sx={{ 
               mt: 2, 
               p: 2.5, 
-              bgcolor: alpha(theme.palette.primary.main, 0.08), 
+              bgcolor: alpha(getSafeColor(theme, 'primary.main'), 0.08), 
               borderRadius: 2,
-              border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
+              border: `1px solid ${alpha(getSafeColor(theme, 'primary.main'), 0.1)}`
             }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                 <Typography variant="body2" fontWeight={600} color="text.secondary">
@@ -491,6 +602,8 @@ function FinancialSummaryCard({
       </CardContent>
     </Card>
   );
-}
+});
 
-export default React.memo(FinancialSummaryCard);
+FinancialSummaryCard.displayName = 'FinancialSummaryCard';
+
+export default FinancialSummaryCard;
