@@ -33,14 +33,119 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
+// 🔥 PERBAIKAN: Fungsi untuk mendapatkan data penjualan 7 hari terakhir
+const getSevenDaysSalesData = async () => {
+  try {
+    const sevenDaysData = await DataService.getSevenDaySalesRealtime?.();
+    
+    if (!sevenDaysData || !Array.isArray(sevenDaysData)) {
+      console.warn('Data 7 hari tidak tersedia, menggunakan fallback');
+      return null;
+    }
+
+    // Filter data yang valid dan konversi ke format yang konsisten
+    const validData = sevenDaysData
+      .filter(item => item && (item.qty !== undefined && item.qty !== null))
+      .map(item => ({
+        date: item.date,
+        qty: Number(item.qty) || 0,
+        totalValue: Number(item.totalValue) || 0
+      }));
+
+    console.log('📊 Data 7 hari terakhir (dari SevenDaysChart):', validData);
+    return validData;
+
+  } catch (error) {
+    console.error('Error mengambil data 7 hari:', error);
+    return null;
+  }
+};
+
+// 🔥 PERBAIKAN: Hitung rata-rata penjualan harian yang lebih akurat
+const calculateAccurateDailyAverage = (salesData) => {
+  if (!salesData || salesData.length === 0) return 0;
+
+  // Filter hanya hari dengan penjualan (tidak termasuk hari tanpa penjualan)
+  const daysWithSales = salesData.filter(day => day.qty > 0);
+  
+  if (daysWithSales.length === 0) return 0;
+
+  const totalQty = daysWithSales.reduce((sum, day) => sum + day.qty, 0);
+  const average = totalQty / daysWithSales.length;
+  
+  console.log('📈 Perhitungan rata-rata harian:', {
+    totalHari: salesData.length,
+    hariDenganPenjualan: daysWithSales.length,
+    totalTabung: totalQty,
+    rataRata: Math.round(average)
+  });
+
+  return Math.round(average);
+};
+
+// 🔥 PERBAIKAN: Forecast yang lebih akurat berdasarkan data historis
+const calculateImprovedForecast = (salesData, currentStock) => {
+  if (!salesData || salesData.length === 0) {
+    return {
+      avgSales: 0,
+      safeDays: 0,
+      safeUntil: null,
+      confidence: 'low',
+      trend: 'stabil'
+    };
+  }
+
+  const dailyAverage = calculateAccurateDailyAverage(salesData);
+  
+  // Hitung tren berdasarkan 3 hari terakhir vs 3 hari sebelumnya
+  const recentDays = salesData.slice(-3);
+  const previousDays = salesData.slice(-6, -3);
+  
+  const recentAvg = recentDays.length > 0 ? 
+    recentDays.reduce((sum, day) => sum + day.qty, 0) / recentDays.length : 0;
+  const previousAvg = previousDays.length > 0 ? 
+    previousDays.reduce((sum, day) => sum + day.qty, 0) / previousDays.length : 0;
+  
+  const trend = recentAvg > previousAvg * 1.1 ? 'naik' : 
+                recentAvg < previousAvg * 0.9 ? 'turun' : 'stabil';
+
+  // Hitung safe days dengan buffer berdasarkan tren
+  let safeDays = 0;
+  if (currentStock > 0 && dailyAverage > 0) {
+    const baseDays = Math.floor(currentStock / dailyAverage);
+    
+    // Adjust berdasarkan tren
+    if (trend === 'naik') {
+      safeDays = Math.max(1, Math.floor(baseDays * 0.8)); // 20% buffer untuk tren naik
+    } else if (trend === 'turun') {
+      safeDays = Math.floor(baseDays * 1.2); // 20% extra untuk tren turun
+    } else {
+      safeDays = baseDays; // Tidak ada adjustment untuk tren stabil
+    }
+  }
+
+  // Hitung confidence level
+  const dataPoints = salesData.filter(day => day.qty > 0).length;
+  const confidence = dataPoints >= 5 ? 'high' : dataPoints >= 3 ? 'medium' : 'low';
+
+  return {
+    avgSales: dailyAverage,
+    safeDays,
+    safeUntil: safeDays > 0 ? formatDatePlus(safeDays) : null,
+    confidence,
+    trend,
+    dataPoints
+  };
+};
+
 const calculateSalesTrend = (salesData) => {
   if (!salesData || salesData.length < 2) return null;
   
   const recentData = salesData.slice(-3);
   const previousData = salesData.slice(-6, -3);
   
-  const recentAvg = recentData.reduce((a, b) => a + b, 0) / recentData.length;
-  const previousAvg = previousData.reduce((a, b) => a + b, 0) / previousData.length;
+  const recentAvg = recentData.reduce((a, b) => a + (b.qty || 0), 0) / recentData.length;
+  const previousAvg = previousData.reduce((a, b) => a + (b.qty || 0), 0) / previousData.length;
   
   const changePercent = previousAvg > 0 ? 
     ((recentAvg - previousAvg) / previousAvg) * 100 : 0;
@@ -64,6 +169,7 @@ export default function BusinessIntelligenceCard() {
   const [priceAnalysis, setPriceAnalysis] = useState(null);
   const [monthlyTrend, setMonthlyTrend] = useState([]);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [sevenDaysData, setSevenDaysData] = useState(null); // 🔥 DATA BARU: Data 7 hari
 
   const { loading, error, data } = state;
 
@@ -78,11 +184,16 @@ export default function BusinessIntelligenceCard() {
         
         setCustomersLoading(true);
         
-        // 🔥 PERBAIKAN: Gunakan onlyPaid: true untuk konsistensi dengan DashboardContainer
+        // 🔥 AMBIL DATA 7 HARI UNTUK PERHITUNGAN YANG LEBIH AKURAT
+        const sevenDaysSales = await getSevenDaysSalesData();
+        if (!alive) return;
+        setSevenDaysData(sevenDaysSales);
+
+        // Top customers
         const topCust = await DataService.getTopCustomersPeriod({
           period: "this_month",
           limit: 5,
-          onlyPaid: true  // Hanya transaksi yang sudah dibayar/lunas
+          onlyPaid: true
         });
         
         if (!alive) return;
@@ -119,14 +230,6 @@ export default function BusinessIntelligenceCard() {
 
       const monthlyStats = analyzeMonthlyTrend(salesData);
       setMonthlyTrend(monthlyStats);
-
-      // 🔥 DEBUG: Log data untuk verifikasi
-      console.log('🔄 Data Tren Bulanan (setelah perbaikan sorting):', monthlyStats);
-      monthlyStats.forEach(month => {
-        const totalQty = month.price18k.quantity + month.price20k.quantity;
-        const totalRevenue = month.price18k.revenue + month.price20k.revenue;
-        console.log(`📊 ${month.month}: ${totalQty} tabung, ${formatCurrency(totalRevenue)}`);
-      });
 
     } catch (error) {
       console.error('Error analyzing price data:', error);
@@ -190,13 +293,13 @@ export default function BusinessIntelligenceCard() {
       const date = new Date(sale.created_at);
       const year = date.getFullYear();
       const month = date.getMonth() + 1;
-      const monthKey = `${year}-${String(month).padStart(2, '0')}`; // Format: "2024-09"
+      const monthKey = `${year}-${String(month).padStart(2, '0')}`;
       const monthName = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
       
       if (!monthlyMap[monthKey]) {
         monthlyMap[monthKey] = {
           month: monthName,
-          monthKey: monthKey, // 🔥 TAMBAHKAN untuk sorting yang benar
+          monthKey: monthKey,
           year: year,
           monthNumber: month,
           price18k: { quantity: 0, revenue: 0, transactions: 0 },
@@ -224,11 +327,71 @@ export default function BusinessIntelligenceCard() {
       }
     });
     
-    // 🔥 PERBAIKAN CRITICAL: Sorting yang benar menggunakan monthKey
     return Object.values(monthlyMap)
-      .sort((a, b) => b.monthKey.localeCompare(a.monthKey)) // Descending: terbaru dulu
-      .slice(0, 6); // Ambil 6 bulan terakhir
+      .sort((a, b) => b.monthKey.localeCompare(a.monthKey))
+      .slice(0, 6);
   };
+
+  // 🔥 PERBAIKAN: Forecast summary yang lebih akurat
+  const forecastSummary = useMemo(() => {
+    if (!sevenDaysData) return null;
+    
+    const currentStock = data?.kpi?.current_stock?.ISI || data?.current_stock?.ISI || 0;
+    const forecast = calculateImprovedForecast(sevenDaysData, currentStock);
+    
+    return {
+      ...forecast,
+      dataSource: '7_hari_terakhir',
+      rawData: sevenDaysData // Untuk debugging
+    };
+  }, [sevenDaysData, data]);
+
+  // 🔥 PERBAIKAN: Stock risk analysis yang lebih akurat
+  const stockRiskAnalysis = useMemo(() => {
+    if (!forecastSummary || !data) return null;
+
+    const currentStock = data.kpi?.current_stock?.ISI || data.current_stock?.ISI || 0;
+    const { avgSales, safeDays, confidence, trend } = forecastSummary;
+
+    let riskLevel = 'low';
+    let riskMessage = '';
+    let recommendation = '';
+
+    if (currentStock === 0) {
+      riskLevel = 'critical';
+      riskMessage = '🚨 STOK HABIS - Segera restock!';
+      recommendation = 'Pesan tabung segera untuk menghindari kehilangan penjualan';
+    } else if (safeDays <= 2) {
+      riskLevel = 'high';
+      riskMessage = '⚠️ Stok kritis - Hanya cukup 2 hari lagi';
+      recommendation = 'Restock dalam 24 jam untuk antisipasi';
+    } else if (safeDays <= 5) {
+      riskLevel = 'medium';
+      riskMessage = '📦 Stok menipis - Cukup untuk 3-5 hari';
+      recommendation = 'Rencanakan restock dalam 2-3 hari';
+    } else {
+      riskLevel = 'low';
+      riskMessage = '✅ Stok aman';
+      recommendation = 'Pantau tren penjualan untuk perencanaan';
+    }
+
+    // Adjust berdasarkan confidence level
+    if (confidence === 'low') {
+      riskMessage += ' (data terbatas)';
+      recommendation = 'Tunggu lebih banyak data untuk analisis akurat';
+    }
+
+    return {
+      riskLevel,
+      riskMessage,
+      recommendation,
+      currentStock,
+      dailyConsumption: avgSales,
+      safeDays,
+      confidence,
+      trend
+    };
+  }, [forecastSummary, data]);
 
   const handleCustomerClick = async (customer) => {
     setSelectedCustomer(customer);
@@ -266,33 +429,6 @@ export default function BusinessIntelligenceCard() {
     setSelectedCustomer(null);
     setCustomerHistory([]);
   };
-
-  const forecastSummary = useMemo(() => {
-    if (!data?.forecast) return null;
-    
-    const sales = Array.isArray(data.forecast.sales_next_7) ? data.forecast.sales_next_7 : [];
-    const stock = Array.isArray(data.forecast.stock_next_7) ? data.forecast.stock_next_7 : [];
-    
-    const avgSales = sales.length ? 
-      Math.round(sales.reduce((a, b) => a + b, 0) / sales.length) : null;
-
-    const trend = calculateSalesTrend(sales);
-    
-    let safeDays = null;
-    const currentStock = data.kpi?.current_stock?.ISI || data.current_stock?.ISI || 0;
-    
-    if (currentStock > 0 && avgSales > 0) {
-      safeDays = Math.floor(currentStock / avgSales);
-    }
-
-    return {
-      avgSales,
-      safeUntil: safeDays != null ? formatDatePlus(safeDays) : null,
-      safeDays,
-      trend,
-      dataSource: 'prediksi'
-    };
-  }, [data]);
 
   const CustomerHistoryModal = () => (
     <Dialog 
@@ -638,6 +774,49 @@ export default function BusinessIntelligenceCard() {
     );
   };
 
+  // 🔥 PERBAIKAN: Stock Risk Alert Component
+  const StockRiskAlert = () => {
+    if (!stockRiskAnalysis) return null;
+
+    const { riskLevel, riskMessage, recommendation, currentStock, dailyConsumption, safeDays, confidence } = stockRiskAnalysis;
+
+    const getAlertProps = () => {
+      switch (riskLevel) {
+        case 'critical':
+          return { severity: 'error', icon: <WarningAmberIcon /> };
+        case 'high':
+          return { severity: 'warning', icon: <WarningAmberIcon /> };
+        case 'medium':
+          return { severity: 'info', icon: <InfoIcon /> };
+        default:
+          return { severity: 'success', icon: <CheckCircleIcon /> };
+      }
+    };
+
+    const alertProps = getAlertProps();
+
+    return (
+      <Alert
+        {...alertProps}
+        sx={{ 
+          borderRadius: 2,
+          '& .MuiAlert-message': { width: '100%' }
+        }}
+      >
+        <Typography variant="body2" fontWeight={700} gutterBottom>
+          {riskMessage}
+        </Typography>
+        <Typography variant="body2" gutterBottom>
+          Stok: {currentStock} tabung • Konsumsi: {dailyConsumption} tabung/hari • Aman: {safeDays} hari
+          {confidence === 'low' && ' • ⚠️ Data terbatas'}
+        </Typography>
+        <Typography variant="body2">
+          <strong>Rekomendasi:</strong> {recommendation}
+        </Typography>
+      </Alert>
+    );
+  };
+
   if (loading) {
     return (
       <Card sx={{ width: '100%', maxWidth: '100%' }}>
@@ -720,6 +899,9 @@ export default function BusinessIntelligenceCard() {
             {data.insight}
           </Alert>
 
+          {/* 🔥 PERBAIKAN: Stock Risk Alert - Lebih Akurat */}
+          <StockRiskAlert />
+
           {/* AI Advice */}
           {data.advice && (
             <Alert
@@ -736,44 +918,49 @@ export default function BusinessIntelligenceCard() {
             </Alert>
           )}
 
-          {/* Forecast */}
+          {/* 🔥 PERBAIKAN: Forecast dengan Data 7 Hari */}
           {forecastSummary && (
             <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
               <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                📊 Forecast 7 Hari
+                📊 Forecast Berdasarkan 7 Hari Terakhir
               </Typography>
               
               <Stack spacing={2}>
                 <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2">Penjualan Harian Rata-rata:</Typography>
+                  <Typography variant="body2">Rata-rata Penjualan Harian:</Typography>
                   <Typography variant="body2" fontWeight="bold" color="primary.main">
-                    {forecastSummary.avgSales ?? "-"} tabung
+                    {forecastSummary.avgSales} tabung
                   </Typography>
                 </Box>
                 
-                {forecastSummary.trend && (
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="body2">Tren Penjualan:</Typography>
-                    <Typography variant="body2" fontWeight="medium">
-                      {forecastSummary.trend.description}
-                    </Typography>
-                  </Box>
-                )}
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                  <Typography variant="body2">Stok Aman Sampai:</Typography>
+                  <Typography variant="body2" fontWeight="bold" color="success.main">
+                    {forecastSummary.safeUntil || 'Tidak dapat dihitung'}
+                  </Typography>
+                </Box>
                 
                 <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2">Estimasi Stok:</Typography>
-                  <Typography 
-                    variant="body2" 
-                    fontWeight="bold"
-                    color={
-                      forecastSummary.safeDays <= 2 ? 'error.main' :
-                      forecastSummary.safeDays <= 5 ? 'warning.main' : 'success.main'
-                    }
-                  >
-                    {forecastSummary.safeDays != null ? (
-                      `Aman ${forecastSummary.safeDays} hari (sampai ${forecastSummary.safeUntil})`
-                    ) : "Tidak tersedia"}
-                  </Typography>
+                  <Typography variant="body2">Tren Penjualan:</Typography>
+                  <Chip 
+                    label={forecastSummary.trend === 'naik' ? '📈 Naik' : 
+                           forecastSummary.trend === 'turun' ? '📉 Turun' : '➡️ Stabil'} 
+                    size="small"
+                    color={forecastSummary.trend === 'naik' ? 'success' : 
+                           forecastSummary.trend === 'turun' ? 'error' : 'default'}
+                    variant="outlined"
+                  />
+                </Box>
+                
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                  <Typography variant="body2">Tingkat Kepercayaan:</Typography>
+                  <Chip 
+                    label={forecastSummary.confidence === 'high' ? 'Tinggi' : 
+                           forecastSummary.confidence === 'medium' ? 'Sedang' : 'Rendah'} 
+                    size="small"
+                    color={forecastSummary.confidence === 'high' ? 'success' : 
+                           forecastSummary.confidence === 'medium' ? 'warning' : 'error'}
+                  />
                 </Box>
               </Stack>
             </Box>
@@ -785,111 +972,58 @@ export default function BusinessIntelligenceCard() {
           {/* Monthly Trend */}
           <MonthlyTrendSection />
 
-          {/* Top Customers - 🔥 SUDAH DIPERBAIKI dengan konsistensi data */}
-          {!customersLoading && topCustomers.length > 0 && (
+          {/* Top Customers */}
+          {topCustomers && topCustomers.length > 0 && (
             <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-              <Box display="flex" alignItems="center" gap={1} mb={2}>
-                <TrendingUpIcon color="primary" />
-                <Typography variant="subtitle2" fontWeight="bold">
-                  Top Pelanggan Bulan Ini
-                </Typography>
-                <Tooltip title="Hanya transaksi yang sudah dibayar/lunas">
-                  <InfoIcon fontSize="small" color="action" />
-                </Tooltip>
-              </Box>
+              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                🏆 Top 5 Customers (Bulan Ini)
+              </Typography>
               
-              <Stack spacing={1.5}>
-                {topCustomers.slice(0, 3).map((customer, index) => (
+              <Stack spacing={1}>
+                {topCustomers.map((customer, index) => (
                   <Box 
-                    key={customer.customer_name || index} 
-                    onClick={() => handleCustomerClick(customer)}
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      p: 1.5,
-                      borderRadius: 2,
+                    key={customer.customer_name || customer.customer || index}
+                    sx={{ 
+                      p: 1.5, 
+                      borderRadius: 1, 
+                      bgcolor: 'background.paper',
                       cursor: 'pointer',
                       transition: 'all 0.2s',
-                      backgroundColor: 'background.paper',
                       border: '1px solid #e0e0e0',
                       '&:hover': {
-                        backgroundColor: 'primary.light',
-                        transform: 'translateY(-2px)',
-                        boxShadow: 2
+                        bgcolor: 'primary.50',
+                        borderColor: 'primary.main'
                       }
                     }}
+                    onClick={() => handleCustomerClick(customer)}
                   >
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body2" fontWeight="medium" noWrap>
-                        {index + 1}. {customer.customer_name || customer.customer || 'N/A'}
-                      </Typography>
-                      <Stack direction="row" spacing={1} alignItems="center" mt={0.5}>
-                        <Typography variant="caption" color="text.secondary">
-                          {customer.total_qty || 0} tabung
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Box>
+                        <Typography variant="body2" fontWeight="medium">
+                          {customer.customer_name || customer.customer}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          •
+                          {customer.transactions || 0} transaksi
+                        </Typography>
+                      </Box>
+                      <Box textAlign="right">
+                        <Typography variant="body2" fontWeight="bold" color="primary.main">
+                          {customer.total_qty || customer.quantity || 0} tabung
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {customer.total_transaksi || 0} transaksi
+                          {formatCurrency(customer.total_revenue || customer.revenue || 0)}
                         </Typography>
-                      </Stack>
-                    </Box>
-                    <Box sx={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="body2" fontWeight="bold" color="primary.main">
-                        {formatCurrency(customer.total_value)}
-                      </Typography>
-                      <Tooltip title="Klik untuk lihat riwayat">
-                        <HistoryIcon fontSize="small" color="action" />
-                      </Tooltip>
+                      </Box>
                     </Box>
                   </Box>
                 ))}
               </Stack>
             </Box>
           )}
-
-          {/* KPI Summary */}
-          {data.kpi && (
-            <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                📈 Kinerja Utama (MTD)
-              </Typography>
-              <Stack spacing={2}>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2">Total Omzet:</Typography>
-                  <Typography variant="body2" fontWeight="bold" color="primary.main">
-                    {formatCurrency(data.kpi.omzet)}
-                  </Typography>
-                </Box>
-                {data.kpi.laba != null && (
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="body2">Laba Bersih:</Typography>
-                    <Typography 
-                      variant="body2" 
-                      fontWeight="bold"
-                      color={data.kpi.laba >= 0 ? 'success.main' : 'error.main'}
-                    >
-                      {formatCurrency(data.kpi.laba)}
-                    </Typography>
-                  </Box>
-                )}
-                {data.kpi.margin != null && (
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="body2">Margin:</Typography>
-                    <Typography variant="body2" fontWeight="bold">
-                      {data.kpi.margin.toFixed(1)}%
-                    </Typography>
-                  </Box>
-                )}
-              </Stack>
-            </Box>
-          )}
         </Stack>
+
+        <CustomerHistoryModal />
       </CardContent>
-      
-      <CustomerHistoryModal />
     </Card>
   );
 }
