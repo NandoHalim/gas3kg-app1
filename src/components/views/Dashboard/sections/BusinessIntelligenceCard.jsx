@@ -12,13 +12,12 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CloseIcon from "@mui/icons-material/Close";
 import HistoryIcon from "@mui/icons-material/History";
-import LocalShippingIcon from "@mui/icons-material/LocalShipping";
-import StoreIcon from "@mui/icons-material/Store";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import PeopleIcon from "@mui/icons-material/People";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import InventoryIcon from "@mui/icons-material/Inventory";
+import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import { DataService } from "../../../../services/DataService.js";
 
 const formatCurrency = (amount) => {
@@ -33,6 +32,30 @@ const formatCurrency = (amount) => {
 const formatNumber = (num) => {
   if (num == null) return '-';
   return new Intl.NumberFormat('id-ID').format(num);
+};
+
+// 🔥 FUNGSI UNTUK MENDAPATKAN DATA PERBANDINGAN BULANAN
+const getMonthlyComparisonData = async () => {
+  try {
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    
+    // Data untuk September dan Oktober
+    const septemberData = await DataService.getMonthlyWeeklyBreakdown(currentYear, 8); // September (0-indexed)
+    const octoberData = await DataService.getMonthlyWeeklyBreakdown(currentYear, 9); // Oktober (0-indexed)
+
+    console.log('📊 Data September:', septemberData);
+    console.log('📊 Data Oktober:', octoberData);
+
+    return {
+      september: septemberData || [],
+      october: octoberData || []
+    };
+
+  } catch (error) {
+    console.error('Error mengambil data perbandingan bulanan:', error);
+    return { september: [], october: [] };
+  }
 };
 
 // 🔥 FUNGSI UNTUK MENDAPATKAN DATA 7 HARI TERAKHIR
@@ -61,7 +84,7 @@ const getSevenDaysSalesData = async () => {
   }
 };
 
-// 🔥 HITUNG RATA-RATA HARIAN YANG LEBIH AKURAT
+// 🔥 HITUNG RATA-RATA HARIAN
 const calculateAccurateDailyAverage = (salesData) => {
   if (!salesData || salesData.length === 0) return 0;
 
@@ -100,9 +123,7 @@ export default function BusinessIntelligenceCard() {
   const [customerHistory, setCustomerHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [priceAnalysis, setPriceAnalysis] = useState(null);
-  const [monthlyTrend, setMonthlyTrend] = useState([]);
-  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [monthlyComparison, setMonthlyComparison] = useState(null);
   const [sevenDaysData, setSevenDaysData] = useState(null);
 
   const { loading, error, data } = state;
@@ -118,22 +139,25 @@ export default function BusinessIntelligenceCard() {
         
         setCustomersLoading(true);
         
-        // Ambil data 7 hari terakhir
+        // 🔥 AMBIL DATA PERBANDINGAN BULANAN
+        const monthlyData = await getMonthlyComparisonData();
+        if (!alive) return;
+        setMonthlyComparison(monthlyData);
+
+        // 🔥 AMBIL DATA 7 HARI TERAKHIR
         const sevenDaysSales = await getSevenDaysSalesData();
         if (!alive) return;
         setSevenDaysData(sevenDaysSales);
 
-        // Top customers
+        // 🔥 TOP CUSTOMERS - SEMUA WAKTU (BUKAN HANYA BULAN BERJALAN)
         const topCust = await DataService.getTopCustomersPeriod({
-          period: "this_month",
+          period: "all_time", // Ubah dari "this_month" ke "all_time"
           limit: 5,
           onlyPaid: true
         });
         
         if (!alive) return;
         setTopCustomers(topCust || []);
-        
-        analyzePriceData();
         
       } catch (e) {
         if (!alive) return;
@@ -146,127 +170,47 @@ export default function BusinessIntelligenceCard() {
     return () => { alive = false; };
   }, []);
 
-  const analyzePriceData = async () => {
-    setAnalysisLoading(true);
-    try {
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 30);
-      
-      const salesData = await DataService.getSalesHistory({
-        from: startDate.toISOString().split('T')[0],
-        to: endDate.toISOString().split('T')[0],
-        limit: 1000
-      });
+  // 🔥 ANALISIS DATA PERBANDINGAN BULANAN
+  const monthlyAnalysis = useMemo(() => {
+    if (!monthlyComparison) return null;
 
-      const priceStats = analyzePrices(salesData);
-      setPriceAnalysis(priceStats);
+    const { september, october } = monthlyComparison;
 
-      const monthlyStats = analyzeMonthlyTrend(salesData);
-      setMonthlyTrend(monthlyStats);
+    // Hitung total untuk September
+    const septTotalQty = september.reduce((sum, week) => sum + (week.value || 0), 0);
+    const septTotalRevenue = september.reduce((sum, week) => sum + (week.totalValue || 0), 0);
+    const septWeeks = september.length;
 
-    } catch (error) {
-      console.error('Error analyzing price data:', error);
-    } finally {
-      setAnalysisLoading(false);
-    }
-  };
+    // Hitung total untuk Oktober
+    const octTotalQty = october.reduce((sum, week) => sum + (week.value || 0), 0);
+    const octTotalRevenue = october.reduce((sum, week) => sum + (week.totalValue || 0), 0);
+    const octWeeks = october.length;
 
-  const analyzePrices = (salesData) => {
-    const validSales = salesData.filter(sale => 
-      String(sale.status || '').toUpperCase() !== 'DIBATALKAN'
-    );
-
-    const price18k = validSales.filter(s => s.price === 18000 || s.price === 18000.00);
-    const price20k = validSales.filter(s => s.price === 20000 || s.price === 20000.00);
-    const otherPrices = validSales.filter(s => s.price !== 18000 && s.price !== 20000);
-
-    const total18k = price18k.reduce((sum, s) => sum + (s.total || s.qty * s.price), 0);
-    const total20k = price20k.reduce((sum, s) => sum + (s.total || s.qty * s.price), 0);
-    const totalOther = otherPrices.reduce((sum, s) => sum + (s.total || s.qty * s.price), 0);
-
-    const qty18k = price18k.reduce((sum, s) => sum + (s.qty || 0), 0);
-    const qty20k = price20k.reduce((sum, s) => sum + (s.qty || 0), 0);
-    const qtyOther = otherPrices.reduce((sum, s) => sum + (s.qty || 0), 0);
+    // Hitung perubahan
+    const qtyChange = septTotalQty > 0 ? ((octTotalQty - septTotalQty) / septTotalQty) * 100 : 0;
+    const revenueChange = septTotalRevenue > 0 ? ((octTotalRevenue - septTotalRevenue) / septTotalRevenue) * 100 : 0;
 
     return {
-      price18k: {
-        transactions: price18k.length,
-        quantity: qty18k,
-        revenue: total18k,
-        percentage: validSales.length ? (price18k.length / validSales.length) * 100 : 0
+      september: {
+        totalQty: septTotalQty,
+        totalRevenue: septTotalRevenue,
+        weeks: septWeeks,
+        avgWeeklyQty: septWeeks > 0 ? Math.round(septTotalQty / septWeeks) : 0
       },
-      price20k: {
-        transactions: price20k.length,
-        quantity: qty20k,
-        revenue: total20k,
-        percentage: validSales.length ? (price20k.length / validSales.length) * 100 : 0
+      october: {
+        totalQty: octTotalQty,
+        totalRevenue: octTotalRevenue,
+        weeks: octWeeks,
+        avgWeeklyQty: octWeeks > 0 ? Math.round(octTotalQty / octWeeks) : 0
       },
-      other: {
-        transactions: otherPrices.length,
-        quantity: qtyOther,
-        revenue: totalOther,
-        percentage: validSales.length ? (otherPrices.length / validSales.length) * 100 : 0
-      },
-      total: {
-        transactions: validSales.length,
-        quantity: qty18k + qty20k + qtyOther,
-        revenue: total18k + total20k + totalOther
+      changes: {
+        qty: qtyChange,
+        revenue: revenueChange
       }
     };
-  };
+  }, [monthlyComparison]);
 
-  const analyzeMonthlyTrend = (salesData) => {
-    const validSales = salesData.filter(sale => 
-      String(sale.status || '').toUpperCase() !== 'DIBATALKAN'
-    );
-
-    const monthlyMap = {};
-    
-    validSales.forEach(sale => {
-      const date = new Date(sale.created_at);
-      const year = date.getFullYear();
-      const month = date.getMonth() + 1;
-      const monthKey = `${year}-${String(month).padStart(2, '0')}`;
-      const monthName = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-      
-      if (!monthlyMap[monthKey]) {
-        monthlyMap[monthKey] = {
-          month: monthName,
-          monthKey: monthKey,
-          year: year,
-          monthNumber: month,
-          price18k: { quantity: 0, revenue: 0, transactions: 0 },
-          price20k: { quantity: 0, revenue: 0, transactions: 0 },
-          other: { quantity: 0, revenue: 0, transactions: 0 }
-        };
-      }
-      
-      const price = sale.price;
-      const quantity = sale.qty || 0;
-      const revenue = sale.total || quantity * price;
-      
-      if (price === 18000 || price === 18000.00) {
-        monthlyMap[monthKey].price18k.quantity += quantity;
-        monthlyMap[monthKey].price18k.revenue += revenue;
-        monthlyMap[monthKey].price18k.transactions += 1;
-      } else if (price === 20000 || price === 20000.00) {
-        monthlyMap[monthKey].price20k.quantity += quantity;
-        monthlyMap[monthKey].price20k.revenue += revenue;
-        monthlyMap[monthKey].price20k.transactions += 1;
-      } else {
-        monthlyMap[monthKey].other.quantity += quantity;
-        monthlyMap[monthKey].other.revenue += revenue;
-        monthlyMap[monthKey].other.transactions += 1;
-      }
-    });
-    
-    return Object.values(monthlyMap)
-      .sort((a, b) => b.monthKey.localeCompare(a.monthKey))
-      .slice(0, 6);
-  };
-
-  // 🔥 ANALISIS DATA 7 HARI UNTUK TREN
+  // 🔥 ANALISIS DATA 7 HARI
   const sevenDaysAnalysis = useMemo(() => {
     if (!sevenDaysData) return null;
 
@@ -292,7 +236,7 @@ export default function BusinessIntelligenceCard() {
     try {
       const endDate = new Date();
       const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 30);
+      startDate.setMonth(startDate.getMonth() - 3); // 3 bulan terakhir
       
       const history = await DataService.getCustomerSalesByRange({
         from: startDate.toISOString().split('T')[0],
@@ -444,6 +388,86 @@ export default function BusinessIntelligenceCard() {
     </Dialog>
   );
 
+  // 🔥 KOMPONEN PERBANDINGAN BULANAN
+  const MonthlyComparisonSection = () => {
+    if (!monthlyAnalysis) return null;
+
+    const { september, october, changes } = monthlyAnalysis;
+
+    return (
+      <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+        <Box display="flex" alignItems="center" gap={1} mb={2}>
+          <CompareArrowsIcon color="primary" />
+          <Typography variant="subtitle2" fontWeight="bold">
+            Perbandingan September vs Oktober
+          </Typography>
+        </Box>
+        
+        <Grid container spacing={2}>
+          {/* September */}
+          <Grid item xs={12} sm={6}>
+            <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.100', height: '100%' }}>
+              <Typography variant="body2" fontWeight="bold" gutterBottom color="primary.main">
+                📅 September
+              </Typography>
+              <Typography variant="h6" fontWeight="bold" color="primary.main" gutterBottom>
+                {formatNumber(september.totalQty)} tabung
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                {formatCurrency(september.totalRevenue)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Rata-rata: {formatNumber(september.avgWeeklyQty)} tabung/minggu
+              </Typography>
+            </Box>
+          </Grid>
+
+          {/* Oktober */}
+          <Grid item xs={12} sm={6}>
+            <Box sx={{ p: 2, borderRadius: 2, bgcolor: changes.qty >= 0 ? 'success.50' : 'warning.50', border: '1px solid', borderColor: changes.qty >= 0 ? 'success.100' : 'warning.100', height: '100%' }}>
+              <Typography variant="body2" fontWeight="bold" gutterBottom color={changes.qty >= 0 ? 'success.main' : 'warning.main'}>
+                📅 Oktober
+              </Typography>
+              <Typography variant="h6" fontWeight="bold" color={changes.qty >= 0 ? 'success.main' : 'warning.main'} gutterBottom>
+                {formatNumber(october.totalQty)} tabung
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                {formatCurrency(october.totalRevenue)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Rata-rata: {formatNumber(october.avgWeeklyQty)} tabung/minggu
+              </Typography>
+            </Box>
+          </Grid>
+        </Grid>
+
+        {/* Summary Perubahan */}
+        <Box sx={{ mt: 2, p: 1.5, borderRadius: 1, bgcolor: 'background.paper' }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="body2" fontWeight="bold">
+              Perubahan:
+            </Typography>
+            <Box textAlign="right">
+              <Chip 
+                label={
+                  changes.qty >= 0 ? 
+                  `📈 +${changes.qty.toFixed(1)}%` : 
+                  `📉 ${changes.qty.toFixed(1)}%`
+                }
+                size="small"
+                color={changes.qty >= 0 ? 'success' : 'error'}
+                variant="outlined"
+              />
+            </Box>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            {changes.qty >= 0 ? 'Peningkatan' : 'Penurunan'} dalam jumlah tabung terjual
+          </Typography>
+        </Box>
+      </Box>
+    );
+  };
+
   // 🔥 KOMPONEN STATISTIK 7 HARI
   const SevenDaysStats = () => {
     if (!sevenDaysAnalysis) return null;
@@ -503,98 +527,7 @@ export default function BusinessIntelligenceCard() {
     );
   };
 
-  // 🔥 KOMPONEN ANALISIS HARGA
-  const PriceAnalysisSection = () => {
-    if (analysisLoading) {
-      return (
-        <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-          <Box display="flex" alignItems="center" gap={1} mb={1}>
-            <LocalShippingIcon color="primary" />
-            <Typography variant="subtitle2" fontWeight="bold">
-              Analisis Harga Jual
-            </Typography>
-          </Box>
-          <Box display="flex" justifyContent="center" py={2}>
-            <CircularProgress size={20} />
-          </Box>
-        </Box>
-      );
-    }
-
-    if (!priceAnalysis) return null;
-
-    return (
-      <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-        <Box display="flex" alignItems="center" gap={1} mb={2}>
-          <AttachMoneyIcon color="primary" />
-          <Typography variant="subtitle2" fontWeight="bold">
-            Analisis Harga Jual (30 Hari)
-          </Typography>
-        </Box>
-        
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'success.50', border: '1px solid', borderColor: 'success.100', height: '100%' }}>
-              <Box display="flex" alignItems="center" gap={1} mb={1}>
-                <LocalShippingIcon fontSize="small" color="success" />
-                <Typography variant="body2" fontWeight="bold" color="success.main">
-                  Delivery (Rp 20.000)
-                </Typography>
-              </Box>
-              <Typography variant="h6" fontWeight="bold" color="success.main" gutterBottom>
-                {formatNumber(priceAnalysis.price20k.quantity)} tabung
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {priceAnalysis.price20k.transactions} transaksi
-              </Typography>
-              <Typography variant="body2" fontWeight="medium" color="success.main">
-                {formatCurrency(priceAnalysis.price20k.revenue)}
-              </Typography>
-            </Box>
-          </Grid>
-          
-          <Grid item xs={12} sm={6}>
-            <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.100', height: '100%' }}>
-              <Box display="flex" alignItems="center" gap={1} mb={1}>
-                <StoreIcon fontSize="small" color="primary" />
-                <Typography variant="body2" fontWeight="bold" color="primary.main">
-                  Regular (Rp 18.000)
-                </Typography>
-              </Box>
-              <Typography variant="h6" fontWeight="bold" color="primary.main" gutterBottom>
-                {formatNumber(priceAnalysis.price18k.quantity)} tabung
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {priceAnalysis.price18k.transactions} transaksi
-              </Typography>
-              <Typography variant="body2" fontWeight="medium" color="primary.main">
-                {formatCurrency(priceAnalysis.price18k.revenue)}
-              </Typography>
-            </Box>
-          </Grid>
-        </Grid>
-
-        {/* Summary */}
-        <Box sx={{ mt: 2, p: 1.5, borderRadius: 1, bgcolor: 'background.paper' }}>
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Typography variant="body2" fontWeight="bold">
-              Total 30 Hari:
-            </Typography>
-            <Box textAlign="right">
-              <Typography variant="body2" fontWeight="bold">
-                {formatNumber(priceAnalysis.total.quantity)} tabung
-              </Typography>
-              <Typography variant="body2" color="primary.main" fontWeight="bold">
-                {formatCurrency(priceAnalysis.total.revenue)}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-      </Box>
-    );
-  };
-
-  // 🔥 KOMPONEN TOP CUSTOMERS
+  // 🔥 KOMPONEN TOP CUSTOMERS (SEMUA WAKTU)
   const TopCustomersSection = () => {
     if (!topCustomers || topCustomers.length === 0) return null;
 
@@ -603,8 +536,11 @@ export default function BusinessIntelligenceCard() {
         <Box display="flex" alignItems="center" gap={1} mb={2}>
           <PeopleIcon color="primary" />
           <Typography variant="subtitle2" fontWeight="bold">
-            Top 5 Pelanggan (Bulan Ini)
+            Top 5 Pelanggan (Sepanjang Masa)
           </Typography>
+          <Tooltip title="Berdasarkan total nilai transaksi sepanjang waktu">
+            <InfoIcon fontSize="small" color="action" />
+          </Tooltip>
         </Box>
         
         <Stack spacing={1.5}>
@@ -647,7 +583,7 @@ export default function BusinessIntelligenceCard() {
                   <Typography variant="body2" fontWeight="bold" color="primary.main">
                     {formatCurrency(customer.total_value)}
                   </Typography>
-                  <Tooltip title="Klik untuk lihat riwayat">
+                  <Tooltip title="Klik untuk lihat riwayat 3 bulan terakhir">
                     <HistoryIcon fontSize="small" color="action" />
                   </Tooltip>
                 </Box>
@@ -824,10 +760,10 @@ export default function BusinessIntelligenceCard() {
             </Grid>
           </Grid>
 
-          {/* Price Analysis */}
-          <PriceAnalysisSection />
+          {/* 🔥 PERBANDINGAN BULANAN */}
+          <MonthlyComparisonSection />
 
-          {/* Top Customers */}
+          {/* 🔥 TOP CUSTOMERS (SEMUA WAKTU) */}
           <TopCustomersSection />
 
           {/* AI Advice */}
