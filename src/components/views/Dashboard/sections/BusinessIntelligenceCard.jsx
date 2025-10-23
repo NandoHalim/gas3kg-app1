@@ -4,7 +4,7 @@ import {
   Card, CardContent, Typography, Box, Stack, Alert, Chip, Tooltip, 
   CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   Button, Table, TableBody, TableCell, TableContainer, TableHead, 
-  TableRow, Paper, IconButton, Divider
+  TableRow, Paper, IconButton, Divider, Grid
 } from "@mui/material";
 import AnalyticsIcon from "@mui/icons-material/Analytics";
 import InfoIcon from "@mui/icons-material/Info";
@@ -16,13 +16,10 @@ import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import StoreIcon from "@mui/icons-material/Store";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
+import PeopleIcon from "@mui/icons-material/People";
+import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
+import InventoryIcon from "@mui/icons-material/Inventory";
 import { DataService } from "../../../../services/DataService.js";
-
-function formatDatePlus(days) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
-}
 
 const formatCurrency = (amount) => {
   if (amount == null || amount === 0) return '-';
@@ -33,17 +30,21 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
-// 🔥 PERBAIKAN: Fungsi untuk mendapatkan data penjualan 7 hari terakhir
+const formatNumber = (num) => {
+  if (num == null) return '-';
+  return new Intl.NumberFormat('id-ID').format(num);
+};
+
+// 🔥 FUNGSI UNTUK MENDAPATKAN DATA 7 HARI TERAKHIR
 const getSevenDaysSalesData = async () => {
   try {
     const sevenDaysData = await DataService.getSevenDaySalesRealtime?.();
     
     if (!sevenDaysData || !Array.isArray(sevenDaysData)) {
-      console.warn('Data 7 hari tidak tersedia, menggunakan fallback');
+      console.warn('Data 7 hari tidak tersedia');
       return null;
     }
 
-    // Filter data yang valid dan konversi ke format yang konsisten
     const validData = sevenDaysData
       .filter(item => item && (item.qty !== undefined && item.qty !== null))
       .map(item => ({
@@ -52,7 +53,6 @@ const getSevenDaysSalesData = async () => {
         totalValue: Number(item.totalValue) || 0
       }));
 
-    console.log('📊 Data 7 hari terakhir (dari SevenDaysChart):', validData);
     return validData;
 
   } catch (error) {
@@ -61,83 +61,18 @@ const getSevenDaysSalesData = async () => {
   }
 };
 
-// 🔥 PERBAIKAN: Hitung rata-rata penjualan harian yang lebih akurat
+// 🔥 HITUNG RATA-RATA HARIAN YANG LEBIH AKURAT
 const calculateAccurateDailyAverage = (salesData) => {
   if (!salesData || salesData.length === 0) return 0;
 
-  // Filter hanya hari dengan penjualan (tidak termasuk hari tanpa penjualan)
   const daysWithSales = salesData.filter(day => day.qty > 0);
-  
   if (daysWithSales.length === 0) return 0;
 
   const totalQty = daysWithSales.reduce((sum, day) => sum + day.qty, 0);
-  const average = totalQty / daysWithSales.length;
-  
-  console.log('📈 Perhitungan rata-rata harian:', {
-    totalHari: salesData.length,
-    hariDenganPenjualan: daysWithSales.length,
-    totalTabung: totalQty,
-    rataRata: Math.round(average)
-  });
-
-  return Math.round(average);
+  return Math.round(totalQty / daysWithSales.length);
 };
 
-// 🔥 PERBAIKAN: Forecast yang lebih akurat berdasarkan data historis
-const calculateImprovedForecast = (salesData, currentStock) => {
-  if (!salesData || salesData.length === 0) {
-    return {
-      avgSales: 0,
-      safeDays: 0,
-      safeUntil: null,
-      confidence: 'low',
-      trend: 'stabil'
-    };
-  }
-
-  const dailyAverage = calculateAccurateDailyAverage(salesData);
-  
-  // Hitung tren berdasarkan 3 hari terakhir vs 3 hari sebelumnya
-  const recentDays = salesData.slice(-3);
-  const previousDays = salesData.slice(-6, -3);
-  
-  const recentAvg = recentDays.length > 0 ? 
-    recentDays.reduce((sum, day) => sum + day.qty, 0) / recentDays.length : 0;
-  const previousAvg = previousDays.length > 0 ? 
-    previousDays.reduce((sum, day) => sum + day.qty, 0) / previousDays.length : 0;
-  
-  const trend = recentAvg > previousAvg * 1.1 ? 'naik' : 
-                recentAvg < previousAvg * 0.9 ? 'turun' : 'stabil';
-
-  // Hitung safe days dengan buffer berdasarkan tren
-  let safeDays = 0;
-  if (currentStock > 0 && dailyAverage > 0) {
-    const baseDays = Math.floor(currentStock / dailyAverage);
-    
-    // Adjust berdasarkan tren
-    if (trend === 'naik') {
-      safeDays = Math.max(1, Math.floor(baseDays * 0.8)); // 20% buffer untuk tren naik
-    } else if (trend === 'turun') {
-      safeDays = Math.floor(baseDays * 1.2); // 20% extra untuk tren turun
-    } else {
-      safeDays = baseDays; // Tidak ada adjustment untuk tren stabil
-    }
-  }
-
-  // Hitung confidence level
-  const dataPoints = salesData.filter(day => day.qty > 0).length;
-  const confidence = dataPoints >= 5 ? 'high' : dataPoints >= 3 ? 'medium' : 'low';
-
-  return {
-    avgSales: dailyAverage,
-    safeDays,
-    safeUntil: safeDays > 0 ? formatDatePlus(safeDays) : null,
-    confidence,
-    trend,
-    dataPoints
-  };
-};
-
+// 🔥 ANALISIS TREN PENJUALAN
 const calculateSalesTrend = (salesData) => {
   if (!salesData || salesData.length < 2) return null;
   
@@ -153,8 +88,7 @@ const calculateSalesTrend = (salesData) => {
   return {
     direction: changePercent > 5 ? 'naik' : changePercent < -5 ? 'turun' : 'stabil',
     percentage: Math.abs(changePercent).toFixed(1),
-    description: changePercent > 5 ? `📈 Naik ${Math.abs(changePercent).toFixed(1)}%` : 
-                 changePercent < -5 ? `📉 Turun ${Math.abs(changePercent).toFixed(1)}%` : '➡️ Stabil'
+    value: changePercent
   };
 };
 
@@ -169,7 +103,7 @@ export default function BusinessIntelligenceCard() {
   const [priceAnalysis, setPriceAnalysis] = useState(null);
   const [monthlyTrend, setMonthlyTrend] = useState([]);
   const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [sevenDaysData, setSevenDaysData] = useState(null); // 🔥 DATA BARU: Data 7 hari
+  const [sevenDaysData, setSevenDaysData] = useState(null);
 
   const { loading, error, data } = state;
 
@@ -184,7 +118,7 @@ export default function BusinessIntelligenceCard() {
         
         setCustomersLoading(true);
         
-        // 🔥 AMBIL DATA 7 HARI UNTUK PERHITUNGAN YANG LEBIH AKURAT
+        // Ambil data 7 hari terakhir
         const sevenDaysSales = await getSevenDaysSalesData();
         if (!alive) return;
         setSevenDaysData(sevenDaysSales);
@@ -332,66 +266,23 @@ export default function BusinessIntelligenceCard() {
       .slice(0, 6);
   };
 
-  // 🔥 PERBAIKAN: Forecast summary yang lebih akurat
-  const forecastSummary = useMemo(() => {
+  // 🔥 ANALISIS DATA 7 HARI UNTUK TREN
+  const sevenDaysAnalysis = useMemo(() => {
     if (!sevenDaysData) return null;
-    
-    const currentStock = data?.kpi?.current_stock?.ISI || data?.current_stock?.ISI || 0;
-    const forecast = calculateImprovedForecast(sevenDaysData, currentStock);
-    
-    return {
-      ...forecast,
-      dataSource: '7_hari_terakhir',
-      rawData: sevenDaysData // Untuk debugging
-    };
-  }, [sevenDaysData, data]);
 
-  // 🔥 PERBAIKAN: Stock risk analysis yang lebih akurat
-  const stockRiskAnalysis = useMemo(() => {
-    if (!forecastSummary || !data) return null;
-
-    const currentStock = data.kpi?.current_stock?.ISI || data.current_stock?.ISI || 0;
-    const { avgSales, safeDays, confidence, trend } = forecastSummary;
-
-    let riskLevel = 'low';
-    let riskMessage = '';
-    let recommendation = '';
-
-    if (currentStock === 0) {
-      riskLevel = 'critical';
-      riskMessage = '🚨 STOK HABIS - Segera restock!';
-      recommendation = 'Pesan tabung segera untuk menghindari kehilangan penjualan';
-    } else if (safeDays <= 2) {
-      riskLevel = 'high';
-      riskMessage = '⚠️ Stok kritis - Hanya cukup 2 hari lagi';
-      recommendation = 'Restock dalam 24 jam untuk antisipasi';
-    } else if (safeDays <= 5) {
-      riskLevel = 'medium';
-      riskMessage = '📦 Stok menipis - Cukup untuk 3-5 hari';
-      recommendation = 'Rencanakan restock dalam 2-3 hari';
-    } else {
-      riskLevel = 'low';
-      riskMessage = '✅ Stok aman';
-      recommendation = 'Pantau tren penjualan untuk perencanaan';
-    }
-
-    // Adjust berdasarkan confidence level
-    if (confidence === 'low') {
-      riskMessage += ' (data terbatas)';
-      recommendation = 'Tunggu lebih banyak data untuk analisis akurat';
-    }
+    const dailyAverage = calculateAccurateDailyAverage(sevenDaysData);
+    const trend = calculateSalesTrend(sevenDaysData);
+    const total7Days = sevenDaysData.reduce((sum, day) => sum + day.qty, 0);
+    const revenue7Days = sevenDaysData.reduce((sum, day) => sum + day.totalValue, 0);
 
     return {
-      riskLevel,
-      riskMessage,
-      recommendation,
-      currentStock,
-      dailyConsumption: avgSales,
-      safeDays,
-      confidence,
-      trend
+      dailyAverage,
+      trend,
+      total7Days,
+      revenue7Days,
+      dataPoints: sevenDaysData.length
     };
-  }, [forecastSummary, data]);
+  }, [sevenDaysData]);
 
   const handleCustomerClick = async (customer) => {
     setSelectedCustomer(customer);
@@ -475,7 +366,6 @@ export default function BusinessIntelligenceCard() {
                   <TableCell align="right"><strong>Harga</strong></TableCell>
                   <TableCell align="right"><strong>Total</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
-                  <TableCell><strong>Metode</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -512,11 +402,6 @@ export default function BusinessIntelligenceCard() {
                         }
                       />
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {transaction.method}
-                      </Typography>
-                    </TableCell>
                   </TableRow>
                 ))}
                 
@@ -541,7 +426,7 @@ export default function BusinessIntelligenceCard() {
                       {formatCurrency(customerHistory.reduce((sum, t) => sum + (t.total || 0), 0))}
                     </Typography>
                   </TableCell>
-                  <TableCell colSpan={2}>
+                  <TableCell>
                     <Typography variant="body2" color="text.secondary">
                       {customerHistory.length} transaksi
                     </Typography>
@@ -559,6 +444,66 @@ export default function BusinessIntelligenceCard() {
     </Dialog>
   );
 
+  // 🔥 KOMPONEN STATISTIK 7 HARI
+  const SevenDaysStats = () => {
+    if (!sevenDaysAnalysis) return null;
+
+    return (
+      <Box sx={{ p: 2, bgcolor: 'primary.50', borderRadius: 2, border: '1px solid', borderColor: 'primary.100' }}>
+        <Typography variant="subtitle2" fontWeight="bold" gutterBottom color="primary.main">
+          📈 Performa 7 Hari Terakhir
+        </Typography>
+        
+        <Grid container spacing={2}>
+          <Grid item xs={6}>
+            <Box textAlign="center">
+              <Typography variant="h4" fontWeight="bold" color="primary.main">
+                {formatNumber(sevenDaysAnalysis.total7Days)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Total Tabung
+              </Typography>
+            </Box>
+          </Grid>
+          <Grid item xs={6}>
+            <Box textAlign="center">
+              <Typography variant="h4" fontWeight="bold" color="success.main">
+                {formatNumber(sevenDaysAnalysis.dailyAverage)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Rata-rata / Hari
+              </Typography>
+            </Box>
+          </Grid>
+        </Grid>
+
+        {sevenDaysAnalysis.trend && (
+          <Box sx={{ mt: 1, p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center">
+              <Typography variant="caption" fontWeight="medium">
+                Tren:
+              </Typography>
+              <Chip 
+                label={
+                  sevenDaysAnalysis.trend.direction === 'naik' ? `📈 Naik ${sevenDaysAnalysis.trend.percentage}%` :
+                  sevenDaysAnalysis.trend.direction === 'turun' ? `📉 Turun ${sevenDaysAnalysis.trend.percentage}%` :
+                  '➡️ Stabil'
+                }
+                size="small"
+                color={
+                  sevenDaysAnalysis.trend.direction === 'naik' ? 'success' :
+                  sevenDaysAnalysis.trend.direction === 'turun' ? 'error' : 'default'
+                }
+                variant="outlined"
+              />
+            </Box>
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
+  // 🔥 KOMPONEN ANALISIS HARGA
   const PriceAnalysisSection = () => {
     if (analysisLoading) {
       return (
@@ -581,254 +526,213 @@ export default function BusinessIntelligenceCard() {
     return (
       <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
         <Box display="flex" alignItems="center" gap={1} mb={2}>
-          <LocalShippingIcon color="primary" />
+          <AttachMoneyIcon color="primary" />
           <Typography variant="subtitle2" fontWeight="bold">
             Analisis Harga Jual (30 Hari)
           </Typography>
         </Box>
         
-        <Stack spacing={2}>
-          {/* Delivery */}
-          <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'success.50', border: '1px solid', borderColor: 'success.100' }}>
-            <Box display="flex" alignItems="center" gap={1} mb={1}>
-              <LocalShippingIcon fontSize="small" color="success" />
-              <Typography variant="body2" fontWeight="bold" color="success.main">
-                Delivery (Rp 20.000)
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6}>
+            <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'success.50', border: '1px solid', borderColor: 'success.100', height: '100%' }}>
+              <Box display="flex" alignItems="center" gap={1} mb={1}>
+                <LocalShippingIcon fontSize="small" color="success" />
+                <Typography variant="body2" fontWeight="bold" color="success.main">
+                  Delivery (Rp 20.000)
+                </Typography>
+              </Box>
+              <Typography variant="h6" fontWeight="bold" color="success.main" gutterBottom>
+                {formatNumber(priceAnalysis.price20k.quantity)} tabung
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {priceAnalysis.price20k.transactions} transaksi
+              </Typography>
+              <Typography variant="body2" fontWeight="medium" color="success.main">
+                {formatCurrency(priceAnalysis.price20k.revenue)}
               </Typography>
             </Box>
-            <Box display="flex" justifyContent="space-between" alignItems="center">
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  {priceAnalysis.price20k.transactions} transaksi
-                </Typography>
-                <Typography variant="h6" fontWeight="bold" color="success.main">
-                  {priceAnalysis.price20k.quantity} tabung
-                </Typography>
-              </Box>
-              <Box textAlign="right">
-                <Typography variant="body2" color="text.secondary">
-                  Total Revenue
-                </Typography>
-                <Typography variant="h6" fontWeight="bold" color="success.main">
-                  {formatCurrency(priceAnalysis.price20k.revenue)}
+          </Grid>
+          
+          <Grid item xs={12} sm={6}>
+            <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.100', height: '100%' }}>
+              <Box display="flex" alignItems="center" gap={1} mb={1}>
+                <StoreIcon fontSize="small" color="primary" />
+                <Typography variant="body2" fontWeight="bold" color="primary.main">
+                  Regular (Rp 18.000)
                 </Typography>
               </Box>
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              {priceAnalysis.price20k.percentage.toFixed(1)}% dari total transaksi
-            </Typography>
-          </Box>
-
-          {/* Regular */}
-          <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.100' }}>
-            <Box display="flex" alignItems="center" gap={1} mb={1}>
-              <StoreIcon fontSize="small" color="primary" />
-              <Typography variant="body2" fontWeight="bold" color="primary.main">
-                Regular (Rp 18.000)
+              <Typography variant="h6" fontWeight="bold" color="primary.main" gutterBottom>
+                {formatNumber(priceAnalysis.price18k.quantity)} tabung
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {priceAnalysis.price18k.transactions} transaksi
+              </Typography>
+              <Typography variant="body2" fontWeight="medium" color="primary.main">
+                {formatCurrency(priceAnalysis.price18k.revenue)}
               </Typography>
             </Box>
-            <Box display="flex" justifyContent="space-between" alignItems="center">
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  {priceAnalysis.price18k.transactions} transaksi
-                </Typography>
-                <Typography variant="h6" fontWeight="bold" color="primary.main">
-                  {priceAnalysis.price18k.quantity} tabung
-                </Typography>
-              </Box>
-              <Box textAlign="right">
-                <Typography variant="body2" color="text.secondary">
-                  Total Revenue
-                </Typography>
-                <Typography variant="h6" fontWeight="bold" color="primary.main">
-                  {formatCurrency(priceAnalysis.price18k.revenue)}
-                </Typography>
-              </Box>
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              {priceAnalysis.price18k.percentage.toFixed(1)}% dari total transaksi
-            </Typography>
-          </Box>
+          </Grid>
+        </Grid>
 
-          {/* Summary */}
-          <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: 'background.paper' }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center">
+        {/* Summary */}
+        <Box sx={{ mt: 2, p: 1.5, borderRadius: 1, bgcolor: 'background.paper' }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="body2" fontWeight="bold">
+              Total 30 Hari:
+            </Typography>
+            <Box textAlign="right">
               <Typography variant="body2" fontWeight="bold">
-                Total 30 Hari:
+                {formatNumber(priceAnalysis.total.quantity)} tabung
               </Typography>
-              <Box textAlign="right">
-                <Typography variant="body2" fontWeight="bold">
-                  {priceAnalysis.total.quantity} tabung
-                </Typography>
-                <Typography variant="body2" color="primary.main" fontWeight="bold">
-                  {formatCurrency(priceAnalysis.total.revenue)}
-                </Typography>
-              </Box>
+              <Typography variant="body2" color="primary.main" fontWeight="bold">
+                {formatCurrency(priceAnalysis.total.revenue)}
+              </Typography>
             </Box>
           </Box>
-        </Stack>
+        </Box>
       </Box>
     );
   };
 
-  const MonthlyTrendSection = () => {
-    if (analysisLoading) {
-      return (
-        <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-          <Box display="flex" alignItems="center" gap={1} mb={2}>
-            <TrendingUpIcon color="primary" />
-            <Typography variant="subtitle2" fontWeight="bold">
-              Tren Harga per Bulan
-            </Typography>
-          </Box>
-          <Box display="flex" justifyContent="center" py={2}>
-            <CircularProgress size={20} />
-          </Box>
-        </Box>
-      );
-    }
-
-    if (monthlyTrend.length === 0) return null;
+  // 🔥 KOMPONEN TOP CUSTOMERS
+  const TopCustomersSection = () => {
+    if (!topCustomers || topCustomers.length === 0) return null;
 
     return (
       <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
         <Box display="flex" alignItems="center" gap={1} mb={2}>
-          <TrendingUpIcon color="primary" />
+          <PeopleIcon color="primary" />
           <Typography variant="subtitle2" fontWeight="bold">
-            Tren Harga per Bulan (6 Bulan Terakhir)
+            Top 5 Pelanggan (Bulan Ini)
           </Typography>
         </Box>
         
-        <Stack spacing={2}>
-          {monthlyTrend.map((month, index) => {
-            const totalQty = month.price18k.quantity + month.price20k.quantity;
-            const totalRevenue = month.price18k.revenue + month.price20k.revenue;
-            
-            return (
-              <Box key={index} sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper', border: '1px solid #e0e0e0' }}>
-                <Typography variant="body2" fontWeight="bold" gutterBottom color="primary">
-                  {month.month} 
-                  <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                    (Total: {totalQty} tabung, {formatCurrency(totalRevenue)})
+        <Stack spacing={1.5}>
+          {topCustomers.slice(0, 5).map((customer, index) => (
+            <Box 
+              key={customer.customer_name || customer.customer || index}
+              onClick={() => handleCustomerClick(customer)}
+              sx={{
+                p: 1.5,
+                borderRadius: 2,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                backgroundColor: 'background.paper',
+                border: '1px solid #e0e0e0',
+                '&:hover': {
+                  backgroundColor: 'primary.light',
+                  transform: 'translateY(-1px)',
+                  boxShadow: 1
+                }
+              }}
+            >
+              <Box display="flex" justifyContent="space-between" alignItems="center">
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" fontWeight="medium" noWrap>
+                    {index + 1}. {customer.customer_name || customer.customer || 'N/A'}
                   </Typography>
-                </Typography>
-                
-                <Stack spacing={1.5}>
-                  {/* Delivery */}
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <LocalShippingIcon fontSize="small" color="success" />
-                      <Typography variant="body2" color="success.main">
-                        Delivery
-                      </Typography>
-                    </Box>
-                    <Box textAlign="right">
-                      <Typography variant="body2" fontWeight="medium">
-                        {month.price20k.quantity} tabung
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {formatCurrency(month.price20k.revenue)}
-                      </Typography>
-                    </Box>
-                  </Box>
-
-                  {/* Regular */}
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <StoreIcon fontSize="small" color="primary" />
-                      <Typography variant="body2" color="primary.main">
-                        Regular
-                      </Typography>
-                    </Box>
-                    <Box textAlign="right">
-                      <Typography variant="body2" fontWeight="medium">
-                        {month.price18k.quantity} tabung
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {formatCurrency(month.price18k.revenue)}
-                      </Typography>
-                    </Box>
-                  </Box>
-
-                  {/* Total */}
-                  <Divider />
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="body2" fontWeight="bold">
-                      Total Bulanan
+                  <Stack direction="row" spacing={1} alignItems="center" mt={0.5}>
+                    <Typography variant="caption" color="text.secondary">
+                      {customer.total_qty || 0} tabung
                     </Typography>
-                    <Box textAlign="right">
-                      <Typography variant="body2" fontWeight="bold">
-                        {totalQty} tabung
-                      </Typography>
-                      <Typography variant="body2" color="primary.main" fontWeight="bold">
-                        {formatCurrency(totalRevenue)}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      •
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {customer.total_transaksi || 0} transaksi
+                    </Typography>
+                  </Stack>
+                </Box>
+                <Box sx={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="body2" fontWeight="bold" color="primary.main">
+                    {formatCurrency(customer.total_value)}
+                  </Typography>
+                  <Tooltip title="Klik untuk lihat riwayat">
+                    <HistoryIcon fontSize="small" color="action" />
+                  </Tooltip>
+                </Box>
               </Box>
-            );
-          })}
+            </Box>
+          ))}
         </Stack>
       </Box>
     );
   };
 
-  // 🔥 PERBAIKAN: Stock Risk Alert Component
-  const StockRiskAlert = () => {
-    if (!stockRiskAnalysis) return null;
-
-    const { riskLevel, riskMessage, recommendation, currentStock, dailyConsumption, safeDays, confidence } = stockRiskAnalysis;
-
-    const getAlertProps = () => {
-      switch (riskLevel) {
-        case 'critical':
-          return { severity: 'error', icon: <WarningAmberIcon /> };
-        case 'high':
-          return { severity: 'warning', icon: <WarningAmberIcon /> };
-        case 'medium':
-          return { severity: 'info', icon: <InfoIcon /> };
-        default:
-          return { severity: 'success', icon: <CheckCircleIcon /> };
-      }
-    };
-
-    const alertProps = getAlertProps();
+  // 🔥 KOMPONEN KPI SUMMARY
+  const KPISummary = () => {
+    if (!data?.kpi) return null;
 
     return (
-      <Alert
-        {...alertProps}
-        sx={{ 
-          borderRadius: 2,
-          '& .MuiAlert-message': { width: '100%' }
-        }}
-      >
-        <Typography variant="body2" fontWeight={700} gutterBottom>
-          {riskMessage}
+      <Box sx={{ p: 2, bgcolor: 'success.50', borderRadius: 2, border: '1px solid', borderColor: 'success.100' }}>
+        <Typography variant="subtitle2" fontWeight="bold" gutterBottom color="success.main">
+          📊 Kinerja Utama (MTD)
         </Typography>
-        <Typography variant="body2" gutterBottom>
-          Stok: {currentStock} tabung • Konsumsi: {dailyConsumption} tabung/hari • Aman: {safeDays} hari
-          {confidence === 'low' && ' • ⚠️ Data terbatas'}
-        </Typography>
-        <Typography variant="body2">
-          <strong>Rekomendasi:</strong> {recommendation}
-        </Typography>
-      </Alert>
+        
+        <Grid container spacing={2}>
+          <Grid item xs={6}>
+            <Box textAlign="center">
+              <InventoryIcon color="primary" sx={{ fontSize: 32, mb: 1 }} />
+              <Typography variant="h6" fontWeight="bold" color="primary.main">
+                {formatCurrency(data.kpi.omzet)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Total Omzet
+              </Typography>
+            </Box>
+          </Grid>
+          
+          {data.kpi.laba != null && (
+            <Grid item xs={6}>
+              <Box textAlign="center">
+                <AttachMoneyIcon color="success" sx={{ fontSize: 32, mb: 1 }} />
+                <Typography 
+                  variant="h6" 
+                  fontWeight="bold"
+                  color={data.kpi.laba >= 0 ? 'success.main' : 'error.main'}
+                >
+                  {formatCurrency(data.kpi.laba)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Laba Bersih
+                </Typography>
+              </Box>
+            </Grid>
+          )}
+        </Grid>
+
+        {data.kpi.margin != null && (
+          <Box sx={{ mt: 1, p: 1, bgcolor: 'background.paper', borderRadius: 1 }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center">
+              <Typography variant="body2">
+                Margin:
+              </Typography>
+              <Chip 
+                label={`${data.kpi.margin.toFixed(1)}%`}
+                size="small"
+                color={data.kpi.margin >= 20 ? 'success' : data.kpi.margin >= 10 ? 'warning' : 'error'}
+              />
+            </Box>
+          </Box>
+        )}
+      </Box>
     );
   };
 
   if (loading) {
     return (
-      <Card sx={{ width: '100%', maxWidth: '100%' }}>
+      <Card sx={{ width: '100%', maxWidth: '100%', borderRadius: 2, boxShadow: 2 }}>
         <CardContent>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h6">Business Intelligence (AI)</Typography>
-            <Box display="flex" alignItems="center" gap={1}>
-              <Chip label="Memuat insights..." color="primary" size="small" />
-              <CircularProgress size={16} />
+            <Box>
+              <Typography variant="h6" fontWeight="bold">Business Intelligence</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Sedang memuat analisis...
+              </Typography>
             </Box>
+            <CircularProgress size={24} />
           </Box>
-          <Box display="flex" justifyContent="center" py={4}>
+          <Box display="flex" justifyContent="center" py={6}>
             <CircularProgress />
           </Box>
         </CardContent>
@@ -838,10 +742,12 @@ export default function BusinessIntelligenceCard() {
 
   if (error) {
     return (
-      <Card sx={{ width: '100%', maxWidth: '100%' }}>
+      <Card sx={{ width: '100%', maxWidth: '100%', borderRadius: 2, boxShadow: 2 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>Business Intelligence (AI)</Typography>
-          <Alert severity="error">{error?.message || "Gagal memuat AI insights"}</Alert>
+          <Typography variant="h6" gutterBottom fontWeight="bold">Business Intelligence</Typography>
+          <Alert severity="error" sx={{ borderRadius: 2 }}>
+            {error?.message || "Gagal memuat analisis bisnis"}
+          </Alert>
         </CardContent>
       </Card>
     );
@@ -849,65 +755,91 @@ export default function BusinessIntelligenceCard() {
 
   if (!data) {
     return (
-      <Card sx={{ width: '100%', maxWidth: '100%' }}>
+      <Card sx={{ width: '100%', maxWidth: '100%', borderRadius: 2, boxShadow: 2 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>Business Intelligence (AI)</Typography>
-          <Alert severity="info">Data AI tidak tersedia.</Alert>
+          <Typography variant="h6" gutterBottom fontWeight="bold">Business Intelligence</Typography>
+          <Alert severity="info" sx={{ borderRadius: 2 }}>
+            Data analisis tidak tersedia saat ini.
+          </Alert>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card sx={{ width: '100%', maxWidth: '100%' }}>
+    <Card sx={{ 
+      width: '100%', 
+      maxWidth: '100%', 
+      borderRadius: 2, 
+      boxShadow: 2,
+      background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)'
+    }}>
       <CardContent>
         {/* Header */}
         <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={3}>
           <Box>
-            <Typography variant="h6" gutterBottom fontWeight="bold">
-              Business Intelligence (AI)
+            <Typography variant="h5" gutterBottom fontWeight="bold" color="primary.main">
+              Business Intelligence
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Ringkasan & analisis otomatis dari data penjualan
+            <Typography variant="body2" color="text.secondary">
+              Analisis mendalam performa bisnis Anda
             </Typography>
           </Box>
           <Tooltip title={`Terakhir update: ${new Date(data.generated_at || Date.now()).toLocaleString("id-ID")}`}>
             <Chip 
-              label="AI Analysis" 
+              label="AI Powered" 
               color="primary" 
-              variant="outlined" 
               size="small" 
-              icon={<AnalyticsIcon fontSize="small" />} 
+              icon={<AnalyticsIcon />} 
+              sx={{ fontWeight: 'bold' }}
             />
           </Tooltip>
         </Box>
 
         <Stack spacing={3}>
           {/* AI Insight */}
-          <Alert 
-            icon={<InfoIcon />} 
-            severity="info" 
-            sx={{ 
-              borderRadius: 2,
-              '& .MuiAlert-message': { 
-                fontSize: '0.9rem', 
-                lineHeight: 1.5,
-                width: '100%'
-              } 
-            }}
-          >
-            {data.insight}
-          </Alert>
+          {data.insight && (
+            <Alert 
+              icon={<InfoIcon />} 
+              severity="info" 
+              sx={{ 
+                borderRadius: 2,
+                border: '1px solid',
+                borderColor: 'primary.light'
+              }}
+            >
+              <Typography variant="body2" fontWeight={500}>
+                {data.insight}
+              </Typography>
+            </Alert>
+          )}
 
-          {/* 🔥 PERBAIKAN: Stock Risk Alert - Lebih Akurat */}
-          <StockRiskAlert />
+          {/* Stats Grid */}
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <SevenDaysStats />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <KPISummary />
+            </Grid>
+          </Grid>
+
+          {/* Price Analysis */}
+          <PriceAnalysisSection />
+
+          {/* Top Customers */}
+          <TopCustomersSection />
 
           {/* AI Advice */}
           {data.advice && (
             <Alert
               icon={data.advice.level === "warning" ? <WarningAmberIcon /> : <CheckCircleIcon />}
               severity={data.advice.level || "info"}
-              sx={{ borderRadius: 2 }}
+              sx={{ 
+                borderRadius: 2,
+                border: '1px solid',
+                borderColor: data.advice.level === "warning" ? 'warning.light' : 'info.light'
+              }}
             >
               <Typography variant="body2" fontWeight={700} gutterBottom>
                 {data.advice.title}
@@ -916,109 +848,6 @@ export default function BusinessIntelligenceCard() {
                 {data.advice.message}
               </Typography>
             </Alert>
-          )}
-
-          {/* 🔥 PERBAIKAN: Forecast dengan Data 7 Hari */}
-          {forecastSummary && (
-            <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                📊 Forecast Berdasarkan 7 Hari Terakhir
-              </Typography>
-              
-              <Stack spacing={2}>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2">Rata-rata Penjualan Harian:</Typography>
-                  <Typography variant="body2" fontWeight="bold" color="primary.main">
-                    {forecastSummary.avgSales} tabung
-                  </Typography>
-                </Box>
-                
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2">Stok Aman Sampai:</Typography>
-                  <Typography variant="body2" fontWeight="bold" color="success.main">
-                    {forecastSummary.safeUntil || 'Tidak dapat dihitung'}
-                  </Typography>
-                </Box>
-                
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2">Tren Penjualan:</Typography>
-                  <Chip 
-                    label={forecastSummary.trend === 'naik' ? '📈 Naik' : 
-                           forecastSummary.trend === 'turun' ? '📉 Turun' : '➡️ Stabil'} 
-                    size="small"
-                    color={forecastSummary.trend === 'naik' ? 'success' : 
-                           forecastSummary.trend === 'turun' ? 'error' : 'default'}
-                    variant="outlined"
-                  />
-                </Box>
-                
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2">Tingkat Kepercayaan:</Typography>
-                  <Chip 
-                    label={forecastSummary.confidence === 'high' ? 'Tinggi' : 
-                           forecastSummary.confidence === 'medium' ? 'Sedang' : 'Rendah'} 
-                    size="small"
-                    color={forecastSummary.confidence === 'high' ? 'success' : 
-                           forecastSummary.confidence === 'medium' ? 'warning' : 'error'}
-                  />
-                </Box>
-              </Stack>
-            </Box>
-          )}
-
-          {/* Price Analysis */}
-          <PriceAnalysisSection />
-
-          {/* Monthly Trend */}
-          <MonthlyTrendSection />
-
-          {/* Top Customers */}
-          {topCustomers && topCustomers.length > 0 && (
-            <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-              <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                🏆 Top 5 Customers (Bulan Ini)
-              </Typography>
-              
-              <Stack spacing={1}>
-                {topCustomers.map((customer, index) => (
-                  <Box 
-                    key={customer.customer_name || customer.customer || index}
-                    sx={{ 
-                      p: 1.5, 
-                      borderRadius: 1, 
-                      bgcolor: 'background.paper',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      border: '1px solid #e0e0e0',
-                      '&:hover': {
-                        bgcolor: 'primary.50',
-                        borderColor: 'primary.main'
-                      }
-                    }}
-                    onClick={() => handleCustomerClick(customer)}
-                  >
-                    <Box display="flex" justifyContent="space-between" alignItems="center">
-                      <Box>
-                        <Typography variant="body2" fontWeight="medium">
-                          {customer.customer_name || customer.customer}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {customer.transactions || 0} transaksi
-                        </Typography>
-                      </Box>
-                      <Box textAlign="right">
-                        <Typography variant="body2" fontWeight="bold" color="primary.main">
-                          {customer.total_qty || customer.quantity || 0} tabung
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatCurrency(customer.total_revenue || customer.revenue || 0)}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Box>
-                ))}
-              </Stack>
-            </Box>
           )}
         </Stack>
 
