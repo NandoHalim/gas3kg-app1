@@ -68,10 +68,7 @@ const isPaid = (r) => {
   const status = String(r.status || "").toUpperCase();
   const method = String(r.method || "").toUpperCase();
 
-  // 🚫 abaikan transaksi dibatalkan
   if (status === "DIBATALKAN") return false;
-
-  // ✅ hanya hitung yang tunai atau sudah lunas
   if (method === "TUNAI") return true;
   if (status === "LUNAS") return true;
 
@@ -99,7 +96,11 @@ export default function LaporanView() {
   const isSmallMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const toast = useToast();
   const [tab, setTab] = useState("penjualan");
-  const [from, setFrom] = useState(todayStr());
+  const [from, setFrom] = useState(() => {
+    // Default ke tanggal 1 bulan ini untuk mobile-first
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+  });
   const [to, setTo] = useState(todayStr());
   const [exportLoading, setExportLoading] = useState(false);
 
@@ -108,25 +109,30 @@ export default function LaporanView() {
   const [err, setErr] = useState("");
   const [settings, setSettings] = useState({});
 
-  // Quick date presets
-  const quickDateRanges = [
-    { label: "Hari Ini", from: todayStr(), to: todayStr() },
-    { 
-      label: "Kemarin", 
-      from: new Date(Date.now() - 86400000).toISOString().split('T')[0], 
-      to: new Date(Date.now() - 86400000).toISOString().split('T')[0] 
-    },
-    { 
-      label: "Minggu Ini", 
-      from: new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0], 
-      to: todayStr() 
-    },
-    { 
-      label: "Bulan Ini", 
-      from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0], 
-      to: todayStr() 
-    },
-  ];
+  // Quick date presets - MOBILE FIRST dengan periode mulai tanggal 1
+  const quickDateRanges = useMemo(() => {
+    const today = new Date();
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    
+    return [
+      { label: "Hari Ini", from: todayStr(), to: todayStr() },
+      { 
+        label: "Kemarin", 
+        from: new Date(Date.now() - 86400000).toISOString().split('T')[0], 
+        to: new Date(Date.now() - 86400000).toISOString().split('T')[0] 
+      },
+      { 
+        label: "Minggu Ini", 
+        from: new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0], 
+        to: todayStr() 
+      },
+      { 
+        label: "Bulan Ini", 
+        from: firstDayOfMonth, 
+        to: todayStr() 
+      },
+    ];
+  }, []);
 
   // Ambil pengaturan dasar sekali di awal
   useEffect(() => {
@@ -166,18 +172,36 @@ export default function LaporanView() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from, to]);
+  }, [from, to, toast]);
 
-  const columns = [
-    { key: "created_at", label: "Tanggal", width: "120px" },
-    { key: "customer", label: "Pelanggan", width: "150px" },
-    { key: "qty", label: "Qty", width: "80px", align: "right" },
-    { key: "price", label: "Harga", width: "120px", align: "right" },
-    { key: "total", label: "Total", width: "120px", align: "right" },
-    { key: "method", label: "Metode", width: "120px" },
-    { key: "status", label: "Status", width: "120px" },
-  ];
+  // Columns responsif untuk mobile
+  const columns = useMemo(() => {
+    const baseColumns = [
+      { key: "created_at", label: "Tanggal", width: "100px" },
+      { key: "customer", label: "Pelanggan", width: "120px" },
+      { key: "qty", label: "Qty", width: "60px", align: "right" },
+      { key: "price", label: "Harga", width: "100px", align: "right" },
+      { key: "total", label: "Total", width: "100px", align: "right" },
+      { key: "method", label: "Metode", width: "100px" },
+      { key: "status", label: "Status", width: "100px" },
+    ];
+
+    // Untuk mobile yang sangat kecil, sembunyikan beberapa kolom
+    if (isSmallMobile) {
+      return baseColumns.filter(col => 
+        !['customer', 'price', 'method'].includes(col.key)
+      );
+    }
+    
+    // Untuk mobile biasa, sembunyikan kolom tertentu
+    if (isMobile) {
+      return baseColumns.filter(col => 
+        !['customer'].includes(col.key)
+      );
+    }
+
+    return baseColumns;
+  }, [isMobile, isSmallMobile]);
 
   /* ====== ringkasan penjualan ====== */
   const summarySales = useMemo(() => {
@@ -257,46 +281,73 @@ export default function LaporanView() {
     );
   };
 
+  // Handler untuk pindah tab - prevent layout shift
+  const handleTabChange = (_, newValue) => {
+    setTab(newValue);
+    // Scroll ke atas dengan smooth behavior untuk mobile
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
-    <Stack spacing={3} sx={{ pb: { xs: 8, md: 2 } }}>
-      {/* Header */}
-      <Box>
+    <Stack spacing={2} sx={{ 
+      pb: { xs: 2, md: 2 },
+      px: { xs: 1, sm: 2 }, // Padding horizontal yang responsif
+      maxWidth: '100%',
+      overflow: 'hidden'
+    }}>
+      {/* Header - Mobile First */}
+      <Box sx={{ 
+        pt: { xs: 1, sm: 2 },
+        pb: 1
+      }}>
         <Typography 
           variant="h4" 
           fontWeight={800} 
           gutterBottom
           sx={{ 
-            fontSize: { xs: '1.75rem', md: '2.125rem' },
+            fontSize: { xs: '1.5rem', sm: '1.75rem', md: '2.125rem' },
             background: `linear(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
             backgroundClip: 'text',
             WebkitBackgroundClip: 'text',
             color: 'transparent',
+            textAlign: { xs: 'center', sm: 'left' }
           }}
         >
           Laporan
         </Typography>
-        <Typography color="text.secondary" variant="body1">
-          Pantau performa penjualan dan analisa laba rugi bisnis Anda
+        <Typography 
+          color="text.secondary" 
+          variant="body2"
+          sx={{ 
+            textAlign: { xs: 'center', sm: 'left' },
+            fontSize: { xs: '0.875rem', sm: '1rem' }
+          }}
+        >
+          Pantau performa penjualan dan analisa laba rugi
         </Typography>
       </Box>
 
-      {/* Tab Navigation */}
+      {/* Tab Navigation - Mobile Optimized */}
       <Card sx={{ 
         background: `linear(135deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
-        border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`
+        border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+        mx: { xs: -1, sm: 0 } // Full width on mobile
       }}>
-        <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+        <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
           <Tabs
             value={tab}
-            onChange={(_, v) => setTab(v)}
+            onChange={handleTabChange}
             textColor="primary"
             indicatorColor="primary"
             variant={isMobile ? "fullWidth" : "standard"}
             sx={{
+              minHeight: { xs: 48, sm: 64 },
               '& .MuiTab-root': {
-                fontSize: { xs: '0.875rem', md: '1rem' },
+                fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' },
                 fontWeight: 600,
-                minHeight: { xs: 48, md: 64 },
+                minHeight: { xs: 40, sm: 48 },
+                minWidth: { xs: 'auto', sm: 120 },
+                px: { xs: 1, sm: 2 },
                 '&.Mui-selected': {
                   color: theme.palette.primary.main,
                 },
@@ -304,41 +355,57 @@ export default function LaporanView() {
             }}
           >
             <Tab 
-              icon={<Inventory sx={{ mb: 0.5 }} />}
-              iconPosition="start"
-              label="Penjualan" 
+              icon={isSmallMobile ? <Inventory fontSize="small" /> : <Inventory />}
+              iconPosition={isSmallMobile ? "top" : "start"}
+              label={isSmallMobile ? "Penjualan" : "Penjualan"} 
               value="penjualan" 
             />
             <Tab 
-              icon={<TrendingUp sx={{ mb: 0.5 }} />}
-              iconPosition="start"
-              label="Laba Rugi" 
+              icon={isSmallMobile ? <TrendingUp fontSize="small" /> : <TrendingUp />}
+              iconPosition={isSmallMobile ? "top" : "start"}
+              label={isSmallMobile ? "Laba Rugi" : "Laba Rugi"} 
               value="labarugi" 
             />
           </Tabs>
         </CardContent>
       </Card>
 
-      {/* Filter Section */}
-      <Card>
+      {/* Filter Section - Mobile Optimized */}
+      <Card sx={{ mx: { xs: -1, sm: 0 } }}>
         <CardHeader 
           title={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <DateRange color="primary" />
-              <Typography variant="h6">Filter Periode</Typography>
+              <DateRange color="primary" fontSize={isSmallMobile ? "small" : "medium"} />
+              <Typography variant="h6" fontSize={{ xs: '1rem', sm: '1.25rem' }}>
+                Filter Periode
+              </Typography>
             </Box>
           }
-          sx={{ pb: 1 }}
+          sx={{ 
+            pb: 1,
+            px: { xs: 2, sm: 3 },
+            pt: { xs: 2, sm: 3 }
+          }}
         />
-        <CardContent>
-          <Stack spacing={3}>
+        <CardContent sx={{ px: { xs: 2, sm: 3 }, pt: 0 }}>
+          <Stack spacing={2}>
             {/* Quick Date Buttons */}
             <Box>
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Today fontSize="small" />
+              <Typography 
+                variant="body2" 
+                color="text.secondary" 
+                gutterBottom 
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 1,
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                }}
+              >
+                <Today fontSize={isSmallMobile ? "small" : "inherit"} />
                 Periode Cepat:
               </Typography>
-              <Stack direction="row" gap={1} flexWrap="wrap">
+              <Stack direction="row" gap={1} flexWrap="wrap" useFlexGap>
                 {quickDateRanges.map((range, index) => (
                   <Chip
                     key={index}
@@ -350,6 +417,10 @@ export default function LaporanView() {
                     variant={from === range.from && to === range.to ? "filled" : "outlined"}
                     color="primary"
                     size={isSmallMobile ? "small" : "medium"}
+                    sx={{ 
+                      mb: 1,
+                      fontSize: { xs: '0.7rem', sm: '0.8125rem' }
+                    }}
                   />
                 ))}
               </Stack>
@@ -359,12 +430,22 @@ export default function LaporanView() {
 
             {/* Custom Date Range */}
             <Box>
-              <Typography variant="body2" color="text.secondary" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CalendarMonth fontSize="small" />
+              <Typography 
+                variant="body2" 
+                color="text.secondary" 
+                gutterBottom 
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 1,
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                }}
+              >
+                <CalendarMonth fontSize={isSmallMobile ? "small" : "inherit"} />
                 Periode Kustom:
               </Typography>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={6} md={4} lg={3}>
+              <Grid container spacing={1.5}>
+                <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
                     label="Dari Tanggal"
@@ -372,11 +453,15 @@ export default function LaporanView() {
                     value={from}
                     onChange={(e) => setFrom(e.target.value)}
                     InputLabelProps={{ shrink: true }}
-                    inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+                    inputProps={{ 
+                      min: MIN_DATE, 
+                      max: maxAllowedDate(),
+                      style: { fontSize: isSmallMobile ? '14px' : 'inherit' }
+                    }}
                     size={isSmallMobile ? "small" : "medium"}
                   />
                 </Grid>
-                <Grid item xs={12} sm={6} md={4} lg={3}>
+                <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
                     label="Sampai Tanggal"
@@ -384,12 +469,17 @@ export default function LaporanView() {
                     value={to}
                     onChange={(e) => setTo(e.target.value)}
                     InputLabelProps={{ shrink: true }}
-                    inputProps={{ min: MIN_DATE, max: maxAllowedDate() }}
+                    inputProps={{ 
+                      min: MIN_DATE, 
+                      max: maxAllowedDate(),
+                      style: { fontSize: isSmallMobile ? '14px' : 'inherit' }
+                    }}
                     size={isSmallMobile ? "small" : "medium"}
                   />
                 </Grid>
-                <Grid item xs={12} md={4} lg={6} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
+                <Grid item xs={12}>
                   <Button 
+                    fullWidth={isSmallMobile}
                     variant="contained" 
                     onClick={() => tab === "penjualan" 
                       ? handleExport(exportPenjualan, "Laporan Penjualan")
@@ -398,6 +488,10 @@ export default function LaporanView() {
                     startIcon={<Download />}
                     disabled={exportLoading || loading}
                     size={isSmallMobile ? "small" : "medium"}
+                    sx={{ 
+                      mt: 1,
+                      minWidth: { sm: 'auto' }
+                    }}
                   >
                     {exportLoading ? "Mengexport..." : "Export Excel"}
                   </Button>
@@ -414,7 +508,8 @@ export default function LaporanView() {
           variant="outlined"
           sx={{ 
             border: `1px solid ${theme.palette.error.main}20`,
-            background: `${theme.palette.error.main}08`
+            background: `${theme.palette.error.main}08`,
+            mx: { xs: -1, sm: 0 }
           }}
         >
           {err}
@@ -423,30 +518,30 @@ export default function LaporanView() {
 
       {/* TAB: PENJUALAN */}
       {tab === "penjualan" && (
-        <Stack spacing={3}>
-          {/* Summary Cards */}
+        <Stack spacing={2} sx={{ mx: { xs: -1, sm: 0 } }}>
+          {/* Summary Cards - Mobile Optimized */}
           {!loading && (
-            <Grid container spacing={2}>
+            <Grid container spacing={1.5}>
               <Grid item xs={12} sm={6}>
                 <Card sx={{ 
                   background: `linear(135deg, ${alpha(theme.palette.info.main, 0.1)} 0%, ${alpha(theme.palette.info.main, 0.05)} 100%)`,
                   border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`
                 }}>
-                  <CardContent>
+                  <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
                     <Stack direction="row" alignItems="center" spacing={2}>
                       <Box sx={{ 
-                        p: 1.5, 
+                        p: { xs: 1, sm: 1.5 }, 
                         borderRadius: 2, 
                         background: alpha(theme.palette.info.main, 0.1) 
                       }}>
-                        <Inventory color="info" />
+                        <Inventory fontSize={isSmallMobile ? "small" : "medium"} color="info" />
                       </Box>
-                      <Box>
-                        <Typography color="text.secondary" variant="body2">
+                      <Box sx={{ flex: 1 }}>
+                        <Typography color="text.secondary" variant="body2" fontSize={{ xs: '0.75rem', sm: '0.875rem' }}>
                           Total Quantity
                         </Typography>
-                        <Typography variant="h5" fontWeight={800} color="info.main">
-                          {summarySales.qty}
+                        <Typography variant="h6" fontWeight={800} color="info.main" fontSize={{ xs: '1.1rem', sm: '1.25rem' }}>
+                          {summarySales.qty.toLocaleString()}
                         </Typography>
                       </Box>
                     </Stack>
@@ -458,20 +553,20 @@ export default function LaporanView() {
                   background: `linear(135deg, ${alpha(theme.palette.success.main, 0.1)} 0%, ${alpha(theme.palette.success.main, 0.05)} 100%)`,
                   border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`
                 }}>
-                  <CardContent>
+                  <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
                     <Stack direction="row" alignItems="center" spacing={2}>
                       <Box sx={{ 
-                        p: 1.5, 
+                        p: { xs: 1, sm: 1.5 }, 
                         borderRadius: 2, 
                         background: alpha(theme.palette.success.main, 0.1) 
                       }}>
-                        <AttachMoney color="success" />
+                        <AttachMoney fontSize={isSmallMobile ? "small" : "medium"} color="success" />
                       </Box>
-                      <Box>
-                        <Typography color="text.secondary" variant="body2">
+                      <Box sx={{ flex: 1 }}>
+                        <Typography color="text.secondary" variant="body2" fontSize={{ xs: '0.75rem', sm: '0.875rem' }}>
                           Total Omzet
                         </Typography>
-                        <Typography variant="h5" fontWeight={800} color="success.main">
+                        <Typography variant="h6" fontWeight={800} color="success.main" fontSize={{ xs: '1.1rem', sm: '1.25rem' }}>
                           {fmtIDR(summarySales.omzet)}
                         </Typography>
                       </Box>
@@ -482,23 +577,31 @@ export default function LaporanView() {
             </Grid>
           )}
 
-          {/* Data Table */}
+          {/* Data Table - Mobile Optimized */}
           <Card>
             <CardHeader 
-              title="Detail Transaksi Penjualan"
+              title={
+                <Typography variant="h6" fontSize={{ xs: '1rem', sm: '1.25rem' }}>
+                  Detail Transaksi Penjualan
+                </Typography>
+              }
               action={
                 <Tooltip title="Menampilkan semua transaksi kecuali yang dibatalkan">
                   <IconButton size="small">
-                    <Info />
+                    <Info fontSize={isSmallMobile ? "small" : "medium"} />
                   </IconButton>
                 </Tooltip>
               }
+              sx={{ 
+                px: { xs: 2, sm: 3 },
+                py: { xs: 1.5, sm: 2 }
+              }}
             />
             <CardContent sx={{ p: 0 }}>
               {loading ? (
                 <Box sx={{ p: 2 }}>
                   {[1, 2, 3, 4, 5].map((item) => (
-                    <Skeleton key={item} height={53} sx={{ mb: 1 }} />
+                    <Skeleton key={item} height={48} sx={{ mb: 1 }} />
                   ))}
                 </Box>
               ) : (
@@ -506,22 +609,26 @@ export default function LaporanView() {
                   component={Paper} 
                   elevation={0}
                   sx={{ 
-                    maxHeight: { md: 600 },
+                    maxHeight: { xs: 400, md: 600 },
                     border: `1px solid ${theme.palette.divider}`,
-                    borderRadius: 1
+                    borderRadius: 1,
+                    overflow: 'auto'
                   }}
                 >
                   <Table 
                     size="small" 
                     stickyHeader
                     sx={{
+                      minWidth: 400, // Minimum width untuk prevent layout break
                       '& .MuiTableCell-head': {
                         backgroundColor: theme.palette.background.default,
                         fontWeight: 700,
-                        fontSize: '0.875rem'
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                        py: { xs: 1, sm: 1.5 }
                       },
                       '& .MuiTableCell-body': {
-                        fontSize: '0.875rem'
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                        py: { xs: 1, sm: 1.5 }
                       }
                     }}
                   >
@@ -533,7 +640,8 @@ export default function LaporanView() {
                             align={c.align || "left"}
                             sx={{ 
                               width: c.width,
-                              minWidth: c.width 
+                              minWidth: c.width,
+                              px: { xs: 1, sm: 2 }
                             }}
                           >
                             {c.label}
@@ -553,51 +661,29 @@ export default function LaporanView() {
                               : 'inherit'
                           }}
                         >
-                          <TableCell sx={{ fontFamily: 'monospace' }}>
-                            {String(r.created_at || "").slice(0, 10)}
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" noWrap sx={{ maxWidth: 150 }}>
-                              {r.customer || "PUBLIC"}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
-                            {r.qty}
-                          </TableCell>
-                          <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
-                            {fmtIDR(r.price)}
-                          </TableCell>
-                          <TableCell align="right" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                            {fmtIDR(r.total)}
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              icon={getMethodIcon(r.method)}
-                              label={r.method}
-                              size="small"
-                              variant="outlined"
-                              color={String(r.method).toUpperCase() === "TUNAI" ? "success" : "primary"}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={r.status || "PENDING"}
-                              size="small"
-                              color={getStatusColor(r.status)}
-                              variant="filled"
-                            />
-                          </TableCell>
+                          {columns.map((col) => (
+                            <TableCell 
+                              key={col.key}
+                              align={col.align || "left"}
+                              sx={{ 
+                                px: { xs: 1, sm: 2 },
+                                fontFamily: col.align === 'right' ? 'monospace' : 'inherit'
+                              }}
+                            >
+                              {renderTableCell(r, col.key)}
+                            </TableCell>
+                          ))}
                         </TableRow>
                       ))}
                       {!rows.length && (
                         <TableRow>
-                          <TableCell colSpan={7} sx={{ textAlign: 'center', py: 6 }}>
+                          <TableCell colSpan={columns.length} sx={{ textAlign: 'center', py: 6 }}>
                             <Box sx={{ color: 'text.secondary' }}>
-                              <Inventory sx={{ fontSize: 48, mb: 1, opacity: 0.5 }} />
-                              <Typography variant="body1" gutterBottom>
+                              <Inventory sx={{ fontSize: { xs: 36, sm: 48 }, mb: 1, opacity: 0.5 }} />
+                              <Typography variant="body1" gutterBottom fontSize={{ xs: '0.875rem', sm: '1rem' }}>
                                 Tidak ada data transaksi
                               </Typography>
-                              <Typography variant="body2">
+                              <Typography variant="body2" fontSize={{ xs: '0.75rem', sm: '0.875rem' }}>
                                 Coba ubah periode filter untuk melihat data
                               </Typography>
                             </Box>
@@ -615,142 +701,119 @@ export default function LaporanView() {
 
       {/* TAB: LABA RUGI */}
       {tab === "labarugi" && (
-        <Stack spacing={3}>
+        <Stack spacing={2} sx={{ mx: { xs: -1, sm: 0 } }}>
           {/* Info Card */}
           <Alert 
             severity="info" 
             variant="outlined"
-            icon={<Info />}
+            icon={<Info fontSize={isSmallMobile ? "small" : "medium"} />}
             sx={{ 
               border: `1px solid ${theme.palette.info.main}20`,
               background: `${theme.palette.info.main}08`
             }}
           >
-            <Typography variant="body2">
+            <Typography variant="body2" fontSize={{ xs: '0.75rem', sm: '0.875rem' }}>
               <strong>Hanya menampilkan transaksi Tunai dan status LUNAS.</strong><br />
               HPP menggunakan nilai dari pengaturan: <strong>{fmtIDR(settings.hpp || 0)} per tabung</strong>
             </Typography>
           </Alert>
 
-          {/* Laba Rugi Cards */}
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6} lg={3}>
-              <Card sx={{ 
-                background: `linear(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
-                border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`
-              }}>
-                <CardContent>
-                  <Stack direction="row" alignItems="center" spacing={2}>
-                    <Box sx={{ 
-                      p: 1.5, 
-                      borderRadius: 2, 
-                      background: alpha(theme.palette.primary.main, 0.1) 
-                    }}>
-                      <Receipt color="primary" />
-                    </Box>
-                    <Box>
-                      <Typography color="text.secondary" variant="body2">
-                        Omzet (Dibayar)
-                      </Typography>
-                      <Typography variant="h6" fontWeight={800} color="primary.main">
-                        {fmtIDR(lr.omzet)}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={6} lg={3}>
-              <Card sx={{ 
-                background: `linear(135deg, ${alpha(theme.palette.warning.main, 0.1)} 0%, ${alpha(theme.palette.warning.main, 0.05)} 100%)`,
-                border: `1px solid ${alpha(theme.palette.warning.main, 0.2)}`
-              }}>
-                <CardContent>
-                  <Stack direction="row" alignItems="center" spacing={2}>
-                    <Box sx={{ 
-                      p: 1.5, 
-                      borderRadius: 2, 
-                      background: alpha(theme.palette.warning.main, 0.1) 
-                    }}>
-                      <Inventory color="warning" />
-                    </Box>
-                    <Box>
-                      <Typography color="text.secondary" variant="body2">
-                        HPP
-                      </Typography>
-                      <Typography variant="h6" fontWeight={800} color="warning.main">
-                        {fmtIDR(lr.hpp)}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={6} lg={3}>
-              <Card sx={{ 
-                background: `linear(135deg, ${alpha(lr.laba >= 0 ? theme.palette.success.main : theme.palette.error.main, 0.1)} 0%, ${alpha(lr.laba >= 0 ? theme.palette.success.main : theme.palette.error.main, 0.05)} 100%)`,
-                border: `1px solid ${alpha(lr.laba >= 0 ? theme.palette.success.main : theme.palette.error.main, 0.2)}`
-              }}>
-                <CardContent>
-                  <Stack direction="row" alignItems="center" spacing={2}>
-                    <Box sx={{ 
-                      p: 1.5, 
-                      borderRadius: 2, 
-                      background: alpha(lr.laba >= 0 ? theme.palette.success.main : theme.palette.error.main, 0.1) 
-                    }}>
-                      {lr.laba >= 0 ? <TrendingUp color="success" /> : <TrendingDown color="error" />}
-                    </Box>
-                    <Box>
-                      <Typography color="text.secondary" variant="body2">
-                        Laba/Rugi
-                      </Typography>
-                      <Typography 
-                        variant="h6" 
-                        fontWeight={800} 
-                        color={lr.laba >= 0 ? "success.main" : "error.main"}
-                      >
-                        {fmtIDR(lr.laba)}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={6} lg={3}>
-              <Card sx={{ 
-                background: `linear(135deg, ${alpha(theme.palette.info.main, 0.1)} 0%, ${alpha(theme.palette.info.main, 0.05)} 100%)`,
-                border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`
-              }}>
-                <CardContent>
-                  <Stack direction="row" alignItems="center" spacing={2}>
-                    <Box sx={{ 
-                      p: 1.5, 
-                      borderRadius: 2, 
-                      background: alpha(theme.palette.info.main, 0.1) 
-                    }}>
-                      <TrendingUp color="info" />
-                    </Box>
-                    <Box>
-                      <Typography color="text.secondary" variant="body2">
-                        Margin
-                      </Typography>
-                      <Typography variant="h6" fontWeight={800} color="info.main">
-                        {lr.margin}%
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
+          {/* Laba Rugi Cards - Mobile Optimized */}
+          <Grid container spacing={1.5}>
+            {[
+              { 
+                key: 'omzet', 
+                label: 'Omzet (Dibayar)', 
+                value: fmtIDR(lr.omzet), 
+                color: 'primary',
+                icon: <Receipt fontSize={isSmallMobile ? "small" : "medium"} />
+              },
+              { 
+                key: 'hpp', 
+                label: 'HPP', 
+                value: fmtIDR(lr.hpp), 
+                color: 'warning',
+                icon: <Inventory fontSize={isSmallMobile ? "small" : "medium"} />
+              },
+              { 
+                key: 'laba', 
+                label: 'Laba/Rugi', 
+                value: fmtIDR(lr.laba), 
+                color: lr.laba >= 0 ? 'success' : 'error',
+                icon: lr.laba >= 0 ? 
+                  <TrendingUp fontSize={isSmallMobile ? "small" : "medium"} /> : 
+                  <TrendingDown fontSize={isSmallMobile ? "small" : "medium"} />
+              },
+              { 
+                key: 'margin', 
+                label: 'Margin', 
+                value: `${lr.margin}%`, 
+                color: 'info',
+                icon: <TrendingUp fontSize={isSmallMobile ? "small" : "medium"} />
+              }
+            ].map((item) => (
+              <Grid item xs={12} sm={6} md={3} key={item.key}>
+                <Card sx={{ 
+                  background: `linear(135deg, ${alpha(theme.palette[item.color].main, 0.1)} 0%, ${alpha(theme.palette[item.color].main, 0.05)} 100%)`,
+                  border: `1px solid ${alpha(theme.palette[item.color].main, 0.2)}`,
+                  height: '100%'
+                }}>
+                  <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                    <Stack direction="row" alignItems="center" spacing={2}>
+                      <Box sx={{ 
+                        p: { xs: 1, sm: 1.5 }, 
+                        borderRadius: 2, 
+                        background: alpha(theme.palette[item.color].main, 0.1) 
+                      }}>
+                        {item.icon}
+                      </Box>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography 
+                          color="text.secondary" 
+                          variant="body2" 
+                          fontSize={{ xs: '0.75rem', sm: '0.875rem' }}
+                          noWrap
+                        >
+                          {item.label}
+                        </Typography>
+                        <Typography 
+                          variant="h6" 
+                          fontWeight={800} 
+                          color={`${item.color}.main`}
+                          fontSize={{ xs: '1rem', sm: '1.25rem' }}
+                          noWrap
+                        >
+                          {item.value}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
           </Grid>
 
           {/* Detailed Breakdown */}
           {!loading && (
             <Card>
-              <CardHeader title="Rincian Laba Rugi" />
-              <CardContent>
+              <CardHeader 
+                title={
+                  <Typography variant="h6" fontSize={{ xs: '1rem', sm: '1.25rem' }}>
+                    Rincian Laba Rugi
+                  </Typography>
+                }
+                sx={{ 
+                  px: { xs: 2, sm: 3 },
+                  py: { xs: 1.5, sm: 2 }
+                }}
+              />
+              <CardContent sx={{ px: { xs: 2, sm: 3 } }}>
                 <Stack spacing={2}>
-                  <Box sx={{ p: 2, background: alpha(theme.palette.primary.main, 0.02), borderRadius: 1 }}>
+                  <Box sx={{ 
+                    p: { xs: 1.5, sm: 2 }, 
+                    background: alpha(theme.palette.primary.main, 0.02), 
+                    borderRadius: 1 
+                  }}>
                     <RowKV k="Omzet (Transaksi Dibayar)" v={fmtIDR(lr.omzet)} />
                     <RowKV k="Harga Pokok Penjualan (HPP)" v={`- ${fmtIDR(lr.hpp)}`} />
                     <Divider sx={{ my: 1 }} />
@@ -760,7 +823,7 @@ export default function LaporanView() {
                       vSx={{ 
                         color: lr.laba >= 0 ? "success.main" : "error.main",
                         fontWeight: 800,
-                        fontSize: '1.1rem'
+                        fontSize: { xs: '1rem', sm: '1.1rem' }
                       }}
                     />
                     <RowKV 
@@ -768,7 +831,8 @@ export default function LaporanView() {
                       v={`${lr.margin}%`}
                       vSx={{ 
                         color: "info.main",
-                        fontWeight: 700
+                        fontWeight: 700,
+                        fontSize: { xs: '0.875rem', sm: '1rem' }
                       }}
                     />
                   </Box>
@@ -782,14 +846,77 @@ export default function LaporanView() {
   );
 }
 
+/* Helper untuk render table cell */
+function renderTableCell(row, key) {
+  switch (key) {
+    case 'created_at':
+      return String(row.created_at || "").slice(0, 10);
+    
+    case 'customer':
+      return (
+        <Typography variant="body2" noWrap sx={{ maxWidth: 120 }}>
+          {row.customer || "PUBLIC"}
+        </Typography>
+      );
+    
+    case 'qty':
+      return row.qty;
+    
+    case 'price':
+      return fmtIDR(row.price);
+    
+    case 'total':
+      return (
+        <Typography variant="body2" fontWeight={600}>
+          {fmtIDR(row.total)}
+        </Typography>
+      );
+    
+    case 'method':
+      return (
+        <Chip
+          icon={getMethodIcon(row.method)}
+          label={row.method}
+          size="small"
+          variant="outlined"
+          color={String(row.method).toUpperCase() === "TUNAI" ? "success" : "primary"}
+        />
+      );
+    
+    case 'status':
+      return (
+        <Chip
+          label={row.status || "PENDING"}
+          size="small"
+          color={getStatusColor(row.status)}
+          variant="filled"
+        />
+      );
+    
+    default:
+      return row[key] || '';
+  }
+}
+
 /* small row */
 function RowKV({ k, v, vSx }) {
   return (
     <Stack direction="row" justifyContent="space-between" alignItems="center">
-      <Typography variant="body1" color="text.secondary">
+      <Typography 
+        variant="body2" 
+        color="text.secondary"
+        fontSize={{ xs: '0.75rem', sm: '0.875rem' }}
+      >
         {k}
       </Typography>
-      <Typography variant="body1" sx={{ fontWeight: 600, ...vSx }}>
+      <Typography 
+        variant="body2" 
+        sx={{ 
+          fontWeight: 600, 
+          fontSize: { xs: '0.75rem', sm: '0.875rem' },
+          ...vSx 
+        }}
+      >
         {v}
       </Typography>
     </Stack>
