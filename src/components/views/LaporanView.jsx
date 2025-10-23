@@ -34,6 +34,7 @@ import {
   alpha,
   Divider,
   Fade,
+  Snackbar,
 } from "@mui/material";
 import {
   Download,
@@ -46,6 +47,7 @@ import {
   TrendingDown,
   Inventory,
   Receipt,
+  Close,
 } from "@mui/icons-material";
 
 /* ===== helpers ===== */
@@ -93,7 +95,10 @@ const getMethodIcon = (method) => {
 // Helper function untuk mendapatkan tanggal 1 bulan berjalan
 const getFirstDayOfCurrentMonth = () => {
   const today = new Date();
-  return new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1;
+  const formattedMonth = month < 10 ? `0${month}` : `${month}`;
+  return `${year}-${formattedMonth}-01`;
 };
 
 /* ===== view ===== */
@@ -105,8 +110,15 @@ export default function LaporanView() {
   const [tab, setTab] = useState("penjualan");
   const [isTransitioning, setIsTransitioning] = useState(false);
   
+  // State untuk alert/notification
+  const [exportAlert, setExportAlert] = useState({
+    open: false,
+    message: "",
+    severity: "success", // "success" | "error" | "info" | "warning"
+  });
+
   // Set default dari tanggal ke tanggal 1 bulan berjalan
-  const [from, setFrom] = useState(getFirstDayOfCurrentMonth());
+  const [from, setFrom] = useState(getFirstDayOfCurrentMonth);
   const [to, setTo] = useState(todayStr());
   const [exportLoading, setExportLoading] = useState(false);
 
@@ -119,8 +131,14 @@ export default function LaporanView() {
   const quickDateRanges = useMemo(() => {
     const today = new Date();
     const firstDayOfMonth = getFirstDayOfCurrentMonth();
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0];
+    
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayFormatted = yesterday.toLocaleDateString('en-CA');
+    
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 6);
+    const weekAgoFormatted = weekAgo.toLocaleDateString('en-CA');
     
     return [
       { 
@@ -131,15 +149,15 @@ export default function LaporanView() {
       },
       { 
         label: "Kemarin", 
-        from: yesterday, 
-        to: yesterday,
-        description: `${yesterday}`
+        from: yesterdayFormatted, 
+        to: yesterdayFormatted,
+        description: `${yesterdayFormatted}`
       },
       { 
         label: "Minggu Ini", 
-        from: weekAgo, 
+        from: weekAgoFormatted, 
         to: todayStr(),
-        description: `${weekAgo} - ${todayStr()}`
+        description: `${weekAgoFormatted} - ${todayStr()}`
       },
       { 
         label: "Bulan Ini", 
@@ -180,7 +198,7 @@ export default function LaporanView() {
       } catch (e) {
         const msg = e.message || "Gagal memuat data laporan";
         setErr(msg);
-        toast?.show?.({ type: "error", message: msg });
+        showAlert(msg, "error");
       } finally {
         if (alive) setLoading(false);
       }
@@ -188,9 +206,9 @@ export default function LaporanView() {
     return () => {
       alive = false;
     };
-  }, [from, to, toast]);
+  }, [from, to]);
 
-  // Columns responsif untuk mobile - DIPERBAIKI untuk konsistensi lebar
+  // Columns responsif untuk mobile
   const columns = useMemo(() => {
     const baseColumns = [
       { key: "created_at", label: "Tanggal", width: "100px", minWidth: "100px" },
@@ -202,14 +220,12 @@ export default function LaporanView() {
       { key: "status", label: "Status", width: "100px", minWidth: "100px" },
     ];
 
-    // Untuk mobile yang sangat kecil, sembunyikan beberapa kolom
     if (isSmallMobile) {
       return baseColumns.filter(col => 
         !['customer', 'price', 'method'].includes(col.key)
       );
     }
     
-    // Untuk mobile biasa, sembunyikan kolom tertentu
     if (isMobile) {
       return baseColumns.filter(col => 
         !['customer'].includes(col.key)
@@ -240,20 +256,38 @@ export default function LaporanView() {
     return { omzet, hpp, laba, margin };
   }, [rows, settings]);
 
+  // Fungsi untuk menampilkan alert
+  const showAlert = (message, severity = "info") => {
+    setExportAlert({
+      open: true,
+      message,
+      severity,
+    });
+  };
+
+  // Fungsi untuk menutup alert
+  const handleCloseAlert = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setExportAlert({ ...exportAlert, open: false });
+  };
+
   /* ====== export ====== */
   const handleExport = async (exportFn, filename) => {
+    // Validasi data sebelum export
+    if (rows.length === 0) {
+      showAlert("Tidak ada data untuk diexport. Silakan pilih periode yang memiliki data.", "warning");
+      return;
+    }
+
     try {
       setExportLoading(true);
       await exportFn();
-      toast?.show?.({ 
-        type: "success", 
-        message: `File ${filename} berhasil diunduh` 
-      });
+      showAlert(`File ${filename} berhasil diunduh!`, "success");
     } catch (error) {
-      toast?.show?.({ 
-        type: "error", 
-        message: `Gagal mengexport: ${error.message}` 
-      });
+      console.error("Export error:", error);
+      showAlert(`Gagal mengexport: ${error.message || "Terjadi kesalahan"}`, "error");
     } finally {
       setExportLoading(false);
     }
@@ -284,6 +318,12 @@ export default function LaporanView() {
   };
 
   const exportLabaRugi = async () => {
+    // Validasi khusus untuk laba rugi
+    const paidRows = rows.filter(isPaid);
+    if (paidRows.length === 0) {
+      throw new Error("Tidak ada transaksi yang dibayar dalam periode ini");
+    }
+
     const data = [
       { Keterangan: "Omzet (dibayar)", Nilai: lr.omzet },
       { Keterangan: "HPP", Nilai: -lr.hpp },
@@ -301,15 +341,12 @@ export default function LaporanView() {
   const handleTabChange = async (_, newValue) => {
     setIsTransitioning(true);
     
-    // Smooth scroll ke atas
     window.scrollTo({ top: 0, behavior: 'smooth' });
     
-    // Delay kecil untuk memastikan scroll selesai sebelum ganti tab
     await new Promise(resolve => setTimeout(resolve, 100));
     
     setTab(newValue);
     
-    // Reset transitioning state setelah animasi
     setTimeout(() => {
       setIsTransitioning(false);
     }, 300);
@@ -334,15 +371,58 @@ export default function LaporanView() {
     return columns.reduce((total, col) => total + parseInt(col.width), 0);
   }, [columns]);
 
+  // Reset ke periode bulan ini
+  const handleResetToCurrentMonth = () => {
+    setFrom(getFirstDayOfCurrentMonth());
+    setTo(todayStr());
+    showAlert("Periode telah direset ke bulan ini", "info");
+  };
+
+  // Cek apakah ada data untuk diexport
+  const hasDataForExport = rows.length > 0;
+  const hasPaidDataForLR = rows.filter(isPaid).length > 0;
+
   return (
     <Stack spacing={2} sx={{ 
       pb: { xs: 2, md: 2 },
       px: { xs: 1, sm: 2 },
       maxWidth: '100%',
       overflow: 'hidden',
-      minHeight: '600px', // Minimum height untuk prevent layout shift
+      minHeight: '600px',
       position: 'relative'
     }}>
+      {/* Custom Alert/Notification */}
+      <Snackbar
+        open={exportAlert.open}
+        autoHideDuration={6000}
+        onClose={handleCloseAlert}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={exportAlert.severity}
+          variant="filled"
+          sx={{ 
+            width: '100%',
+            alignItems: 'center',
+            '& .MuiAlert-message': {
+              flex: 1
+            }
+          }}
+          action={
+            <IconButton
+              size="small"
+              aria-label="close"
+              color="inherit"
+              onClick={handleCloseAlert}
+            >
+              <Close fontSize="small" />
+            </IconButton>
+          }
+        >
+          {exportAlert.message}
+        </Alert>
+      </Snackbar>
+
       {/* Header - Mobile First */}
       <Box sx={{ 
         pt: { xs: 1, sm: 2 },
@@ -437,6 +517,22 @@ export default function LaporanView() {
               </Typography>
             </Box>
           }
+          action={
+            !isSmallMobile && (
+              <Button 
+                size="small" 
+                onClick={handleResetToCurrentMonth}
+                variant="outlined"
+                startIcon={<CalendarMonth />}
+                sx={{ 
+                  fontSize: '0.8rem',
+                  minWidth: 'auto'
+                }}
+              >
+                Reset ke Bulan Ini
+              </Button>
+            )
+          }
           sx={{ 
             pb: 1,
             px: { xs: 2, sm: 3 },
@@ -480,6 +576,19 @@ export default function LaporanView() {
                     }}
                   />
                 ))}
+                {isSmallMobile && (
+                  <Chip
+                    label="Reset"
+                    onClick={handleResetToCurrentMonth}
+                    variant="outlined"
+                    color="secondary"
+                    size="small"
+                    sx={{ 
+                      mb: 1,
+                      fontSize: '0.7rem',
+                    }}
+                  />
+                )}
               </Stack>
             </Box>
 
@@ -516,7 +625,7 @@ export default function LaporanView() {
                       style: { fontSize: isSmallMobile ? '14px' : 'inherit' }
                     }}
                     size={isSmallMobile ? "small" : "medium"}
-                    helperText="Default: Tanggal 1 bulan berjalan"
+                    helperText={`Default: ${getFirstDayOfCurrentMonth()}`}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
@@ -540,12 +649,20 @@ export default function LaporanView() {
                   <Button 
                     fullWidth={isSmallMobile}
                     variant="contained" 
-                    onClick={() => tab === "penjualan" 
-                      ? handleExport(exportPenjualan, "Laporan Penjualan")
-                      : handleExport(exportLabaRugi, "Laporan Laba Rugi")
-                    }
+                    onClick={() => {
+                      if (tab === "penjualan") {
+                        handleExport(exportPenjualan, "Laporan Penjualan");
+                      } else {
+                        // Validasi khusus untuk laba rugi
+                        if (!hasPaidDataForLR) {
+                          showAlert("Tidak ada transaksi yang dibayar dalam periode ini. Export Laba Rugi membutuhkan transaksi dengan status LUNAS atau metode TUNAI.", "warning");
+                          return;
+                        }
+                        handleExport(exportLabaRugi, "Laporan Laba Rugi");
+                      }
+                    }}
                     startIcon={<Download />}
-                    disabled={exportLoading || loading || isTransitioning}
+                    disabled={exportLoading || loading || isTransitioning || !hasDataForExport}
                     size={isSmallMobile ? "small" : "medium"}
                     sx={{ 
                       mt: 1,
@@ -554,11 +671,29 @@ export default function LaporanView() {
                       '&:hover': {
                         transform: 'translateY(-1px)',
                         boxShadow: theme.shadows[4],
+                      },
+                      '&:disabled': {
+                        opacity: 0.6,
                       }
                     }}
                   >
-                    {exportLoading ? "Mengexport..." : "Export Excel"}
+                    {exportLoading ? "Mengexport..." : `Export ${tab === "penjualan" ? "Penjualan" : "Laba Rugi"}`}
                   </Button>
+                  
+                  {/* Info tambahan untuk export */}
+                  {!hasDataForExport && (
+                    <Typography 
+                      variant="caption" 
+                      color="text.secondary" 
+                      sx={{ 
+                        display: 'block', 
+                        mt: 1,
+                        textAlign: 'center'
+                      }}
+                    >
+                      Tidak ada data untuk diexport pada periode ini
+                    </Typography>
+                  )}
                 </Grid>
               </Grid>
             </Box>
@@ -570,6 +705,7 @@ export default function LaporanView() {
         <Alert 
           severity="error" 
           variant="outlined"
+          onClose={() => setErr("")}
           sx={{ 
             border: `1px solid ${theme.palette.error.main}20`,
             background: `${theme.palette.error.main}08`,
@@ -670,7 +806,7 @@ export default function LaporanView() {
               </Grid>
             )}
 
-            {/* Data Table - Mobile Optimized dengan lebar konsisten */}
+            {/* Data Table - Mobile Optimized */}
             <Card sx={{ transition: 'all 0.3s ease-in-out' }}>
               <CardHeader 
                 title={
@@ -706,7 +842,7 @@ export default function LaporanView() {
                       border: `1px solid ${theme.palette.divider}`,
                       borderRadius: 1,
                       overflow: 'auto',
-                      minWidth: `${tableTotalWidth}px`, // Lebar minimum konsisten
+                      minWidth: `${tableTotalWidth}px`,
                       transition: 'all 0.3s ease-in-out'
                     }}
                   >
@@ -714,7 +850,7 @@ export default function LaporanView() {
                       size="small" 
                       stickyHeader
                       sx={{
-                        minWidth: `${tableTotalWidth}px`, // Lebar minimum konsisten
+                        minWidth: `${tableTotalWidth}px`,
                         '& .MuiTableCell-head': {
                           backgroundColor: theme.palette.background.default,
                           fontWeight: 700,
