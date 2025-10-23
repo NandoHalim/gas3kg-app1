@@ -34,6 +34,22 @@ const formatNumber = (num) => {
   return new Intl.NumberFormat('id-ID').format(num);
 };
 
+// 🔥 FILTER UNTUK MENGHAPUS ADVICE TENTANG STOK
+const filterStockRelatedAdvice = (advice) => {
+  if (!advice) return null;
+  
+  const stockKeywords = ['stok', 'restock', 'tabung', 'kekurangan', 'aman', 'hari', 'risiko'];
+  const message = advice.message?.toLowerCase() || '';
+  const title = advice.title?.toLowerCase() || '';
+  
+  // Cek apakah advice mengandung kata-kata terkait stok
+  const hasStockReference = stockKeywords.some(keyword => 
+    message.includes(keyword) || title.includes(keyword)
+  );
+  
+  return hasStockReference ? null : advice;
+};
+
 // 🔥 FUNGSI UNTUK MENDAPATKAN DATA PERBANDINGAN BULANAN
 const getMonthlyComparisonData = async () => {
   try {
@@ -127,6 +143,11 @@ export default function BusinessIntelligenceCard() {
   const [sevenDaysData, setSevenDaysData] = useState(null);
 
   const { loading, error, data } = state;
+
+  // 🔥 FILTER ADVICE UNTUK MENGHAPUS YANG TENTANG STOK
+  const filteredAdvice = useMemo(() => {
+    return data?.advice ? filterStockRelatedAdvice(data.advice) : null;
+  }, [data?.advice]);
 
   useEffect(() => {
     let alive = true;
@@ -766,22 +787,22 @@ export default function BusinessIntelligenceCard() {
           {/* 🔥 TOP CUSTOMERS (SEMUA WAKTU) */}
           <TopCustomersSection />
 
-          {/* AI Advice */}
-          {data.advice && (
+          {/* 🔥 AI Advice (FILTERED - TANPA STOK) */}
+          {filteredAdvice && (
             <Alert
-              icon={data.advice.level === "warning" ? <WarningAmberIcon /> : <CheckCircleIcon />}
-              severity={data.advice.level || "info"}
+              icon={filteredAdvice.level === "warning" ? <WarningAmberIcon /> : <CheckCircleIcon />}
+              severity={filteredAdvice.level || "info"}
               sx={{ 
                 borderRadius: 2,
                 border: '1px solid',
-                borderColor: data.advice.level === "warning" ? 'warning.light' : 'info.light'
+                borderColor: filteredAdvice.level === "warning" ? 'warning.light' : 'info.light'
               }}
             >
               <Typography variant="body2" fontWeight={700} gutterBottom>
-                {data.advice.title}
+                {filteredAdvice.title}
               </Typography>
               <Typography variant="body2">
-                {data.advice.message}
+                {filteredAdvice.message}
               </Typography>
             </Alert>
           )}
