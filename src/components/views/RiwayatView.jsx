@@ -108,7 +108,7 @@ export default function RiwayatView() {
   const [tFrom, setTFrom] = useState(MIN_DATE || "2024-01-01");
   const [tTo, setTTo] = useState(todayStr());
   const [tMethod, setTMethod] = useState("ALL");
-  the const [tStatus, setTStatus] = useState("ALL");
+  const [tStatus, setTStatus] = useState("ALL");
   const [tCashier, setTCashier] = useState("");
   const [tQ, setTQ] = useState("");
   const [trxRows, setTrxRows] = useState([]);
