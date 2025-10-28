@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   AppBar, Box, CssBaseline, Divider, Drawer, IconButton, List, ListItem,
   ListItemButton, ListItemIcon, ListItemText, Toolbar, Typography,
-  BottomNavigation, BottomNavigationAction, Paper, Button
+  BottomNavigation, BottomNavigationAction, Paper, Button, GlobalStyles
 } from "@mui/material";
 
 import MenuIcon from "@mui/icons-material/Menu";
@@ -150,9 +150,15 @@ export default function AppLayout({ children }) {
         display: "flex",
         minHeight: "100svh",
         pb: { xs: `calc(${BN_HEIGHT}px + env(safe-area-inset-bottom))`, sm: 0 },
+        overflowX: "hidden", // ⬅️ cegah page horizontal scroll
       }}
     >
       <CssBaseline />
+      {/* Global hardening: tak ada horizontal scroll di level dokumen */}
+      <GlobalStyles styles={{
+        "html, body, #root": { overflowX: "hidden", width: "100%" },
+        "main": { overflowX: "hidden" }
+      }} />
 
       {/* AppBar */}
       <AppBar position="fixed" sx={{ zIndex: 1201 }}>
@@ -223,6 +229,7 @@ export default function AppLayout({ children }) {
           px: { xs: 1.5, sm: 3 },
           py: { xs: 1.5, sm: 3 },
           width: { sm: `calc(100% - ${drawerWidth}px)` },
+          overflowX: "hidden", // ⬅️ kunci lagi di container konten
         }}
       >
         <Toolbar />

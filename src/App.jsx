@@ -189,7 +189,7 @@ export default function App() {
                 }
               />
 
-              {/* Riwayat: tiga halaman berbeda */}
+              {/* Riwayat: tiga halaman berbeda (route-aware tabs) */}
               <Route path="/riwayat/transaksi" element={<RiwayatView />} />
               <Route path="/riwayat/hutang" element={<RiwayatView />} />
               <Route path="/riwayat/stok" element={<RiwayatView />} />

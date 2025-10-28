@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { COLORS, MIN_DATE } from "../../utils/constants.js";
-import { fmtIDR, maxAllowedDate } from "../../utils/helpers.js";
+import { fmtIDR } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
 import { useToast } from "../../context/ToastContext.jsx";
 
@@ -15,11 +15,6 @@ import {
   Box,
   Stack,
   Typography,
-  Card,
-  CardHeader,
-  CardContent,
-  Grid,
-  TextField,
   Button,
   Select,
   MenuItem,
@@ -32,53 +27,23 @@ import {
   DialogActions,
   Alert,
   Divider,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   CircularProgress,
-  Skeleton,
   useMediaQuery,
   useTheme,
-  LinearProgress,
+  Tabs,
+  Tab
 } from "@mui/material";
 
 // Icons
 import {
-  ExpandMore as ExpandMoreIcon,
   ReceiptLong as ReceiptLongIcon,
   Inventory as InventoryIcon,
   CreditCard as CreditCardIcon,
-  Search as SearchIcon,
-  FilterList as FilterListIcon,
-  FirstPage as FirstPageIcon,
-  LastPage as LastPageIcon,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
 } from "@mui/icons-material";
 
-/* ============ Constants & Styles ============ */
-const CARD_STYLES = {
-  borderRadius: 3,
-  boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-  marginBottom: 3
-};
-
-const FIELD_PROPS = { fullWidth: true, size: "medium" };
-const FIELD_SX = {
-  "& .MuiOutlinedInput-root": { 
-    borderRadius: 2, 
-    minHeight: 48,
-    transition: 'all 0.2s ease',
-    '&:hover': {
-      boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.1)'
-    }
-  },
-  "& input": { paddingTop: 1.25, paddingBottom: 1.25 },
-};
-
-/* ============ Helper Functions ============ */
+/* ============ Helper ============ */
 const normalizeToDate = (to) => (to && to.length === 10 ? `${to} 23:59:59` : to);
-const todayStr = () => new Date().toISOString().split('T')[0];
+const todayStr = () => new Date().toISOString().split("T")[0];
 
 // XLSX Export helper
 async function exportXlsx(filename, rows, columns) {
@@ -114,21 +79,12 @@ function StatusChip({ status }) {
     DIBATALKAN: { bgcolor: "#f3f4f6", color: "#374151", label: "DIBATALKAN" },
     HUTANG: { bgcolor: "#fef3c7", color: "#92400e", label: "HUTANG" },
   };
-  
   const style = styles[status] || { bgcolor: "#eef2ff", color: "#3730a3", label: status };
-  
   return (
     <Chip
       label={style.label}
       size="small"
-      sx={{ 
-        bgcolor: style.bgcolor, 
-        color: style.color,
-        fontWeight: 600,
-        fontSize: '0.75rem',
-        px: 0.5,
-        minWidth: 80
-      }}
+      sx={{ bgcolor: style.bgcolor, color: style.color, fontWeight: 600, fontSize: "0.75rem", px: 0.5, minWidth: 80 }}
     />
   );
 }
@@ -136,8 +92,9 @@ function StatusChip({ status }) {
 export default function RiwayatView() {
   const toast = useToast();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const location = useLocation();
+  const navigate = useNavigate();
 
   // Tentukan tab aktif berdasarkan URL
   const currentTab = location.pathname.includes("/riwayat/hutang")
@@ -146,12 +103,12 @@ export default function RiwayatView() {
     ? "stok"
     : "transaksi";
 
-  /* ================= STATE MANAGEMENT ================= */
-  // === TRANSAKSI STATE ===
+  /* ================= STATE ================= */
+  // TRANSAKSI
   const [tFrom, setTFrom] = useState(MIN_DATE || "2024-01-01");
   const [tTo, setTTo] = useState(todayStr());
   const [tMethod, setTMethod] = useState("ALL");
-  const [tStatus, setTStatus] = useState("ALL");
+  the const [tStatus, setTStatus] = useState("ALL");
   const [tCashier, setTCashier] = useState("");
   const [tQ, setTQ] = useState("");
   const [trxRows, setTrxRows] = useState([]);
@@ -161,7 +118,7 @@ export default function RiwayatView() {
   const [trxPageSize, setTrxPageSize] = useState(25);
   const [trxPage, setTrxPage] = useState(1);
 
-  // === HUTANG STATE ===
+  // HUTANG
   const [qDebt, setQDebt] = useState("");
   const [debtStatusFilter, setDebtStatusFilter] = useState("BELUM_LUNAS");
   const [debts, setDebts] = useState([]);
@@ -171,7 +128,7 @@ export default function RiwayatView() {
   const [debtPageSize, setDebtPageSize] = useState(25);
   const [debtPage, setDebtPage] = useState(1);
 
-  // === STOK STATE ===
+  // STOK
   const [sFrom, setSFrom] = useState(MIN_DATE || "2024-01-01");
   const [sTo, setSTo] = useState(todayStr());
   const [sJenis, setSJenis] = useState("ALL");
@@ -182,7 +139,7 @@ export default function RiwayatView() {
   const [stokPageSize, setStokPageSize] = useState(25);
   const [stokPage, setStokPage] = useState(1);
 
-  // === MODAL STATES ===
+  // MODALS
   const [detailSale, setDetailSale] = useState(null);
   const [voidSale, setVoidSale] = useState(null);
   const [voidReason, setVoidReason] = useState("");
@@ -190,7 +147,7 @@ export default function RiwayatView() {
   const [payDebtLoading, setPayDebtLoading] = useState(false);
   const VOID_REASONS = ["Salah Input Data", "Batal oleh Pelanggan", "Barang Rusak", "Lainnya"];
 
-  /* ================= DATA FETCHING ================= */
+  /* ================= DATA ================= */
   const loadTrx = async () => {
     try {
       setTrxLoading(true);
@@ -251,7 +208,6 @@ export default function RiwayatView() {
   };
 
   /* ================= EFFECTS ================= */
-  // Load data ketika route (sub-halaman) berubah
   useEffect(() => {
     if (currentTab === "transaksi") loadTrx();
     if (currentTab === "hutang") loadDebts();
@@ -264,8 +220,8 @@ export default function RiwayatView() {
   useEffect(() => { if (currentTab === "hutang") setDebtPage(1); }, [qDebt, debtStatusFilter, debtPageSize, currentTab]);
   useEffect(() => { if (currentTab === "stok") setStokPage(1); }, [sFrom, sTo, sJenis, stokPageSize, currentTab]);
 
-  /* ================= DERIVED DATA ================= */
-  // TRANSAKSI - Sorting logic
+  /* ================= DERIVED ================= */
+  // TRANSAKSI
   const sortedTrx = useMemo(() => {
     const rows = [...trxRows];
     const key = trxSortKey;
@@ -333,13 +289,10 @@ export default function RiwayatView() {
     return sortedStok.slice(start, start + stokPageSize);
   }, [sortedStok, stokPage, stokPageSize]);
 
-  /* ================= EVENT HANDLERS ================= */
-  const setSortTrx = (f) =>
-    trxSortKey === f ? setTrxSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setTrxSortKey(f), setTrxSortDir("asc"));
-  const setSortDebt = (f) =>
-    debtSortKey === f ? setDebtSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setDebtSortKey(f), setDebtSortDir("asc"));
-  const setSortStok = (f) =>
-    stokSortKey === f ? setStokSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setStokSortKey(f), setStokSortDir("asc"));
+  /* ================= EVENT ================= */
+  const setSortTrx = (f) => (trxSortKey === f ? setTrxSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setTrxSortKey(f), setTrxSortDir("asc")));
+  const setSortDebt = (f) => (debtSortKey === f ? setDebtSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setDebtSortKey(f), setDebtSortDir("asc")));
+  const setSortStok = (f) => (stokSortKey === f ? setStokSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setStokSortKey(f), setStokSortDir("asc")));
 
   // Void transaction
   const submitVoid = async () => {
@@ -385,7 +338,7 @@ export default function RiwayatView() {
     return `https://wa.me/?text=${encodeURIComponent(pesan)}`;
   };
 
-  // Export functions
+  // Export
   const exportTrxXlsx = () =>
     exportXlsx("riwayat-transaksi.xlsx", sortedTrx, [
       { header: "Tanggal", key: (r) => String(r.created_at || "").slice(0, 19).replace("T", " ") },
@@ -421,63 +374,59 @@ export default function RiwayatView() {
 
   /* ================= RENDER ================= */
   return (
-    <Stack spacing={3}>
-      {/* Header + Nav Button (ganti Tabs internal) */}
-      <Stack direction={{ xs: "column", md: "row" }} alignItems="center" spacing={2}>
-        <Typography variant="h4" fontWeight={700} color="primary">
-          Riwayat
-        </Typography>
-        <Box sx={{ flex: 1 }} />
-        <Stack direction="row" spacing={1}>
-          <Button
-            component={Link}
-            to="/riwayat/transaksi"
-            variant={currentTab === "transaksi" ? "contained" : "outlined"}
-            startIcon={<ReceiptLongIcon />}
-          >
-            Transaksi
-          </Button>
-          <Button
-            component={Link}
-            to="/riwayat/hutang"
-            variant={currentTab === "hutang" ? "contained" : "outlined"}
-            startIcon={<CreditCardIcon />}
-          >
-            Hutang
-          </Button>
-          <Button
-            component={Link}
-            to="/riwayat/stok"
-            variant={currentTab === "stok" ? "contained" : "outlined"}
-            startIcon={<InventoryIcon />}
-          >
-            Stok
-          </Button>
-        </Stack>
-      </Stack>
+    <Stack spacing={2}>
+      {/* Header */}
+      <Typography variant="h4" fontWeight={700} color="primary">
+        Riwayat
+      </Typography>
+
+      {/* Sticky Tabs: mobile-first, compact, route-aware */}
+      <Box
+        sx={{
+          position: "sticky",
+          top: { xs: 56, sm: 64 }, // offset AppBar
+          zIndex: 10,
+          backgroundColor: "background.paper",
+          borderBottom: (t) => `1px solid ${t.palette.divider}`,
+          backdropFilter: "saturate(1.2) blur(6px)",
+          mx: -1.5,
+          px: 1.5,
+        }}
+      >
+        <Tabs
+          value={currentTab}
+          onChange={(_, v) => {
+            if (v === "transaksi") navigate("/riwayat/transaksi");
+            if (v === "hutang") navigate("/riwayat/hutang");
+            if (v === "stok") navigate("/riwayat/stok");
+          }}
+          variant="scrollable"
+          allowScrollButtonsMobile
+          textColor="primary"
+          indicatorColor="primary"
+          sx={{
+            minHeight: 44,
+            "& .MuiTab-root": {
+              minHeight: 44,
+              px: { xs: 1.25, md: 2 },
+              fontWeight: 600,
+            },
+          }}
+        >
+          <Tab value="transaksi" label={isMobile ? "Trx" : "Transaksi"} icon={<ReceiptLongIcon />} iconPosition="start" />
+          <Tab value="hutang" label="Hutang" icon={<CreditCardIcon />} iconPosition="start" />
+          <Tab value="stok" label="Stok" icon={<InventoryIcon />} iconPosition="start" />
+        </Tabs>
+      </Box>
 
       {currentTab === "transaksi" && (
         <TransaksiSection
           rows={pagedTrx}
           totalRows={sortedTrx.length}
           loading={trxLoading}
-          filterValues={{
-            from: tFrom,
-            to: tTo,
-            method: tMethod,
-            status: tStatus,
-            cashier: tCashier,
-            query: tQ,
-          }}
-          pagination={{
-            page: trxPage,
-            pageSize: trxPageSize,
-            totalPages: Math.ceil(sortedTrx.length / trxPageSize),
-          }}
-          sorting={{
-            key: trxSortKey,
-            direction: trxSortDir,
-          }}
+          filterValues={{ from: tFrom, to: tTo, method: tMethod, status: tStatus, cashier: tCashier, query: tQ }}
+          pagination={{ page: trxPage, pageSize: trxPageSize, totalPages: Math.ceil(sortedTrx.length / trxPageSize) }}
+          sorting={{ key: trxSortKey, direction: trxSortDir }}
           onFilterChange={{
             onFromChange: setTFrom,
             onToChange: setTTo,
@@ -486,10 +435,7 @@ export default function RiwayatView() {
             onCashierChange: setTCashier,
             onQueryChange: setTQ,
           }}
-          onPaginationChange={{
-            onPageChange: setTrxPage,
-            onPageSizeChange: setTrxPageSize,
-          }}
+          onPaginationChange={{ onPageChange: setTrxPage, onPageSizeChange: setTrxPageSize }}
           onSortChange={setSortTrx}
           onReload={loadTrx}
           onExport={exportTrxXlsx}
@@ -504,27 +450,11 @@ export default function RiwayatView() {
           totalRows={sortedDebts.length}
           totalHutang={totalHutang}
           loading={debtLoading}
-          filterValues={{
-            query: qDebt,
-            status: debtStatusFilter,
-          }}
-          pagination={{
-            page: debtPage,
-            pageSize: debtPageSize,
-            totalPages: Math.ceil(sortedDebts.length / debtPageSize),
-          }}
-          sorting={{
-            key: debtSortKey,
-            direction: debtSortDir,
-          }}
-          onFilterChange={{
-            onQueryChange: setQDebt,
-            onStatusChange: setDebtStatusFilter,
-          }}
-          onPaginationChange={{
-            onPageChange: setDebtPage,
-            onPageSizeChange: setDebtPageSize,
-          }}
+          filterValues={{ query: qDebt, status: debtStatusFilter }}
+          pagination={{ page: debtPage, pageSize: debtPageSize, totalPages: Math.ceil(sortedDebts.length / debtPageSize) }}
+          sorting={{ key: debtSortKey, direction: debtSortDir }}
+          onFilterChange={{ onQueryChange: setQDebt, onStatusChange: setDebtStatusFilter }}
+          onPaginationChange={{ onPageChange: setDebtPage, onPageSizeChange: setDebtPageSize }}
           onSortChange={setSortDebt}
           onReload={loadDebts}
           onExport={exportHutangXlsx}
@@ -538,29 +468,11 @@ export default function RiwayatView() {
           rows={pagedStok}
           totalRows={sortedStok.length}
           loading={stokLoading}
-          filterValues={{
-            from: sFrom,
-            to: sTo,
-            jenis: sJenis,
-          }}
-          pagination={{
-            page: stokPage,
-            pageSize: stokPageSize,
-            totalPages: Math.ceil(sortedStok.length / stokPageSize),
-          }}
-          sorting={{
-            key: stokSortKey,
-            direction: stokSortDir,
-          }}
-          onFilterChange={{
-            onFromChange: setSFrom,
-            onToChange: setSTo,
-            onJenisChange: setSJenis,
-          }}
-          onPaginationChange={{
-            onPageChange: setStokPage,
-            onPageSizeChange: setStokPageSize,
-          }}
+          filterValues={{ from: sFrom, to: sTo, jenis: sJenis }}
+          pagination={{ page: stokPage, pageSize: stokPageSize, totalPages: Math.ceil(sortedStok.length / stokPageSize) }}
+          sorting={{ key: stokSortKey, direction: stokSortDir }}
+          onFilterChange={{ onFromChange: setSFrom, onToChange: setSTo, onJenisChange: setSJenis }}
+          onPaginationChange={{ onPageChange: setStokPage, onPageSizeChange: setStokPageSize }}
           onSortChange={setSortStok}
           onReload={loadStok}
           onExport={exportStokXlsx}
@@ -582,17 +494,14 @@ export default function RiwayatView() {
               <Row label="Tanggal" value={String(detailSale.created_at || "").slice(0, 16).replace("T", " ")} />
               <Row label="Pelanggan" value={detailSale.customer || "PUBLIC"} />
               <Row label="Qty" value={detailSale.qty} />
-              <Row
-                label="Total"
-                value={fmtIDR(detailSale.total || (detailSale.qty || 0) * (detailSale.price || 0))}
-              />
+              <Row label="Total" value={fmtIDR(detailSale.total || (detailSale.qty || 0) * (detailSale.price || 0))} />
               <Row label="Metode" value={detailSale.method} />
               <Row label="Status" value={<StatusChip status={detailSale.status} />} />
               {detailSale.note && (
                 <>
                   <Divider />
                   <Typography variant="subtitle2" fontWeight={600}>Catatan</Typography>
-                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", p: 1, bgcolor: '#f8fafc', borderRadius: 1 }}>
+                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", p: 1, bgcolor: "#f8fafc", borderRadius: 1 }}>
                     {detailSale.note}
                   </Typography>
                 </>
@@ -619,14 +528,12 @@ export default function RiwayatView() {
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle color="error">
-          ⚠️ Batalkan (Void) — {voidSale?.invoice || voidSale?.id || ""}
-        </DialogTitle>
+        <DialogTitle color="error">⚠️ Batalkan (Void) — {voidSale?.invoice || voidSale?.id || ""}</DialogTitle>
         <DialogContent dividers>
           <Alert severity="warning" sx={{ mb: 2 }}>
             Pembatalan akan <b>mengembalikan stok</b> & menandai transaksi asli sebagai <b>DIBATALKAN</b>.
           </Alert>
-          <FormControl {...FIELD_PROPS}>
+          <FormControl fullWidth size="medium">
             <InputLabel id="void-reason">Alasan Pembatalan</InputLabel>
             <Select
               labelId="void-reason"
@@ -636,9 +543,7 @@ export default function RiwayatView() {
             >
               <MenuItem value="">— Pilih alasan —</MenuItem>
               {VOID_REASONS.map((r) => (
-                <MenuItem key={r} value={r}>
-                  {r}
-                </MenuItem>
+                <MenuItem key={r} value={r}>{r}</MenuItem>
               ))}
             </Select>
           </FormControl>
@@ -701,15 +606,11 @@ export default function RiwayatView() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button 
-            variant="outlined" 
-            onClick={() => setPayingDebt(null)} 
-            disabled={payDebtLoading}
-          >
+          <Button variant="outlined" onClick={() => setPayingDebt(null)} disabled={payDebtLoading}>
             Batal
           </Button>
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             onClick={() => handlePayDebt(payingDebt)}
             disabled={payDebtLoading}
             startIcon={payDebtLoading ? <CircularProgress size={16} /> : <CreditCardIcon />}
