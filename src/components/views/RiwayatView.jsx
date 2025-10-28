@@ -1,5 +1,5 @@
-// src/components/views/RiwayatView.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation, Link } from "react-router-dom";
 import { COLORS, MIN_DATE } from "../../utils/constants.js";
 import { fmtIDR, maxAllowedDate } from "../../utils/helpers.js";
 import { DataService } from "../../services/DataService.js";
@@ -25,8 +25,6 @@ import {
   MenuItem,
   InputLabel,
   FormControl,
-  Tabs,
-  Tab,
   Chip,
   Dialog,
   DialogTitle,
@@ -139,10 +137,16 @@ export default function RiwayatView() {
   const toast = useToast();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const location = useLocation();
+
+  // Tentukan tab aktif berdasarkan URL
+  const currentTab = location.pathname.includes("/riwayat/hutang")
+    ? "hutang"
+    : location.pathname.includes("/riwayat/stok")
+    ? "stok"
+    : "transaksi";
 
   /* ================= STATE MANAGEMENT ================= */
-  const [tab, setTab] = useState("transaksi"); // transaksi | hutang | stok
-
   // === TRANSAKSI STATE ===
   const [tFrom, setTFrom] = useState(MIN_DATE || "2024-01-01");
   const [tTo, setTTo] = useState(todayStr());
@@ -215,10 +219,11 @@ export default function RiwayatView() {
         limit: 300,
         status: debtStatusFilter === "BELUM_LUNAS" ? "BELUM_LUNAS" : undefined,
       });
-      // Mapping data untuk invoice display
       const mapped = (data || []).map((r) => ({
         ...r,
-        invoice_display: r.invoice_display || `PLP/${String(r.created_at || "").slice(0,4)}/${String(r.created_at || "").slice(5,7)}/${String(r.id).padStart(3,"0")}`,
+        invoice_display:
+          r.invoice_display ||
+          `PLP/${String(r.created_at || "").slice(0, 4)}/${String(r.created_at || "").slice(5, 7)}/${String(r.id).padStart(3, "0")}`,
       }));
       setDebts(mapped);
     } catch (e) {
@@ -246,18 +251,18 @@ export default function RiwayatView() {
   };
 
   /* ================= EFFECTS ================= */
-  // Load data ketika tab berubah
+  // Load data ketika route (sub-halaman) berubah
   useEffect(() => {
-    if (tab === "transaksi") loadTrx();
-    if (tab === "hutang") loadDebts();
-    if (tab === "stok") loadStok();
+    if (currentTab === "transaksi") loadTrx();
+    if (currentTab === "hutang") loadDebts();
+    if (currentTab === "stok") loadStok();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [currentTab]);
 
   // Reset pagination ketika filter berubah
-  useEffect(() => { if (tab === "transaksi") setTrxPage(1); }, [tFrom, tTo, tMethod, tStatus, tCashier, tQ, trxPageSize]);
-  useEffect(() => { if (tab === "hutang") setDebtPage(1); }, [qDebt, debtStatusFilter, debtPageSize]);
-  useEffect(() => { if (tab === "stok") setStokPage(1); }, [sFrom, sTo, sJenis, stokPageSize]);
+  useEffect(() => { if (currentTab === "transaksi") setTrxPage(1); }, [tFrom, tTo, tMethod, tStatus, tCashier, tQ, trxPageSize, currentTab]);
+  useEffect(() => { if (currentTab === "hutang") setDebtPage(1); }, [qDebt, debtStatusFilter, debtPageSize, currentTab]);
+  useEffect(() => { if (currentTab === "stok") setStokPage(1); }, [sFrom, sTo, sJenis, stokPageSize, currentTab]);
 
   /* ================= DERIVED DATA ================= */
   // TRANSAKSI - Sorting logic
@@ -265,13 +270,11 @@ export default function RiwayatView() {
     const rows = [...trxRows];
     const key = trxSortKey;
     const dir = trxSortDir === "asc" ? 1 : -1;
-    
     rows.sort((a, b) => {
       const tA = Number(a.total ?? (a.qty || 0) * (a.price || 0));
       const tB = Number(b.total ?? (b.qty || 0) * (b.price || 0));
       const va = key === "total" ? tA : key === "created_at" ? new Date(a.created_at || 0).getTime() : a[key];
       const vb = key === "total" ? tB : key === "created_at" ? new Date(b.created_at || 0).getTime() : b[key];
-      
       if (["qty", "price", "total"].includes(key)) return (Number(va) - Number(vb)) * dir;
       if (key === "created_at") return (va - vb) * dir;
       return String(va || "").localeCompare(String(vb || ""), "id") * dir;
@@ -284,18 +287,16 @@ export default function RiwayatView() {
     return sortedTrx.slice(start, start + trxPageSize);
   }, [sortedTrx, trxPage, trxPageSize]);
 
-  // HUTANG - Sorting logic
+  // HUTANG
   const totalHutang = useMemo(() => debts.reduce((a, b) => a + Number(b.total || 0), 0), [debts]);
-  
+
   const sortedDebts = useMemo(() => {
     const rows = [...debts];
     const key = debtSortKey;
     const dir = debtSortDir === "asc" ? 1 : -1;
-    
     rows.sort((a, b) => {
       const va = key === "total" ? Number(a.total) : key === "created_at" ? new Date(a.created_at || 0).getTime() : a[key];
       const vb = key === "total" ? Number(b.total) : key === "created_at" ? new Date(b.created_at || 0).getTime() : b[key];
-      
       if (["qty", "total"].includes(key)) return (Number(va) - Number(vb)) * dir;
       if (key === "created_at") return (va - vb) * dir;
       return String(va || "").localeCompare(String(vb || ""), "id") * dir;
@@ -308,12 +309,11 @@ export default function RiwayatView() {
     return sortedDebts.slice(start, start + debtPageSize);
   }, [sortedDebts, debtPage, debtPageSize]);
 
-  // STOK - Sorting logic
+  // STOK
   const sortedStok = useMemo(() => {
     const rows = [...stokRows];
     const key = stokSortKey;
     const dir = stokSortDir === "asc" ? 1 : -1;
-    
     rows.sort((a, b) => {
       let va = a[key];
       let vb = b[key];
@@ -334,10 +334,12 @@ export default function RiwayatView() {
   }, [sortedStok, stokPage, stokPageSize]);
 
   /* ================= EVENT HANDLERS ================= */
-  // Sorting handlers
-  const setSortTrx = (f) => trxSortKey === f ? setTrxSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setTrxSortKey(f), setTrxSortDir("asc"));
-  const setSortDebt = (f) => debtSortKey === f ? setDebtSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setDebtSortKey(f), setDebtSortDir("asc"));
-  const setSortStok = (f) => stokSortKey === f ? setStokSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setStokSortKey(f), setStokSortDir("asc"));
+  const setSortTrx = (f) =>
+    trxSortKey === f ? setTrxSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setTrxSortKey(f), setTrxSortDir("asc"));
+  const setSortDebt = (f) =>
+    debtSortKey === f ? setDebtSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setDebtSortKey(f), setDebtSortDir("asc"));
+  const setSortStok = (f) =>
+    stokSortKey === f ? setStokSortDir((d) => (d === "asc" ? "desc" : "asc")) : (setStokSortKey(f), setStokSortDir("asc"));
 
   // Void transaction
   const submitVoid = async () => {
@@ -384,194 +386,180 @@ export default function RiwayatView() {
   };
 
   // Export functions
-  const exportTrxXlsx = () => exportXlsx("riwayat-transaksi.xlsx", sortedTrx, [
-    { header: "Tanggal", key: (r) => String(r.created_at || "").slice(0, 19).replace("T", " ") },
-    { header: "Invoice", key: (r) => r.invoice || r.id },
-    { header: "Pelanggan", key: "customer" },
-    { header: "Qty", key: "qty" },
-    { header: "Harga Satuan", key: "price" },
-    { header: "Total", key: (r) => r.total ?? (Number(r.qty || 0) * Number(r.price || 0)) },
-    { header: "Metode", key: "method" },
-    { header: "Status", key: "status" },
-    { header: "Catatan", key: "note" },
-  ]);
+  const exportTrxXlsx = () =>
+    exportXlsx("riwayat-transaksi.xlsx", sortedTrx, [
+      { header: "Tanggal", key: (r) => String(r.created_at || "").slice(0, 19).replace("T", " ") },
+      { header: "Invoice", key: (r) => r.invoice || r.id },
+      { header: "Pelanggan", key: "customer" },
+      { header: "Qty", key: "qty" },
+      { header: "Harga Satuan", key: "price" },
+      { header: "Total", key: (r) => r.total ?? Number(r.qty || 0) * Number(r.price || 0) },
+      { header: "Metode", key: "method" },
+      { header: "Status", key: "status" },
+      { header: "Catatan", key: "note" },
+    ]);
 
-  const exportStokXlsx = () => exportXlsx("riwayat-stok.xlsx", sortedStok, [
-    { header: "Tanggal", key: "tanggal" },
-    { header: "Jenis Stok", key: "code" },
-    { header: "Keterangan", key: "keterangan" },
-    { header: "Masuk", key: "masuk" },
-    { header: "Keluar", key: "keluar" },
-    { header: "Sisa", key: "sisa" },
-  ]);
+  const exportStokXlsx = () =>
+    exportXlsx("riwayat-stok.xlsx", sortedStok, [
+      { header: "Tanggal", key: "tanggal" },
+      { header: "Jenis Stok", key: "code" },
+      { header: "Keterangan", key: "keterangan" },
+      { header: "Masuk", key: "masuk" },
+      { header: "Keluar", key: "keluar" },
+      { header: "Sisa", key: "sisa" },
+    ]);
 
-  const exportHutangXlsx = () => exportXlsx("riwayat-hutang.xlsx", sortedDebts, [
-    { header: "Tanggal", key: (r) => String(r.created_at || "").slice(0, 10) },
-    { header: "Invoice", key: (r) => r.invoice || r.id },
-    { header: "Pelanggan", key: "customer" },
-    { header: "Qty", key: "qty" },
-    { header: "Total Hutang", key: "total" },
-    { header: "Catatan", key: "note" },
-  ]);
+  const exportHutangXlsx = () =>
+    exportXlsx("riwayat-hutang.xlsx", sortedDebts, [
+      { header: "Tanggal", key: (r) => String(r.created_at || "").slice(0, 10) },
+      { header: "Invoice", key: (r) => r.invoice || r.id },
+      { header: "Pelanggan", key: "customer" },
+      { header: "Qty", key: "qty" },
+      { header: "Total Hutang", key: "total" },
+      { header: "Catatan", key: "note" },
+    ]);
 
   /* ================= RENDER ================= */
   return (
     <Stack spacing={3}>
-      {/* Header dengan Tabs */}
+      {/* Header + Nav Button (ganti Tabs internal) */}
       <Stack direction={{ xs: "column", md: "row" }} alignItems="center" spacing={2}>
         <Typography variant="h4" fontWeight={700} color="primary">
           Riwayat
         </Typography>
         <Box sx={{ flex: 1 }} />
-        <Tabs 
-          value={tab} 
-          onChange={(_, v) => setTab(v)} 
-          textColor="primary" 
-          indicatorColor="primary"
-          sx={{ 
-            minHeight: 48,
-            '& .MuiTab-root': { 
-              minHeight: 48,
-              fontWeight: 600 
-            }
-          }}
-        >
-          <Tab value="transaksi" label="Transaksi" icon={<ReceiptLongIcon />} iconPosition="start" />
-          <Tab value="hutang" label="Hutang" icon={<CreditCardIcon />} iconPosition="start" />
-          <Tab value="stok" label="Stok" icon={<InventoryIcon />} iconPosition="start" />
-        </Tabs>
+        <Stack direction="row" spacing={1}>
+          <Button
+            component={Link}
+            to="/riwayat/transaksi"
+            variant={currentTab === "transaksi" ? "contained" : "outlined"}
+            startIcon={<ReceiptLongIcon />}
+          >
+            Transaksi
+          </Button>
+          <Button
+            component={Link}
+            to="/riwayat/hutang"
+            variant={currentTab === "hutang" ? "contained" : "outlined"}
+            startIcon={<CreditCardIcon />}
+          >
+            Hutang
+          </Button>
+          <Button
+            component={Link}
+            to="/riwayat/stok"
+            variant={currentTab === "stok" ? "contained" : "outlined"}
+            startIcon={<InventoryIcon />}
+          >
+            Stok
+          </Button>
+        </Stack>
       </Stack>
 
-      {/* RENDER CHILD SECTIONS DENGAN PROPS YANG BENAR */}
-      {tab === "transaksi" && (
+      {currentTab === "transaksi" && (
         <TransaksiSection
-          // Data & State
           rows={pagedTrx}
           totalRows={sortedTrx.length}
           loading={trxLoading}
-          
-          // Filter State
           filterValues={{
             from: tFrom,
             to: tTo,
             method: tMethod,
             status: tStatus,
             cashier: tCashier,
-            query: tQ
+            query: tQ,
           }}
-          
-          // Pagination & Sorting
           pagination={{
             page: trxPage,
             pageSize: trxPageSize,
-            totalPages: Math.ceil(sortedTrx.length / trxPageSize)
+            totalPages: Math.ceil(sortedTrx.length / trxPageSize),
           }}
           sorting={{
             key: trxSortKey,
-            direction: trxSortDir
+            direction: trxSortDir,
           }}
-          
-          // Event Handlers - STRUCTURE YANG BENAR
           onFilterChange={{
             onFromChange: setTFrom,
             onToChange: setTTo,
             onMethodChange: setTMethod,
             onStatusChange: setTStatus,
             onCashierChange: setTCashier,
-            onQueryChange: setTQ
+            onQueryChange: setTQ,
           }}
           onPaginationChange={{
             onPageChange: setTrxPage,
-            onPageSizeChange: setTrxPageSize
+            onPageSizeChange: setTrxPageSize,
           }}
           onSortChange={setSortTrx}
           onReload={loadTrx}
           onExport={exportTrxXlsx}
-          
-          // Modal Handlers
           onDetailOpen={setDetailSale}
           onVoidOpen={setVoidSale}
         />
       )}
 
-      {tab === "hutang" && (
+      {currentTab === "hutang" && (
         <HutangSection
-          // Data & State
           rows={pagedDebts}
           totalRows={sortedDebts.length}
           totalHutang={totalHutang}
           loading={debtLoading}
-          
-          // Filter State
           filterValues={{
             query: qDebt,
-            status: debtStatusFilter
+            status: debtStatusFilter,
           }}
-          
-          // Pagination & Sorting
           pagination={{
             page: debtPage,
             pageSize: debtPageSize,
-            totalPages: Math.ceil(sortedDebts.length / debtPageSize)
+            totalPages: Math.ceil(sortedDebts.length / debtPageSize),
           }}
           sorting={{
             key: debtSortKey,
-            direction: debtSortDir
+            direction: debtSortDir,
           }}
-          
-          // Event Handlers - STRUCTURE YANG BENAR
           onFilterChange={{
             onQueryChange: setQDebt,
-            onStatusChange: setDebtStatusFilter
+            onStatusChange: setDebtStatusFilter,
           }}
           onPaginationChange={{
             onPageChange: setDebtPage,
-            onPageSizeChange: setDebtPageSize
+            onPageSizeChange: setDebtPageSize,
           }}
           onSortChange={setSortDebt}
           onReload={loadDebts}
           onExport={exportHutangXlsx}
-          
-          // Action Handlers
           onPayOpen={handlePayDebt}
           onWhatsApp={waHref}
         />
       )}
 
-      {tab === "stok" && (
+      {currentTab === "stok" && (
         <StokSection
-          // Data & State
           rows={pagedStok}
           totalRows={sortedStok.length}
           loading={stokLoading}
-          
-          // Filter State  
           filterValues={{
             from: sFrom,
             to: sTo,
-            jenis: sJenis
+            jenis: sJenis,
           }}
-          
-          // Pagination & Sorting
           pagination={{
             page: stokPage,
             pageSize: stokPageSize,
-            totalPages: Math.ceil(sortedStok.length / stokPageSize)
+            totalPages: Math.ceil(sortedStok.length / stokPageSize),
           }}
           sorting={{
             key: stokSortKey,
-            direction: stokSortDir
+            direction: stokSortDir,
           }}
-          
-          // Event Handlers - STRUCTURE YANG BENAR
           onFilterChange={{
             onFromChange: setSFrom,
             onToChange: setSTo,
-            onJenisChange: setSJenis
+            onJenisChange: setSJenis,
           }}
           onPaginationChange={{
             onPageChange: setStokPage,
-            onPageSizeChange: setStokPageSize
+            onPageSizeChange: setStokPageSize,
           }}
           onSortChange={setSortStok}
           onReload={loadStok}
@@ -580,7 +568,6 @@ export default function RiwayatView() {
       )}
 
       {/* ======= MODALS ======= */}
-      
       {/* Detail Modal */}
       <Dialog open={!!detailSale} onClose={() => setDetailSale(null)} fullWidth maxWidth="sm">
         <DialogTitle>
@@ -595,7 +582,10 @@ export default function RiwayatView() {
               <Row label="Tanggal" value={String(detailSale.created_at || "").slice(0, 16).replace("T", " ")} />
               <Row label="Pelanggan" value={detailSale.customer || "PUBLIC"} />
               <Row label="Qty" value={detailSale.qty} />
-              <Row label="Total" value={fmtIDR(detailSale.total || (detailSale.qty || 0) * (detailSale.price || 0))} />
+              <Row
+                label="Total"
+                value={fmtIDR(detailSale.total || (detailSale.qty || 0) * (detailSale.price || 0))}
+              />
               <Row label="Metode" value={detailSale.method} />
               <Row label="Status" value={<StatusChip status={detailSale.status} />} />
               {detailSale.note && (

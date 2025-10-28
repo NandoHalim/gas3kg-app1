@@ -1,7 +1,7 @@
-// src/components/layout/AppLayout.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate, Outlet } from "react-router-dom";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   AppBar, Box, CssBaseline, Divider, Drawer, IconButton, List, ListItem,
   ListItemButton, ListItemIcon, ListItemText, Toolbar, Typography,
@@ -87,7 +87,7 @@ export default function AppLayout({ children }) {
       { key: "dashboard", label: "Dashboard", icon: <HomeIcon />, path: "/" },
       { key: "transaksi", label: "Transaksi", icon: <SwapHorizIcon />, path: "/transaksi" },
       { key: "stok", label: "Stok", icon: <InventoryIcon />, path: "/stok" },
-      { key: "riwayat", label: "Riwayat", icon: <HistoryIcon />, path: "/riwayat" },
+      { key: "riwayat", label: "Riwayat", icon: <HistoryIcon />, path: "/riwayat/transaksi" },
       { key: "pelanggan", label: "Pelanggan", icon: <PeopleIcon />, path: "/pelanggan" },
       { key: "broadcast", label: "Broadcast", icon: <CampaignIcon />, path: "/broadcast" },
       { key: "laporan", label: "Laporan", icon: <DescriptionIcon />, path: "/laporan" },
@@ -215,7 +215,7 @@ export default function AppLayout({ children }) {
         </Drawer>
       </Box>
 
-      {/* Konten */}
+      {/* Konten + Animasi Halaman */}
       <Box
         component="main"
         sx={{
@@ -226,7 +226,17 @@ export default function AppLayout({ children }) {
         }}
       >
         <Toolbar />
-        {children ?? <Outlet />}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 10, filter: "blur(3px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            exit={{ opacity: 0, y: -10, filter: "blur(3px)" }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+          >
+            {children ?? <Outlet />}
+          </motion.div>
+        </AnimatePresence>
       </Box>
 
       {/* Bottom nav (mobile) */}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, Suspense, lazy } from "react";
-import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 import AppLayout from "./components/layout/AppLayout.jsx";
 
 import DashboardView from "./components/views/Dashboard/index.jsx";
@@ -32,7 +32,6 @@ class RouteErrorBoundary extends React.Component {
   }
   componentDidCatch(error, info) {
     if (import.meta.env.DEV) {
-      // hanya log di dev; di prod console.* sudah dibersihkan oleh plugin vite
       // eslint-disable-next-line no-console
       console.error("Route render error:", error, info);
     }
@@ -190,11 +189,11 @@ export default function App() {
                 }
               />
 
-              {/* ⬇️ ini sekarang lazy-loaded */}
-              <Route
-                path="/riwayat"
-                element={<RiwayatView onCancel={() => navigate("/")} />}
-              />
+              {/* Riwayat: tiga halaman berbeda */}
+              <Route path="/riwayat/transaksi" element={<RiwayatView />} />
+              <Route path="/riwayat/hutang" element={<RiwayatView />} />
+              <Route path="/riwayat/stok" element={<RiwayatView />} />
+              <Route path="/riwayat" element={<Navigate to="/riwayat/transaksi" replace />} />
 
               {/* menu tambahan */}
               <Route
@@ -207,6 +206,9 @@ export default function App() {
               {/* ⬇️ lazy-loaded */}
               <Route path="/laporan" element={<LaporanView />} />
               <Route path="/pengaturan" element={<PengaturanView />} />
+
+              {/* fallback */}
+              <Route path="*" element={<Navigate to="/riwayat/transaksi" replace />} />
             </Routes>
           </Suspense>
         </RouteErrorBoundary>
